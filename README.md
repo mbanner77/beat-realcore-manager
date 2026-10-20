@@ -13,3 +13,5 @@ Der RealCore-Fußballmanager im Browser: Führe TechHub United durch sieben Spie
 - Störungen der Legacy-KI, Bestenliste mit RealCore-Benchmark, Gutschein-Flow, DE/EN
 - Filmisches Intro (Kamerafahrt durchs Stadion, Titelbutton „Intro“, einmalig vor der ersten Saison)
 - Oberfläche 2.0: Übersichts-Tab, Vereinswappen, Spieler-Avatare, Trikots auf dem Aufstellungsbrett, Spielzeitleiste, Ballbesitz, Spieler:in des Spiels, Saison-Auszeichnungen, Torjägerliste
+- Sprecher (DE/EN, Sprachausgabe des Geräts): Intro-Erzähler und Live-Kommentator im Spiel (Ereignisse + Füllkommentar), abschaltbar
+- Intro läuft beim Start (Klick auf „Los geht's“ schaltet Ton frei), Abpfiff-Animation (Sieg/Remis/Niederlage) und Meisterfeier mit Feuerwerk, Pokal und Konfetti

@@ -65,6 +65,7 @@
   <div class="intro-cap" id="intro-cap" hidden><b></b><p></p></div>
   <div class="intro-title" id="intro-title" hidden><small>RealCore TechHub präsentiert</small><h1>BEAT<br><span>REALCORE</span></h1><em>LEGACY LEAGUE</em></div>
   <button class="btn sm intro-skip" id="btn-intro-skip">Überspringen ›</button>
+  <div class="intro-gate" id="intro-gate" hidden><div><small>RealCore TechHub präsentiert</small><h1>BEAT<br><span>REALCORE</span></h1><em>LEGACY LEAGUE</em><button class="btn primary big">▶ Los geht's</button><p>Mit Ton und Sprecher · Taste Esc überspringt</p></div></div>
 </section>
 
 <section id="screen-setup" class="screen">
@@ -158,12 +159,17 @@
   <div class="match-top">
     <div class="score" id="score"><span class="tm home"><i id="sc-home-crest"></i><span id="sc-home">TechHub</span></span><b id="sc-val">0 : 0</b><span class="tm away"><span id="sc-away">Datensilo</span><i id="sc-away-crest"></i></span></div>
     <div class="clock"><b id="sc-min">0'</b><span id="sc-phase">1. Halbzeit</span></div>
-    <div class="speed" id="speed"><button data-s="1" class="on">1×</button><button data-s="2">2×</button><button data-s="4">4×</button><button data-s="skip" title="Spiel durchlaufen lassen">⏭</button><button id="btn-tactics-live" title="Taktik / Wechsel">⏸ Taktik</button></div>
+    <div class="speed" id="speed"><button data-s="1" class="on">1×</button><button data-s="2">2×</button><button data-s="4">4×</button><button data-s="skip" title="Spiel durchlaufen lassen">⏭</button><button id="btn-voice" title="Sprecher an/aus">🎙</button><button id="btn-tactics-live" title="Taktik / Wechsel">⏸ Taktik</button></div>
   </div>
   <div class="timeline" id="timeline"><div class="tl-fill" id="tl-fill"></div><div class="tl-marks" id="tl-marks"></div></div>
   <div class="match-body">
     <div class="pitch-wrap"><canvas id="pitch"></canvas><div class="banner" id="match-banner" hidden></div></div>
     <aside class="ticker-side"><div class="ts-head"><span>▸ Live-Ticker</span><span id="ts-stats"></span></div><div class="poss" id="poss"><i style="width:50%"></i><span id="poss-l">50 %</span><span id="poss-r">50 %</span></div><div class="live-tactics" id="live-tactics"></div><div class="ticker-list" id="ticker-list"></div></aside>
+  </div>
+  <div class="lineup-intro" id="lineup-intro" hidden></div>
+  <div class="fulltime" id="fulltime" hidden>
+    <canvas id="ft-fx"></canvas>
+    <div class="ft-body"><small id="ft-sub">Abpfiff</small><h1 id="ft-title">SIEG!</h1><div class="ft-score" id="ft-score"></div><p id="ft-line"></p><button class="btn primary big" id="btn-ft-next">Zum Spielbericht ›</button></div>
   </div>
   <div class="overlay" id="half" hidden>
     <div class="panel sm">
@@ -195,6 +201,17 @@
 </section>
 
 <!-- ============ Saisonende ============ -->
+<!-- ============ Saisonende: Feier ============ -->
+<section id="screen-ceremony" class="screen">
+  <canvas id="cer-canvas"></canvas>
+  <canvas id="cer-fx"></canvas>
+  <div class="intro-vignette"></div>
+  <div class="cer-body" id="cer-body">
+    <div class="trophy" id="cer-trophy" hidden><svg viewBox="0 0 120 140" aria-hidden="true"><defs><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0a8"/><stop offset=".45" stop-color="#f3c74a"/><stop offset="1" stop-color="#9a6a12"/></linearGradient></defs><path d="M30 10h60v30c0 22-13 36-30 36S30 62 30 40z" fill="url(#gold)"/><path d="M30 18H12v8c0 14 9 24 20 26M90 18h18v8c0 14-9 24-20 26" fill="none" stroke="url(#gold)" stroke-width="7" stroke-linecap="round"/><rect x="52" y="76" width="16" height="22" fill="url(#gold)"/><path d="M36 98h48v12H36zM30 110h60v14H30z" fill="url(#gold)"/><ellipse cx="60" cy="34" rx="14" ry="5" fill="#fff" opacity=".35"/></svg></div>
+    <small id="cer-sub">Saisonende</small><h1 id="cer-title">MEISTER</h1><p id="cer-text"></p>
+    <button class="btn primary big" id="btn-cer-next">Weiter zur Auswertung ›</button>
+  </div>
+</section>
 <section id="screen-result" class="screen">
   <div class="panel wide result-panel">
     <div class="result-head" id="result-head"><h1 id="result-title">MEISTER!</h1><p id="result-reason"></p><div class="grade" id="grade"><b></b><small>NOTE</small></div></div>
@@ -266,6 +283,7 @@
       <section><h3>Ton</h3>
         <label class="sl"><span>Stadion</span><input type="range" min="0" max="100" id="vol-music"><b id="vol-music-v"></b></label>
         <label class="sl"><span>Effekte</span><input type="range" min="0" max="100" id="vol-sfx"><b id="vol-sfx-v"></b></label>
+        <label class="sl chk"><span>Sprecher</span><input type="checkbox" id="opt-voice"><b>DE / EN</b></label>
         <label class="sl chk"><span>3D-Stadion</span><input type="checkbox" id="opt-3d"><b>Babylon.js</b></label>
       </section>
       <section><h3 data-nt>Sprache · Language</h3><div class="seg" id="set-lang" data-nt></div></section>

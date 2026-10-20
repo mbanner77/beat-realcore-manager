@@ -20,9 +20,9 @@ const SHOTS = [
   { dur: 5.0, lights: 1, from: { alpha: -Math.PI / 2, beta: 0.9, radius: 90, tx: PW / 2, tz: PH / 2 }, to: { alpha: -Math.PI / 2, beta: 0.95, radius: 74, tx: PW / 2, tz: PH / 2 }, title: true },
 ];
 
-export async function playIntro({ canvas, captionEl, titleEl, skipBtn, audio, onDone }) {
+export async function playIntro({ canvas, captionEl, titleEl, skipBtn, audio, voice, tr, lang, onDone }) {
   let pitch = null, M = null, done = false, raf = 0, t0 = 0, last = 0;
-  const finish = () => { if (done) return; done = true; cancelAnimationFrame(raf); skipBtn.onclick = null; try { pitch?.dispose(); } catch { /* ignore */ } onDone(); };
+  const finish = () => { if (done) return; done = true; cancelAnimationFrame(raf); skipBtn.onclick = null; voice?.cancel(); try { pitch?.dispose(); } catch { /* ignore */ } onDone(); };
   skipBtn.onclick = finish;
   // Demo-Spiel: TechHub United gegen den Monolithen
   try { const se = new Season({ difficulty: 'profi', seed: 4242 }); se.day = 6; const me = se.teamForMatch(), opp = se.opponentForMatch(); M = new Match(me, opp, { seed: 99 }); M.speed = 1; } catch { M = null; }
@@ -32,9 +32,10 @@ export async function playIntro({ canvas, captionEl, titleEl, skipBtn, audio, on
   const onResize = () => { if (pitch) pitch.resize(canvas.clientWidth, canvas.clientHeight); }; window.addEventListener('resize', onResize);
   let shotIdx = -1, shotT = 0;
   const showCaption = (sh) => {
-    if (sh.title) { captionEl.hidden = true; titleEl.hidden = false; titleEl.classList.add('in'); return; }
+    if (sh.title) { captionEl.hidden = true; titleEl.hidden = false; titleEl.classList.add('in'); voice?.say(tr ? tr('Beat RealCore – Legacy League. Saison starten!') : 'Beat RealCore – Legacy League. Saison starten!', { lang, prio: 3, interrupt: true, rate: 0.95 }); return; }
     captionEl.hidden = false; captionEl.className = 'intro-cap in' + (sh.legacy ? ' legacy' : ''); captionEl.querySelector('b').textContent = sh.who; captionEl.querySelector('p').textContent = sh.text;
     audio?.play(sh.legacy ? 'legacy' : 'type');
+    voice?.say(tr ? tr(sh.text) : sh.text, { lang, prio: 3, interrupt: true, rate: 0.96, pitch: sh.legacy ? 0.75 : 1 });
   };
   const frame = (now) => {
     if (done) return;

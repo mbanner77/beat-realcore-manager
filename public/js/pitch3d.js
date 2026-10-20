@@ -18,7 +18,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 export class Pitch3D {
   constructor(canvas) {
     this.c = canvas; this.M = null; this.figs = new Map(); this.t = 0; this.rot = false; this.flash = 0; this.shake = 0; this.focus = null;
-    this.ballH = 0; this.flight = null; this.camT = null; this.ownerRingT = 0; this.cine = null; this.celeb = null; this.lamps = []; this.day = false; this.lampLevel = 1;
+    this.ballH = 0; this.flight = null; this.camT = null; this.ownerRingT = 0; this.cine = null; this.celeb = null; this.lamps = []; this.day = false; this.lampLevel = 1; this.mood = null; this.fw = false; this.fwNext = 0; this.labels = true;
     const { Engine, Scene, Color4, Vector3, HemisphericLight, DirectionalLight, ArcRotateCamera } = B;
     this.engine = new Engine(canvas, true, { stencil: false, preserveDrawingBuffer: false, antialias: true });
     this.engine.setHardwareScalingLevel(1 / Math.min(1.5, devicePixelRatio || 1));
@@ -130,6 +130,11 @@ export class Pitch3D {
     ps.minEmitBox = new Vector3(-0.3, 0, -0.3); ps.maxEmitBox = new Vector3(0.3, 0.5, 0.3); ps.minSize = 0.25; ps.maxSize = 0.6; ps.minLifeTime = 0.7; ps.maxLifeTime = 1.4;
     ps.emitRate = 0; ps.direction1 = new Vector3(-4, 6, -4); ps.direction2 = new Vector3(4, 12, 4); ps.minEmitPower = 1; ps.maxEmitPower = 2.2; ps.gravity = new Vector3(0, -14, 0); ps.updateSpeed = 0.012; ps.blendMode = ParticleSystem.BLENDMODE_STANDARD;
     ps.color1 = new Color4(1, 1, 1, 1); ps.color2 = new Color4(0.3, 0.9, 0.5, 1); ps.colorDead = new Color4(0, 0, 0, 0); ps.start();
+    // Feuerwerk über den Tribünen
+    const fw = this.fwPs = new ParticleSystem('fw', 3000, scene); fw.particleTexture = t; fw.emitter = new Vector3(PW / 2, 30, PH / 2);
+    fw.minEmitBox = new Vector3(0, 0, 0); fw.maxEmitBox = new Vector3(0, 0, 0); fw.minSize = 0.5; fw.maxSize = 1.1; fw.minLifeTime = 1.1; fw.maxLifeTime = 2.0;
+    fw.emitRate = 0; fw.createSphereEmitter(0.5); fw.minEmitPower = 9; fw.maxEmitPower = 15; fw.gravity = new Vector3(0, -7, 0); fw.updateSpeed = 0.012; fw.blendMode = ParticleSystem.BLENDMODE_ADD;
+    fw.colorDead = new Color4(0, 0, 0, 0); fw.start();
   }
   // Spielerfigur: Körper, Kopf, Beine, Arme, Nummernschild
   figure(p) {
@@ -185,6 +190,10 @@ export class Pitch3D {
   setLamps(level) { const { Color3 } = B; this.lampLevel = level; for (const l of this.lamps) l.material.emissiveColor = new Color3(1, 0.96, 0.85).scale(level); if (!this.day) { this.hemi.intensity = 0.25 + 0.5 * level; this.sun.intensity = 0.2 + 0.75 * level; } }
   // Kamerafahrt (Intro): { alpha, beta, radius, tx, tz } oder null
   setCine(c) { this.cine = c; }
+  // Stimmung nach dem Spiel: Gewinner jubeln, Verlierer hängen die Köpfe (team: Index oder null)
+  setMood(winTeam, ms = 6000) { this.mood = winTeam === null || winTeam === undefined ? null : { win: winTeam, until: performance.now() + ms }; }
+  // Feuerwerk an/aus (Meisterfeier)
+  setFireworks(on) { this.fw = on; }
   // Torjubel: Schütze reißt die Arme hoch, Kamera fährt heran
   celebrate(p) { if (p) this.celeb = { p, until: performance.now() + 2100 }; }
   resize(w, h) { this.w = w; this.h = h; this.rot = h > w * 1.15; this.engine.resize(); this.cam.fov = this.rot ? 0.95 : 0.78; }
@@ -227,8 +236,12 @@ export class Pitch3D {
       if (this.celeb && this.celeb.until > performance.now() && p.team === this.celeb.p.team && (p === this.celeb.p || Math.hypot(p.x - this.celeb.p.x, p.y - this.celeb.p.y) < 12)) { // Jubel
         const j = Math.abs(Math.sin(this.t * 9 + p.num)); f.arms[0].rotation.x = -2.9; f.arms[1].rotation.x = -2.9; f.arms[0].rotation.z = 0.5; f.arms[1].rotation.z = -0.5; f.root.position.y = j * (p === this.celeb.p ? 0.6 : 0.35); f.root.rotation.x = 0; f.legs[0].rotation.x = f.legs[1].rotation.x = -j * 0.4;
       }
+      if (this.mood && this.mood.until > performance.now()) {
+        if (p.team === this.mood.win) { const j = Math.abs(Math.sin(this.t * 7 + p.num * 1.3)); f.arms[0].rotation.x = -2.9; f.arms[1].rotation.x = -2.9; f.arms[0].rotation.z = 0.6; f.arms[1].rotation.z = -0.6; f.root.position.y = j * 0.5; f.root.rotation.x = 0; f.legs[0].rotation.x = f.legs[1].rotation.x = -j * 0.35; }
+        else { f.root.rotation.x = 0.5; f.arms[0].rotation.x = f.arms[1].rotation.x = 0.3; f.legs[0].rotation.x = f.legs[1].rotation.x = 0; f.root.position.y = 0; }
+      }
       if (p.injured) { f.root.rotation.x = 0.35; }
-      this.label(f, p);
+      f.plane.setEnabled(this.labels); if (this.labels) this.label(f, p);
     }
     // Ball
     const h = this.ballHeight(M); this.ballH = lerp(this.ballH, h, Math.min(1, dt * 12));
@@ -251,6 +264,12 @@ export class Pitch3D {
     }
     if (this.shake > 0) this.shake -= dt;
     const baseH = this.day ? 1.0 : 0.25 + 0.5 * this.lampLevel; if (this.flash > 0) { this.flash -= dt * 1.4; this.hemi.intensity = baseH + Math.max(0, this.flash) * 0.6; } else this.hemi.intensity = baseH;
+    if (this.fw && performance.now() > this.fwNext) {
+      const { Color4 } = B; this.fwNext = performance.now() + 350 + Math.random() * 500;
+      const cols = [[1, 0.3, 0.2], [1, 0.85, 0.3], [0.3, 1, 0.55], [0.4, 0.8, 1], [1, 0.5, 1], [1, 1, 1]], c = cols[Math.floor(Math.random() * cols.length)];
+      this.fwPs.emitter.set(-10 + Math.random() * (PW + 20), 22 + Math.random() * 18, -8 + Math.random() * (PH + 16)); this.fwPs.color1 = new Color4(c[0], c[1], c[2], 1); this.fwPs.color2 = new Color4(1, 1, 1, 1); this.fwPs.manualEmitCount = 160 + Math.floor(Math.random() * 120);
+      this.flash = Math.max(this.flash, 0.35);
+    }
     this.scene.render();
   }
   dispose() { try { this.engine.dispose(); } catch { /* ignore */ } }
