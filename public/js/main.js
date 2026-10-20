@@ -350,14 +350,16 @@ function fillerLine() {
 }
 function onMatchEvent(e) {
   const mine = e.team === S.myTeam;
-  if (['intercept', 'corner', 'press'].includes(e.type)) return;
+  if (pitch && pitch.onEvent) pitch.onEvent(e, M);
+  if (['intercept', 'corner', 'press', 'tackle'].includes(e.type)) return;
   const li = document.createElement('div'); const key = e.type === 'goal' ? (mine ? 'goal' : 'goal_opp') : e.type; li.className = 'te ' + key; li.innerHTML = `<b>${e.min}'</b><span>${esc(e.text)}</span>`;
   const list = $('#ticker-list'); list.prepend(li); while (list.children.length > 60) list.lastChild.remove();
   // Sprecher: wichtige Ereignisse immer, Kleinigkeiten nur bei normalem Tempo
   const PRIO = { goal: 2, red: 2, penalty: 2, pen_save: 2, pen_miss: 2, full: 2, half: 2, kickoff: 1, yellow: 1, save: 1, post: 1, wide: 1, chance: 1, injury: 1, sub: 1, block: 0, koloss: 1 };
   const pr = PRIO[e.type]; if (pr !== undefined && M.speed < 10 && (M.speed <= 1 || pr >= 2)) voice.say(tr(e.text), { lang: LANG, prio: pr, interrupt: e.type === 'goal' || e.type === 'full', rate: e.type === 'goal' ? 1.08 : 1.04, pitch: e.type === 'goal' ? 1.1 : 1 });
   if (['goal', 'yellow', 'red', 'injury', 'sub', 'penalty'].includes(e.type)) { const mk = document.createElement('i'); mk.className = 'tm ' + e.type + (mine ? ' me' : ' opp'); mk.style.left = Math.min(100, e.min / 90 * 100) + '%'; mk.title = `${e.min}' ${e.p ? e.p.name : ''}`; mk.innerHTML = icon(e.type === 'goal' ? 'ball' : e.type === 'yellow' || e.type === 'red' ? 'card' : e.type === 'penalty' ? 'pen' : e.type); $('#tl-marks').appendChild(mk); }
-  if (e.type === 'goal') { $('#sc-val').textContent = `${e.score[0]} : ${e.score[1]}`; if (pitch && pitch.celebrate && M.speed < 10) pitch.celebrate(e.p); $('#sc-val').classList.remove('flash'); void $('#sc-val').offsetWidth; $('#sc-val').classList.add('flash'); audio.play(mine ? 'goal' : 'goal_opp'); banner(mine ? 'TOOOR!' : 'Gegentor', `${e.p ? e.p.name : ''} · ${e.min}'`, !mine, 2600, e.p); if (M.speed < 10) pitch.burst(M.ball.x, M.ball.y, mine ? '#3ddc84' : '#ff6a3d'); }
+  if (e.type === 'goal') { $('#sc-val').textContent = `${e.score[0]} : ${e.score[1]}`; if (pitch && pitch.startReplay && M.speed <= 1 && !M.over) { const d = pitch.startReplay(M, e.team); if (d) { M.paused = true; $('#replay-tag').hidden = false; voice.say(tr('Wiederholung.'), { lang: LANG, prio: 1 }); setTimeout(() => { if (M && M.paused && $('#half').hidden) M.paused = false; $('#replay-tag').hidden = true; pitch.stopReplay(); pitch.celebrate(e.p); }, d); } else pitch.celebrate(e.p); }
+    else if (pitch && pitch.celebrate && M.speed < 10) pitch.celebrate(e.p); $('#sc-val').classList.remove('flash'); void $('#sc-val').offsetWidth; $('#sc-val').classList.add('flash'); audio.play(mine ? 'goal' : 'goal_opp'); banner(mine ? 'TOOOR!' : 'Gegentor', `${e.p ? e.p.name : ''} · ${e.min}'`, !mine, 2600, e.p); if (M.speed < 10) pitch.burst(M.ball.x, M.ball.y, mine ? '#3ddc84' : '#ff6a3d'); }
   else if (e.type === 'save' || e.type === 'post' || e.type === 'wide') audio.play('ooh', mine ? 0.8 : 0.5);
   else if (e.type === 'chance' && mine) audio.play('chance');
   else if (e.type === 'yellow' || e.type === 'red') { audio.play('card'); if (e.type === 'red') banner('ROT', e.p.name, !mine); }
@@ -526,7 +528,7 @@ function frame(now) {
     if (!M.paused && !M.over) { if (M.speed >= 10) { let n = 0; while (!M.over && !M.paused && n++ < 400) M.step(1 / 30); } else M.tick(dt); }
     const sc = M.score; if (!M.paused) { $('#sc-min').textContent = `${Math.floor(M.min)}'`; $('#tl-fill').style.width = Math.min(100, M.min / 90 * 100) + '%'; const pt = M.poss[0] + M.poss[1]; if (pt > 1 && (M.stepN || 0) % 20 === 0) { const l = Math.round(100 * M.poss[S.myTeam] / pt); $('#poss > i').style.width = l + '%'; $('#poss-l').textContent = l + ' %'; $('#poss-r').textContent = (100 - l) + ' %'; } }
     if (S.ftOrbit && pitch && pitch.setCine) { const t = (now - S.ftOrbit.t0) / 1000, mine = M.players.filter(p => p.team === S.myTeam && !p.out); const cx = mine.reduce((a, p) => a + p.x, 0) / Math.max(1, mine.length), cz = mine.reduce((a, p) => a + p.y, 0) / Math.max(1, mine.length); pitch.setCine({ alpha: -Math.PI / 2 + t * 0.28, beta: 1.08, radius: 30 + t * 1.2, tx: cx, tz: cz, ty: 1.2 }); }
-    if (pitch) pitch.draw(M, dt);
+    if (pitch) pitch.draw(M, dt); if (pitch && pitch.kicked) { pitch.kicked = false; if (M.speed <= 2) audio.play('kick', 0.5); }
     const excite = Math.min(1, 0.4 + Math.abs(sc[0] - sc[1]) * 0.1 + (M.ball.mode === 'shot' ? 0.4 : 0)); audio.setCrowd(excite * 0.8);
     if (!M.paused && !M.over && M.speed <= 1 && voice.idle && now - voice.lastEnd > 14000 && now - (S.fillerT || 0) > 24000) { S.fillerT = now; voice.say(fillerLine(), { lang: LANG, prio: 0, rate: 1.02 }); }
   } else if (S.screen === 'title' || S.screen === 'setup' || S.screen === 'brief' || S.screen === 'board' || S.screen === 'howto' || S.screen === 'privacy' || S.screen === 'result' || S.screen === 'report') {

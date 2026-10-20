@@ -738,3 +738,5 @@ body:not(.on-title) .lang-sw { display: none; }
 .banner > span { display: grid; }
 .hcard:nth-child(2) { animation-delay: .05s; } .hcard:nth-child(3) { animation-delay: .1s; } .hcard:nth-child(4) { animation-delay: .15s; } .hcard:nth-child(5) { animation-delay: .2s; } .hcard:nth-child(6) { animation-delay: .25s; } .hcard:nth-child(7) { animation-delay: .3s; }
 @media (max-width: 760px) { .li-wrap { grid-template-columns: 1fr; } .li-vs { display: none; } .li-col:last-child { display: none; } }
+.replay-tag { position: absolute; left: 16px; top: 14px; z-index: 5; font-family: var(--mono); font-size: 12px; letter-spacing: .2em; color: #fff; background: rgba(255,77,77,0.85); padding: 6px 12px; border-radius: 6px; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .55; } }

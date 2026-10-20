@@ -18,7 +18,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 export class Pitch3D {
   constructor(canvas) {
     this.c = canvas; this.M = null; this.figs = new Map(); this.t = 0; this.rot = false; this.flash = 0; this.shake = 0; this.focus = null;
-    this.ballH = 0; this.flight = null; this.camT = null; this.ownerRingT = 0; this.cine = null; this.celeb = null; this.lamps = []; this.day = false; this.lampLevel = 1; this.mood = null; this.fw = false; this.fwNext = 0; this.labels = true;
+    this.ballH = 0; this.flight = null; this.camT = null; this.ownerRingT = 0; this.cine = null; this.celeb = null; this.lamps = []; this.day = false; this.lampLevel = 1; this.mood = null; this.fw = false; this.fwNext = 0; this.labels = true; this.prevMode = 'held'; this.hist = []; this.replay = null; this.anim = new Map(); this.crowdPulse = 0;
     const { Engine, Scene, Color4, Vector3, HemisphericLight, DirectionalLight, ArcRotateCamera } = B;
     this.engine = new Engine(canvas, true, { stencil: false, preserveDrawingBuffer: false, antialias: true });
     this.engine.setHardwareScalingLevel(1 / Math.min(1.5, devicePixelRatio || 1));
@@ -31,7 +31,7 @@ export class Pitch3D {
     this.blobMat = this.mat('blob', '#000000', { alpha: 0.38, spec: 0 });
     this.cam = new ArcRotateCamera('cam', -Math.PI / 2, 0.98, 64, new Vector3(PW / 2, 0, PH / 2), scene);
     this.cam.fov = 0.78; this.cam.minZ = 0.5; this.cam.maxZ = 600;
-    this.buildStadium(); this.buildBall(); this.buildFx();
+    this.buildStadium(); this.buildBall(); this.buildFx(); this.ref = null;
   }
   // ---------- Aufbau ----------
   mat(name, hex, o = {}) { const { StandardMaterial, Color3 } = B; const m = new StandardMaterial(name, this.scene); m.diffuseColor = Color3.FromHexString(hex); m.specularColor = new Color3(o.spec ?? 0.08, o.spec ?? 0.08, o.spec ?? 0.08); if (o.em) m.emissiveColor = Color3.FromHexString(o.em); if (o.alpha !== undefined) m.alpha = o.alpha; m.backFaceCulling = o.bfc ?? true; return m; }
@@ -86,7 +86,7 @@ export class Pitch3D {
     const cols = ['#3ddc84', '#ffffff', '#1d6b3c', '#cfd8d3', '#ffd166', '#2a2f33', '#8bd3a8', '#0b3b22'];
     for (let i = 0; i < 9000; i++) { cc.fillStyle = cols[Math.floor(Math.random() * cols.length)]; const x = Math.random() * 1024, y = 12 + Math.random() * 232; cc.fillRect(x, y, 3, 5); }
     for (let r = 0; r < 256; r += 24) { cc.fillStyle = 'rgba(0,0,0,0.35)'; cc.fillRect(0, r, 1024, 3); } crowd.update();
-    const cm = new StandardMaterial('cm', scene); cm.diffuseTexture = crowd; cm.specularColor = Color3.Black(); cm.emissiveColor = new Color3(0.35, 0.35, 0.35);
+    const cm = this.crowdMat = new StandardMaterial('cm', scene); cm.diffuseTexture = crowd; cm.specularColor = Color3.Black(); cm.emissiveColor = new Color3(0.35, 0.35, 0.35);
     const standH = 16, tilt = 0.62;
     const mk = (len, cx, cz, roty, off) => {
       const s = MeshBuilder.CreatePlane('stand', { width: len, height: standH }, scene); s.material = cm;
@@ -180,6 +180,21 @@ export class Pitch3D {
     fig.tex.update();
   }
   // ---------- Laufzeit ----------
+  // Ereignisse aus dem Spiel: Parade, Grätsche, Tor (Publikum)
+  onEvent(e, M) {
+    const now = performance.now();
+    if (e.type === 'save' || e.type === 'pen_save') { const k = M.keeper(1 - e.team); if (k) this.anim.set(k, { kind: 'dive', until: now + 900, side: Math.random() < 0.5 ? -1 : 1 }); }
+    else if (e.type === 'tackle' && e.p) this.anim.set(e.p, { kind: 'slide', until: now + 700 });
+    else if (e.type === 'goal') this.crowdPulse = 1;
+    else if (e.type === 'yellow' || e.type === 'red') { if (e.p) this.anim.set(e.p, { kind: 'protest', until: now + 1500 }); }
+  }
+  // Torwiederholung: letzte Sekunden aus einer Kamera hinter dem Tor, in Zeitlupe. Gibt die Dauer in ms zurück (0 = keine Aufnahme).
+  startReplay(M, team) {
+    const now = performance.now(), frames = this.hist.filter(h => h.t > now - 3200); if (frames.length < 20) return 0;
+    const g = M.goalOf(team), slow = 0.55; this.replay = { frames, t0: now, slow, g, dur: (frames[frames.length - 1].t - frames[0].t) / slow + 600 };
+    return this.replay.dur;
+  }
+  stopReplay() { this.replay = null; }
   // Tageszeit: Tag (Heimspiel) oder Flutlicht (Auswärts / Intro)
   setDaylight(day) {
     const { Color4, Color3 } = B; this.day = day;
@@ -202,7 +217,20 @@ export class Pitch3D {
     const { Color4, Color3 } = B; const c = Color3.FromHexString(color);
     this.ps.emitter.set(x, 0.6, y); this.ps.color1 = new Color4(1, 1, 1, 1); this.ps.color2 = new Color4(c.r, c.g, c.b, 1); this.ps.manualEmitCount = 160;
   }
+  buildRef() {
+    const { MeshBuilder, TransformNode, Vector3 } = B, scene = this.scene, root = new TransformNode('ref', scene); root.scaling.set(1.4, 1.4, 1.4);
+    const sm = this.mat('refshirt', '#1c1c1c', { spec: 0.05 }), km = this.mat('refskin', '#e0ac69');
+    const body = MeshBuilder.CreateCapsule('rb', { height: 1.0, radius: 0.28, tessellation: 8 }, scene); body.position.y = 1.05; body.material = sm; body.parent = root;
+    const sh = MeshBuilder.CreateCylinder('rsh', { height: 0.34, diameterTop: 0.52, diameterBottom: 0.58 }, scene); sh.position.y = 0.62; sh.material = sm; sh.parent = root;
+    const head = MeshBuilder.CreateSphere('rh', { diameter: 0.38, segments: 8 }, scene); head.position.y = 1.78; head.material = km; head.parent = root;
+    const legs = [];
+    for (const sd of [-1, 1]) { const leg = new TransformNode('rl', scene); leg.position = new Vector3(sd * 0.13, 0.5, 0); leg.parent = root; const th = MeshBuilder.CreateCylinder('rt', { height: 0.5, diameter: 0.15 }, scene); th.position.y = -0.25; th.material = sm; th.parent = leg; legs.push(leg); }
+    const blob = MeshBuilder.CreateDisc('rblob', { radius: 0.5, tessellation: 12 }, scene); blob.rotation.x = Math.PI / 2; blob.position.y = 0.015; blob.material = this.blobMat; blob.parent = root;
+    for (const m of root.getChildMeshes()) m.isPickable = false;
+    return { root, legs, x: PW / 2 + 8, y: PH / 2 + 6, phase: 0 };
+  }
   syncRoster(M) {
+    if (!this.ref) this.ref = this.buildRef();
     if (this.M !== M) { for (const f of this.figs.values()) f.root.dispose(); this.figs.clear(); this.M = M; this.flight = null; this.camT = null; }
     for (const p of M.players) { if (p.out) { const f = this.figs.get(p); if (f) f.root.setEnabled(false); continue; } if (!this.figs.has(p)) this.figs.set(p, this.figure(p)); }
   }
@@ -220,19 +248,39 @@ export class Pitch3D {
   }
   draw(M, dt) {
     if (!M) return; this.t += dt; this.syncRoster(M);
-    const { Vector3 } = B, b = M.ball;
+    const { Vector3 } = B, now = performance.now();
+    // Wiederholung: Positionen aus der Aufzeichnung statt aus dem Spiel
+    let b = M.ball, rp = null;
+    if (this.replay) {
+      const R = this.replay, tt = R.frames[0].t + (now - R.t0) * R.slow; let i = 0; while (i < R.frames.length - 1 && R.frames[i + 1].t < tt) i++;
+      rp = R.frames[Math.min(i, R.frames.length - 1)]; b = rp.ball;
+      if (now - R.t0 > R.dur) { this.replay = null; rp = null; b = M.ball; }
+    }
+    // Abschlag/Pass: Beinschwung des Schützen, Kick-Sound-Hinweis
+    if (!rp) { if (this.prevMode === 'held' && (b.mode === 'pass' || b.mode === 'shot')) { const k = b.mode === 'pass' ? b.from : b.shooter; if (k) this.anim.set(k, { kind: 'kick', until: now + 380, t0: now }); this.kicked = true; } this.prevMode = b.mode; }
     // Spieler
     for (const [p, f] of this.figs) {
       if (p.out) continue; f.root.setEnabled(true);
-      const v = Math.hypot(p.vx, p.vy), run = Math.min(1, v / 5);
+      const rpp = rp ? rp.pl.get(p) : null; const px = rpp ? rpp.x : p.x, py = rpp ? rpp.y : p.y, pvx = rpp ? rpp.vx : p.vx, pvy = rpp ? rpp.vy : p.vy;
+      const v = Math.hypot(pvx, pvy), run = Math.min(1, v / 5);
       f.phase += dt * (2 + v * 1.6);
-      f.root.position.set(p.x, 0, p.y);
-      if (v > 0.3) { const ty = Math.atan2(p.vx, p.vy); let d = ty - f.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); f.root.rotation.y += d * Math.min(1, dt * 10); }
+      f.root.position.set(px, 0, py); f.root.rotation.z = 0;
+      if (v > 0.3) { const ty = Math.atan2(pvx, pvy); let d = ty - f.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); f.root.rotation.y += d * Math.min(1, dt * 10); }
+      else if (b.owner === p || (!rp && p.pos !== 'TW')) { const ty = Math.atan2(b.x - px, b.y - py); let d = ty - f.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); f.root.rotation.y += d * Math.min(1, dt * 4); }
       f.root.rotation.x = 0.18 * run;
       const sw = Math.sin(f.phase) * 0.75 * run;
       f.legs[0].rotation.x = sw; f.legs[1].rotation.x = -sw; f.arms[0].rotation.x = -sw * 0.8; f.arms[1].rotation.x = sw * 0.8;
       f.arms[0].rotation.z = 0.25; f.arms[1].rotation.z = -0.25;
       f.root.position.y = Math.abs(Math.sin(f.phase)) * 0.07 * run;
+      // Sonderanimationen: Schuss, Parade, Grätsche, Protest
+      const an = this.anim.get(p);
+      if (an && an.until > now) {
+        const k = 1 - (an.until - now) / (an.kind === 'kick' ? 380 : an.kind === 'dive' ? 900 : an.kind === 'slide' ? 700 : 1500);
+        if (an.kind === 'kick') { const sw2 = k < 0.4 ? -1.1 * (k / 0.4) : -1.1 + 2.3 * ((k - 0.4) / 0.6); f.legs[1].rotation.x = sw2; f.legs[0].rotation.x = -0.2; f.arms[0].rotation.x = 0.6; f.arms[1].rotation.x = -0.6; f.root.rotation.x = 0.1; }
+        else if (an.kind === 'dive') { const kk = Math.sin(Math.min(1, k * 1.3) * Math.PI); f.root.rotation.z = an.side * 1.25 * kk; f.root.position.y = 0.5 * kk; f.arms[0].rotation.x = f.arms[1].rotation.x = -2.6 * kk; f.arms[0].rotation.z = 0.2; f.arms[1].rotation.z = -0.2; f.legs[0].rotation.x = f.legs[1].rotation.x = 0.3 * kk; }
+        else if (an.kind === 'slide') { const kk = Math.sin(Math.min(1, k) * Math.PI); f.root.rotation.x = 1.1 * kk; f.root.position.y = -0.25 * kk; f.legs[0].rotation.x = -1.4 * kk; f.legs[1].rotation.x = 0.4 * kk; f.arms[0].rotation.x = -1.2 * kk; f.arms[1].rotation.x = 0.4 * kk; }
+        else if (an.kind === 'protest') { const kk = Math.abs(Math.sin(now / 160)); f.arms[0].rotation.x = -1.6 - kk * 0.6; f.arms[1].rotation.x = -1.6 - kk * 0.6; f.arms[0].rotation.z = 0.9; f.arms[1].rotation.z = -0.9; f.root.rotation.x = -0.1; }
+      } else if (an) this.anim.delete(p);
       if (this.celeb && this.celeb.until > performance.now() && p.team === this.celeb.p.team && (p === this.celeb.p || Math.hypot(p.x - this.celeb.p.x, p.y - this.celeb.p.y) < 12)) { // Jubel
         const j = Math.abs(Math.sin(this.t * 9 + p.num)); f.arms[0].rotation.x = -2.9; f.arms[1].rotation.x = -2.9; f.arms[0].rotation.z = 0.5; f.arms[1].rotation.z = -0.5; f.root.position.y = j * (p === this.celeb.p ? 0.6 : 0.35); f.root.rotation.x = 0; f.legs[0].rotation.x = f.legs[1].rotation.x = -j * 0.4;
       }
@@ -244,13 +292,22 @@ export class Pitch3D {
       f.plane.setEnabled(this.labels); if (this.labels) this.label(f, p);
     }
     // Ball
-    const h = this.ballHeight(M); this.ballH = lerp(this.ballH, h, Math.min(1, dt * 12));
+    const h = rp ? (b.h || 0) : this.ballHeight(M); this.ballH = rp ? h : lerp(this.ballH, h, Math.min(1, dt * 12));
     this.ball.position.set(b.x, 0.25 + this.ballH, b.y); this.ballBlob.position.x = b.x + this.ballH * 0.3; this.ballBlob.position.z = b.y - this.ballH * 0.2; const bs = 1 / (1 + this.ballH * 0.5); this.ballBlob.scaling.set(bs, bs, bs);
     const bv = Math.hypot(b.vx, b.vy); this.ball.rotation.z -= b.vx * dt * 2.2; this.ball.rotation.x += b.vy * dt * 2.2; if (bv < 0.1 && b.owner) { this.ball.rotation.z -= dt * 6; }
     // Ring unter Ballbesitzer / Fokus
-    const o = b.owner || this.focus; this.ring.isVisible = !!o; if (o) { this.ring.position.set(o.x, 0.06, o.y); this.ring.rotation.y += dt * 1.5; const T = M.teams[o.team]; this.ring.material.emissiveColor = B.Color3.FromHexString(T.color); this.ring.material.diffuseColor = this.ring.material.emissiveColor; }
-    // Kamera: Kamerafahrt (Intro), Torjubel oder TV-Kamera, die dem Ball folgt
+    const o = rp ? null : (b.owner || this.focus); this.ring.isVisible = !!o; if (o) { this.ring.position.set(o.x, 0.06, o.y); this.ring.rotation.y += dt * 1.5; const T = M.teams[o.team]; this.ring.material.emissiveColor = B.Color3.FromHexString(T.color); this.ring.material.diffuseColor = this.ring.material.emissiveColor; }
+    // Schiedsrichter: hält Abstand zum Ball, läuft mit
+    if (this.ref && !rp) { const R = this.ref, tx = Math.max(6, Math.min(PW - 6, b.x - (b.x > PW / 2 ? 12 : -12))), tz = Math.max(4, Math.min(PH - 4, b.y + 9)); const dx = tx - R.x, dz = tz - R.y, d = Math.hypot(dx, dz); const sp = Math.min(6.5, d * 1.2);
+      if (d > 0.3) { R.x += dx / d * sp * dt; R.y += dz / d * sp * dt; R.root.rotation.y = Math.atan2(dx, dz); } R.phase += dt * (1 + sp * 1.6); const rr = Math.min(1, sp / 5); R.root.position.set(R.x, Math.abs(Math.sin(R.phase)) * 0.06 * rr, R.y); R.legs[0].rotation.x = Math.sin(R.phase) * 0.7 * rr; R.legs[1].rotation.x = -Math.sin(R.phase) * 0.7 * rr; R.root.setEnabled(this.labels || true); }
+    if (this.ref) this.ref.root.setEnabled(!rp);
+    // Aufzeichnung für die Wiederholung (letzte ~4 s)
+    if (!rp && !this.cine) { const pl = new Map(); for (const [p] of this.figs) if (!p.out) pl.set(p, { x: p.x, y: p.y, vx: p.vx, vy: p.vy }); this.hist.push({ t: now, pl, ball: { x: b.x, y: b.y, h: this.ballH, mode: b.mode, owner: null } }); while (this.hist.length && this.hist[0].t < now - 4500) this.hist.shift(); }
+    // Publikum pulsiert nach einem Tor
+    if (this.crowdPulse > 0) { this.crowdPulse -= dt * 0.5; const k = Math.max(0, this.crowdPulse); if (this.crowdMat) this.crowdMat.emissiveColor.set(0.35 + k * 0.5 * Math.abs(Math.sin(now / 90)), 0.35 + k * 0.5 * Math.abs(Math.sin(now / 90)), 0.35 + k * 0.4); }
+    // Kamera: Kamerafahrt (Intro), Wiederholung, Torjubel oder TV-Kamera, die dem Ball folgt
     const land = !this.rot;
+    if (rp) { const R = this.replay, behind = R.g.x > PW / 2; this.cam.alpha = behind ? 0.15 : Math.PI - 0.15; this.cam.beta = 1.05; this.cam.radius = 44; this.cam.target.set(R.g.x + (behind ? -16 : 16), 1, PH / 2 + (b.y - PH / 2) * 0.3); this.scene.render(); return; }
     if (this.cine) { const c = this.cine; this.cam.alpha = c.alpha; this.cam.beta = c.beta; this.cam.radius = c.radius; this.cam.target.set(c.tx, c.ty ?? 0.5, c.tz); this.camT = null; }
     else {
       const cel = this.celeb && this.celeb.until > performance.now() && M.speed < 10 ? this.celeb : null;
@@ -260,6 +317,7 @@ export class Pitch3D {
       this.cam.target.set(this.camT.x + (this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0), cel ? 1.2 : 0.5, this.camT.z + (this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0));
       const want = land ? { alpha: -Math.PI / 2, beta: 0.9, radius: 74 + Math.max(0, 1.7 - this.w / this.h) * 26 } : { alpha: Math.PI, beta: 0.52, radius: 96 + Math.max(0, 1.9 - this.h / this.w) * 30 };
       if (cel) { want.radius = 26; want.beta = 1.1; }
+      else if (land) { const edge = Math.max(0, Math.abs(b.x - PW / 2) - 25) / 27.5; want.radius -= edge * 16; want.beta += edge * 0.08; } // TV-Zoom im Angriffsdrittel
       const kc = Math.min(1, dt * 3); this.cam.alpha = want.alpha; this.cam.beta = lerp(this.cam.beta, want.beta, kc); this.cam.radius = lerp(this.cam.radius, want.radius, kc);
     }
     if (this.shake > 0) this.shake -= dt;

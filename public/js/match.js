@@ -26,6 +26,7 @@ const COMMENT = {
   chance: ['{p} kommt frei zum Abschluss …', 'Großchance für {t}!'],
   press: ['{t} presst wie am ersten Tag nach dem Go-Live.'],
   koloss: ['Der Koloss setzt sich in Bewegung. Das Stadion wackelt.', 'Mainframe-Koloss mit dem Ball – langsam, aber unaufhaltsam.'],
+  tackle: ['{p} grätscht dazwischen – Zugriff entzogen.'],
   penalty: ['ELFMETER für {t}! {p} legt sich den Ball zurecht.', 'Strafstoß! Change Request mit Prio 1 – {p} tritt an.'],
   pen_goal: ['{p} verwandelt den Elfmeter – eiskalt wie ein Cutover um Mitternacht.', 'TOR! {p} schiebt den Strafstoß ein. {k} war in der falschen Ecke.'],
   pen_save: ['{k} HÄLT DEN ELFMETER! Zugriff verweigert, Ticket geschlossen.', 'Gehalten! {k} ahnt die Ecke von {p}.'],
@@ -260,7 +261,7 @@ export class Match {
       const S = this.styleOf(q.team);
       const win = 0.5 * (q.abwehr / (q.abwehr + o.technik)) * (1 + S.press * 0.1) * (q.pos === 'TW' ? 1.3 : 1) * (0.7 + 0.3 * q.energy);
       const r = this.r();
-      if (r < win) { q.rating += 0.1; o.rating -= 0.03; this.loose(b.x, b.y, (q.x - o.x) * 3 + (this.r() - 0.5) * 4, (q.y - o.y) * 3 + (this.r() - 0.5) * 4); b.last = q; this.lastTouch = q; return; }
+      if (r < win) { q.rating += 0.1; o.rating -= 0.03; this.log('tackle', { team: q.team, p: q, p2: o }); this.loose(b.x, b.y, (q.x - o.x) * 3 + (this.r() - 0.5) * 4, (q.y - o.y) * 3 + (this.r() - 0.5) * 4); b.last = q; this.lastTouch = q; return; }
       if (r < win + (this.inBox(o, q.team) ? 0.14 : 0.09)) { // Foul (im Strafraum etwas häufiger: Elfmeter)
         this.freeze = 0.9; o.decideT = 0.4;
         const ownHalf = q.team === 0 ? q.x < PW / 2 : q.x > PW / 2;

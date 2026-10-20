@@ -450,7 +450,7 @@ export default {
   "▸ Auszeichnungen der Saison": "▸ Season awards", "Auszeichnungen der Saison": "Season awards", "Torschützenkönig:in": "Top scorer", "Vorlagengeber:in": "Top assists", "Spieler:in der Saison": "Player of the season", "Talent der Saison": "Talent of the season",
   "{0} Tore": "{0} goals", "{0} Vorlagen": "{0} assists", "Stärke {0} · {1} Spiele": "Strength {0} · {1} matches", "{0} J. · {1} Scorerpunkte": "{0} yrs · {1} goal contributions",
   "Intro": "Intro", "Die Geschichte der Legacy League": "The story of the Legacy League", "Überspringen ›": "Skip ›", "RealCore TechHub präsentiert": "RealCore TechHub presents",
-  "1998. Ein System geht live. Es wurde nie dokumentiert – und nie wieder abgeschaltet.": "1998. A system goes live. It was never documented – and never switched off again.",
+  "1998. Ein System geht in Betrieb. Es wurde nie dokumentiert – und nie wieder abgeschaltet.": "1998. A system goes live. It was never documented – and never switched off again.",
   "Seit 1998 ungeschlagen. Ohne Tests, ohne Doku, ohne Gnade: der Legacy-Monolith FC.": "Unbeaten since 1998. No tests, no docs, no mercy: Legacy-Monolith FC.",
   "Ein neuer Verein fordert ihn heraus: TechHub United. Clean Core in der Abwehr, Integration im Mittelfeld, KI im Sturm.": "A new club challenges it: TechHub United. Clean core in defence, integration in midfield, AI up front.",
   "Sieben Spieltage. Sieben Legacy-Clubs. Ein Ziel: die Legacy League – und das Finale gegen den Monolithen.": "Seven matchdays. Seven legacy clubs. One goal: the Legacy League – and the final against the Monolith.",
@@ -472,4 +472,5 @@ export default {
   "Meister der Legacy League! TechHub United hat den Monolithen gestürzt. Clean Core gewinnt Meisterschaften!": "Champions of the Legacy League! TechHub United has toppled the Monolith. Clean core wins championships!",
   "Saisonende. Platz {0} für TechHub United – stark gespielt, aber die Legacy-IT bleibt vorn. Nächste Saison holen wir den Titel.": "Season over. {0}th place for TechHub United – well played, but the legacy IT stays ahead. Next season we take the title.",
   "Saisonende. Platz {0}. Die Legacy-KI hat diese Saison gewonnen – never touch a running system. Revanche?": "Season over. {0}th place. The Legacy AI won this season – never touch a running system. Rematch?",
+  "Wiederholung.": "Replay.", "⟲ WIEDERHOLUNG": "⟲ REPLAY", "{0} grätscht dazwischen – Zugriff entzogen.": "{0} slides in – access revoked.",
 };

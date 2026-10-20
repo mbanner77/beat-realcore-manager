@@ -3,7 +3,7 @@ import { OPPONENTS, TAUNTS } from '/home/claude/beat-realcore-manager/public/js/
 import fs from 'node:fs';
 const de = [];
 const add = (who, text) => de.push({ who, text });
-add('narr', '1998. Ein System geht live. Es wurde nie dokumentiert – und nie wieder abgeschaltet.');
+add('narr', '1998. Ein System geht in Betrieb. Es wurde nie dokumentiert – und nie wieder abgeschaltet.');
 add('legacy', 'Seit 1998 ungeschlagen. Ohne Tests, ohne Doku, ohne Gnade: der Legacy-Monolith FC.');
 add('lena', 'Ein neuer Verein fordert ihn heraus: TechHub United. Clean Core in der Abwehr, Integration im Mittelfeld, KI im Sturm.');
 add('lena', 'Sieben Spieltage. Sieben Legacy-Clubs. Ein Ziel: die Legacy League – und das Finale gegen den Monolithen.');
