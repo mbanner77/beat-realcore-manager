@@ -743,3 +743,12 @@ body:not(.on-title) .lang-sw { display: none; }
 .subtitle { position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 16px); z-index: 85; max-width: min(900px, 92vw); padding: 10px 18px; background: rgba(2,8,6,0.85); border: 1px solid var(--line2); border-left: 3px solid var(--green); border-radius: 8px; color: #fff; font-size: clamp(14px, 1.6vw, 19px); line-height: 1.4; text-align: center; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; backdrop-filter: blur(6px); }
 .subtitle.on { opacity: 1; transform: translate(-50%, 0); }
 body.ingame .subtitle { bottom: 18px; }
+.hcard .tipp.wx { background: rgba(56,225,255,0.07); border-left-color: var(--cyan); }
+.hcard .tipp.wx b { font-size: 18px; }
+.talk-row h3 { margin-top: 14px; }
+.live-energy { padding: 6px 12px 10px; border-bottom: 1px solid var(--line2); cursor: pointer; }
+.live-energy small { color: var(--muted); font-size: 11px; font-family: var(--mono); }
+.le-grid { display: grid; grid-template-columns: repeat(11, 1fr); gap: 3px; margin-top: 4px; }
+.le-grid span { position: relative; height: 22px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; display: grid; place-items: center; }
+.le-grid i { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--green); } .le-grid .mid i { background: var(--amber); } .le-grid .low i { background: var(--red); } .le-grid .inj { outline: 1px solid var(--red); }
+.le-grid b { position: relative; font-family: var(--mono); font-size: 10.5px; color: var(--text); }

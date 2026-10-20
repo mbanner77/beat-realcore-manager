@@ -1,5 +1,5 @@
 // Spielsimulation: Positionsspiel auf 105 × 68 m, Pässe, Schüsse, Zweikämpfe, Karten, Verletzungen, Kommentar
-import { STYLES, TEMPO } from './data.js';
+import { STYLES, TEMPO, WEATHER } from './data.js';
 import { rng } from './manager.js';
 
 export const PW = 105, PH = 68, GOAL_W = 7.32;
@@ -9,7 +9,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 // Kommentar-Vorlagen mit SAP-Humor; {p} Spieler, {t} Team, {o} Gegner, {k} Torwart
-const COMMENT = {
+export const COMMENT = {
   kickoff: ['Anpfiff in der {s}! {t} stößt an.', 'Es geht los – Inbetriebnahme für 90 Minuten.'],
   half: ['Halbzeit. Zeit für eine Schnellkorrektur in der Kabine.', 'Pause. Der Änderungsbeirat tagt in der Kabine.'],
   full: ['Abpfiff! Das Spiel ist ausgerollt.', 'Schluss! Der Stapellauf ist durch.'],
@@ -35,7 +35,7 @@ const COMMENT = {
 
 export class Match {
   constructor(home, away, o = {}) {
-    this.r = rng(o.seed || 1); this.hooks = o.hooks || {}; this.t = 0; this.min = 0; this.speed = 1; this.paused = false; this.halfDone = false; this.over = false; this.stoppage = 0;
+    this.r = rng(o.seed || 1); this.hooks = o.hooks || {}; this.weather = o.weather || 'sun'; this.W = WEATHER[this.weather] || WEATHER.sun; this.t = 0; this.min = 0; this.speed = 1; this.paused = false; this.halfDone = false; this.over = false; this.stoppage = 0;
     this.score = [0, 0]; this.events = []; this.shots = [[0, 0], [0, 0]]; this.poss = [0, 0];
     this.teams = [home, away]; this.players = [];
     this.subsLeft = [3, 3]; this.subsDone = [];
@@ -64,7 +64,9 @@ export class Match {
     let key = e.type; if (e.type === 'goal') key = e.pen ? 'pen_goal' : e.team === me ? 'goal' : 'goal_opp';
     const arr = COMMENT[key] || [e.type]; const tpl = arr[Math.floor(this.r() * arr.length)];
     const k = e.team !== undefined ? this.keeper(1 - e.team) : null;
-    return tpl.replace('{p2}', e.p2 ? e.p2.name : '').replace('{p}', e.p ? e.p.name : '').replace('{t2}', e.team !== undefined ? this.teams[1 - e.team].short : '').replace('{t}', T ? T.short : '').replace('{k}', k ? k.name : 'Torwart').replace('{s}', 'Clean-Core-Arena');
+    const vals = { p2: e.p2 ? e.p2.name : '', p: e.p ? e.p.name : '', t2: e.team !== undefined ? this.teams[1 - e.team].short : '', t: T ? T.short : '', k: k ? k.name : 'Torwart', s: 'Clean-Core-Arena' };
+    e.tpl = tpl; e.vals = vals; // für den Sprecher (Teilstücke)
+    return tpl.replace(/\{(p2|t2|p|t|k|s)\}/g, (_, n) => vals[n]);
   }
   // ---------- Spielstart / Standards ----------
   kickoff(ti) {
@@ -100,7 +102,7 @@ export class Match {
     this.tackles(dt);
     this.aiSubs();
   }
-  spd(p) { const T = this.tempoOf(p.team); return (5.2 + p.tempo / 100 * 6.5) * (0.6 + 0.4 * p.energy) * T.k * (p.injured ? 0.55 : 1); }
+  spd(p) { const T = this.tempoOf(p.team); return (5.2 + p.tempo / 100 * 6.5) * (0.6 + 0.4 * p.energy) * T.k * (p.injured ? 0.55 : 1) * this.W.spd; }
   // Zielpunkt eines Spielers ohne Ball
   targetOf(p) {
     const b = this.ball, ti = p.team, S = this.styleOf(ti), own = b.owner && b.owner.team === ti, dir = ti === 0 ? 1 : -1;
@@ -224,7 +226,7 @@ export class Match {
   laneBlocked(a, b) { const d = dist(a, b); for (const q of this.alive(1 - a.team)) { const t = ((q.x - a.x) * (b.x - a.x) + (q.y - a.y) * (b.y - a.y)) / (d * d); if (t <= 0.08 || t >= 0.92) continue; const px = a.x + (b.x - a.x) * t, py = a.y + (b.y - a.y) * t; if (Math.hypot(q.x - px, q.y - py) < 1.3) return true; } return false; }
   pass(p, q) {
     const b = this.ball, d = dist(p, q), tgt = { x: q.x + q.vx * 0.3, y: q.y + q.vy * 0.3 };
-    const err = (1 - p.technik / 100) * 3.5 * (this.r() - 0.5); tgt.y += err; tgt.x += err * 0.5;
+    const err = (1 - p.technik / 100) * 3.5 * (this.r() - 0.5) * this.W.err * (d > 22 ? this.W.long : 1); tgt.y += err; tgt.x += err * 0.5;
     const sp = clamp(12 + d * 0.5, 13, 30), dd = dist(p, tgt) || 1;
     b.owner = null; b.mode = 'pass'; b.target = q; b.from = p; b.vx = (tgt.x - p.x) / dd * sp; b.vy = (tgt.y - p.y) / dd * sp; b.x = p.x; b.y = p.y; this.lastTouch = p; b.last = p; p.rating += 0.015;
   }
@@ -235,6 +237,7 @@ export class Match {
     let crowd = 0; for (const q of this.alive(1 - p.team)) if (q.pos !== 'TW' && dist(q, p) < 6) crowd++;
     v *= 1 - 0.1 * Math.min(3, crowd);
     if (p.koloss) v *= 1.2;
+    v *= this.W.xg * (d > 22 && this.weather === 'wind' ? 0.85 : 1);
     return clamp(v, 0.015, 0.7);
   }
   shoot(p, xg) {
@@ -300,6 +303,15 @@ export class Match {
     const sp = 30, dd = Math.hypot(g.x - b.x, ty - b.y) || 1;
     b.owner = null; b.mode = 'shot'; b.shooter = taker; b.outcome = outcome; b.blocker = null; b.penalty = true; b.vx = (g.x - b.x) / dd * sp; b.vy = (ty - b.y) / dd * sp;
     this.assist = null;
+  }
+  // Kabinenansprache (eigenes Team)
+  teamTalk(ti, kind) {
+    for (const p of this.alive(ti)) {
+      if (kind === 'push') { p.tempo = clamp(p.tempo * 1.04, 1, 99); p.schuss = clamp(p.schuss * 1.04, 1, 99); p.energy = Math.max(0.3, p.energy - 0.03); }
+      else if (kind === 'calm') { p.technik = clamp(p.technik * 1.04, 1, 99); p.abwehr = clamp(p.abwehr * 1.04, 1, 99); }
+      else if (kind === 'praise') { for (const a of ['tempo', 'technik', 'abwehr', 'schuss']) p[a] = clamp(p[a] * 1.02, 1, 99); p.energy = Math.min(1, p.energy + 0.05); }
+    }
+    this.talked = kind;
   }
   // Gegnerische Trainerbank: müde oder verletzte Spieler ab der 55. Minute auswechseln
   aiSubs() {

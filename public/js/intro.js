@@ -14,7 +14,7 @@ const SHOTS = [
   { dur: 6.5, lights: 1, from: { alpha: -Math.PI / 2 - 0.5, beta: 0.55, radius: 150, tx: PW / 2, tz: PH / 2 }, to: { alpha: -Math.PI / 2 + 0.25, beta: 0.7, radius: 110, tx: PW / 2, tz: PH / 2 },
     who: 'Legacy-KI', text: 'Seit 1998 ungeschlagen. Ohne Tests, ohne Doku, ohne Gnade: der Legacy-Monolith FC.', legacy: true },
   { dur: 6.5, lights: 1, from: { alpha: -Math.PI / 2, beta: 1.2, radius: 28, tx: 30, tz: PH / 2 + 8 }, to: { alpha: -Math.PI / 2 + 0.15, beta: 1.05, radius: 36, tx: 60, tz: PH / 2 },
-    who: 'Lena Hoff', text: 'Ein neuer Verein fordert ihn heraus: TechHub United. Clean Core in der Abwehr, Integration im Mittelfeld, KI im Sturm.' },
+    who: 'Lena Hoff', text: 'Ein neuer Verein fordert ihn heraus: TechHub United. Ein sauberer Kern in der Abwehr, Integration im Mittelfeld, KI im Sturm.' },
   { dur: 6.0, lights: 1, from: { alpha: Math.PI / 2 + 0.3, beta: 0.95, radius: 60, tx: PW / 2, tz: PH / 2 }, to: { alpha: Math.PI / 2 - 0.3, beta: 0.85, radius: 70, tx: PW / 2, tz: PH / 2 },
     who: 'Lena Hoff', text: 'Sieben Spieltage. Sieben Legacy-Clubs. Ein Ziel: die Legacy League – und das Finale gegen den Monolithen.' },
   { dur: 5.0, lights: 1, from: { alpha: -Math.PI / 2, beta: 0.9, radius: 90, tx: PW / 2, tz: PH / 2 }, to: { alpha: -Math.PI / 2, beta: 0.95, radius: 74, tx: PW / 2, tz: PH / 2 }, title: true },

@@ -104,27 +104,27 @@ export const OPPONENTS = [
   { id: 'zombies', club: 'Z-Report Zombies 1998', short: 'Zombies', color: '#8a6d4a', color2: '#3a2a16', strength: 70, style: 'wall', seed: 404,
     teaser: 'Langsam, zäh, undokumentiert: Die Zombies stehen mit zehn Mann hinten und laufen seit 1998 ohne Doku.',
     lena: 'Die Zombies mauern. Geduld, Geduld, Geduld – und dann ein Fernschuss von Anton oder ein Tempo-Lauf von Jules. Nicht in die Masse rennen.',
-    legacy: 'Meine Z-Reports laufen seit 1998 ohne Doku. Und jetzt laufen sie zu euch.',
+    legacy: 'Meine Eigenbau-Berichte laufen seit 1998 ohne Doku. Und jetzt laufen sie zu euch.',
     real: 'Eine S/4HANA-Transformation gelingt, wenn Eigenentwicklungen vorher transparent sind. Mit Z-Insight analysieren wir eure Z-Erweiterungen und Systemgesundheit – und begleiten die Migration bis zum Go-Live.',
     offer: ['S/4HANA-Transformation', 'Z-Insight Custom-Code-Analyse', 'Datenmigration'],
     names: ['Zombie Zed', 'Report Rolf', 'Doku Dieter', 'Include Ivo', 'Legacy Leo', 'Modpool Moni', 'Dynpro Dirk', 'Batch Bodo', 'Spool Sven', 'Job Jürgen', 'Mauer Malte'] },
   { id: 'hypercare', club: 'SV Ticketflut', short: 'Ticketflut', color: '#38e1ff', color2: '#0b3d4a', strength: 73, style: 'press', seed: 505,
     teaser: 'Nach dem Go-Live kommt die Hypercare: Der SV Ticketflut presst 90 Minuten mit Prio 1. Wer die Nerven behält, gewinnt.',
-    lena: 'Ticketflut presst wie am ersten Tag nach dem Go-Live. Kurze, sichere Pässe, Kondition schonen – und in der Schlussphase zuschlagen, wenn ihnen die Luft ausgeht.',
+    lena: 'Ticketflut presst wie am ersten Tag nach der Inbetriebnahme. Kurze, sichere Pässe, Kondition schonen – und in der Schlussphase zuschlagen, wenn ihnen die Luft ausgeht.',
     legacy: 'Neues System, neue Fehler. Ich habe Zeit. Ihr nicht.',
     real: 'Nach dem Go-Live entscheidet die Hypercare über den Erfolg: Tickets, Performance, Nutzerfragen. Mit Application Management und Monitoring sorgen wir dafür, dass der neue Betrieb stabil läuft.',
     offer: ['Hypercare & Application Management', 'SAP-Basis-Betrieb', 'Monitoring & Alerting'],
     names: ['Ticket Tanja', 'Prio Pit', 'Eskalation Emil', 'Hotline Hans', 'Incident Inka', 'Störung Stefan', 'Nachfrage Nadja', 'Warteschlange Wenzel', 'Erstkontakt Erik', 'Reopen Ria', 'Deadline Dagmar'] },
   { id: 'rollout', club: 'Fax-Werk Süd', short: 'Fax-Werk', color: '#b8b8b8', color2: '#3b3b3b', strength: 76, style: 'longshot', seed: 606,
     teaser: 'Werk Süd will sein eigenes Template – und schießt aus jeder Lage. Das Fax-Werk trifft aus 30 Metern. Manchmal sogar das Tor.',
-    lena: 'Auswärts in Werk Süd. Die schießen aus jeder Entfernung – rückt raus, stellt die Schusslinien zu. Und bringt unser Template heil nach Hause.',
+    lena: 'Auswärts in Werk Süd. Die schießen aus jeder Entfernung – rückt raus, stellt die Schusslinien zu. Und bringt unsere Vorlage heil nach Hause.',
     legacy: 'Jedes Werk hat seine eigenen Prozesse. Ich habe dafür gesorgt.',
     real: 'Internationale Rollouts gelingen mit einem stabilen Template und klarer Steuerung. Wir begleiten SAP-Rollouts von der Template-Entwicklung bis zur Einführung in den Landesgesellschaften.',
     offer: ['Internationale SAP-Rollouts', 'Template-Management', 'Change & Schulung'],
     names: ['Fax Ferdinand', 'Kopierer Klaus', 'Werk Werner', 'Sonderlocke Silke', 'Formular Fritz', 'Durchschlag Doris', 'Papier Pamela', 'Stempel Stan', 'Postweg Percy', 'Telex Toni', 'Ausnahme Axel'] },
   { id: 'monolith', club: 'Legacy-Monolith FC', short: 'Monolith', color: '#ff4d2e', color2: '#4a0d05', strength: 82, style: 'boss', seed: 707,
     teaser: 'Das Finale. Der Legacy-Monolith FC: seit 1998 ungeschlagen, nie dokumentiert, im Sturm der Mainframe-Koloss. Wer ihn stürzt, gewinnt die Liga.',
-    lena: 'Das Finale gegen den Monolithen. Der Koloss im Sturm ist langsam – aber wenn er schießt, wackelt das Stadion. Doppelt decken, Tempo über die Flügel, und dann: Clean Core.',
+    lena: 'Das Finale gegen den Monolithen. Der Koloss im Sturm ist langsam – aber wenn er schießt, wackelt das Stadion. Doppelt decken, Tempo über die Flügel, und dann: sauber aufräumen.',
     legacy: 'Ihr wollt mich abschalten? Ich BIN die Dokumentation.',
     real: 'Monolithische Altsysteme bremsen Innovation. Mit Clean Core, BTP-Erweiterungen und KI-Lösungen wie AI4BIZ modernisieren wir Schritt für Schritt – ohne Big Bang.',
     offer: ['Clean-Core-Strategie', 'BTP Side-by-Side-Erweiterungen', 'AI4BIZ'],
@@ -144,14 +144,14 @@ export const EVENTS = {
 };
 
 export const TAUNTS = {
-  release_freeze: ['Release-Freeze! Niemand spielt irgendwas. Anweisung von ganz oben.', 'Change Advisory Board tagt. Euer Kapitän sitzt mit drin.'],
-  change_requests: ['Eine Flut von Change Requests rollt an. Alle mit Prio 1 – und alle auf eure Knie.', 'Fachbereich meldet: Zu viele Änderungen, Spieler verletzt.'],
+  release_freeze: ['Änderungsstopp! Niemand spielt irgendwas. Anweisung von ganz oben.', 'Der Änderungsbeirat tagt. Euer Kapitän sitzt mit drin.'],
+  change_requests: ['Eine Flut von Änderungsanträgen rollt an. Alle mit höchster Dringlichkeit – und alle auf eure Knie.', 'Fachbereich meldet: Zu viele Änderungen, Spieler verletzt.'],
   budget_cut: ['Das Controlling hat euer Transferbudget gekürzt. Ich hatte nichts damit zu tun. Fast.', 'Budgetrunde vorbei – ihr habt verloren.'],
   shadow_it: ['Schatten-IT aktiviert. Habt ihr den Spieler im Keller vergessen?', 'Irgendwer hat da einen Spieler gebaut … und er lebt.'],
-  koloss: ['Ich hole den Mainframe aus dem Keller. Bandlaufwerke bereit.', 'COBOL-Koloss erwacht. Er hat 40 Jahre Wartungsrückstand – und einen Schuss wie ein Batchlauf.'],
-  wave_now: ['Batchlauf gestartet. Ziel: euer Strafraum.', 'Change Request genehmigt: Vollpressing!'],
-  win: ['Never touch a running system – ich touche euch trotzdem.', 'Ihr wollt Clean Core? Ich will Chaos.', 'Hab ich doch gesagt. Never touch a running system.'],
-  lose: ['Zurück ins Backlog. Wir kommen wieder – mit mehr Change Requests.', 'Das war ein Testsystem. Angeblich.', 'Ich bin älter als eure Frameworks. Und ich habe mehr Zeit.'],
+  koloss: ['Ich hole den Großrechner aus dem Keller. Bandlaufwerke bereit.', 'COBOL-Koloss erwacht. Er hat 40 Jahre Wartungsrückstand – und einen Schuss wie ein nächtlicher Stapellauf.'],
+  wave_now: ['Stapellauf gestartet. Ziel: euer Strafraum.', 'Änderungsantrag genehmigt: Pressing über das ganze Feld!'],
+  win: ['Ein laufendes System fasst man nicht an – euch schon.', 'Ihr wollt einen sauberen Kern? Ich will Chaos.', 'Hab ich doch gesagt: Ein laufendes System fasst man nicht an.'],
+  lose: ['Zurück in die Warteschlange. Wir kommen wieder – mit mehr Änderungsanträgen.', 'Das war ein Testsystem. Angeblich.', 'Ich bin älter als eure ganze Technik. Und ich habe mehr Zeit.'],
 };
 
 export const CLUB = { name: 'TechHub United', short: 'TechHub', color: '#3ddc84', color2: '#0b3b22', stadium: 'Clean-Core-Arena Essen' };
@@ -186,4 +186,18 @@ export const DECISIONS = {
     options: [{ key: 'yes', label: 'Abstellen', effect: 'Budget +200 T€, ein:e Stammspieler:in erschöpft' }, { key: 'no', label: 'Ablehnen', effect: 'Keine Änderung' }] },
   offer: { title: 'Transferanfrage', text: 'Ein Club bietet 150 % des Marktwerts für {p}. Verkaufen oder halten?',
     options: [{ key: 'sell', label: 'Verkaufen', effect: 'Budget +{v} T€' }, { key: 'keep', label: 'Behalten', effect: 'Stimmung des Spielers +8' }] },
+};
+
+// Wetter am Spieltag: beeinflusst Passgenauigkeit, Tempo und Abschlüsse
+export const WEATHER = {
+  sun:  { name: 'Sonne', icon: '☀️', desc: 'Bestes Fußballwetter. Keine Einschränkungen.', err: 1, spd: 1, xg: 1, long: 1 },
+  rain: { name: 'Regen', icon: '🌧️', desc: 'Nasser Rasen: Pässe ungenauer, Schüsse gefährlicher. Kurzpassspiel (Clean Core) hilft.', err: 1.45, spd: 0.97, xg: 1.08, long: 1.2 },
+  wind: { name: 'Sturm', icon: '🌬️', desc: 'Starker Wind: lange Bälle werden zur Lotterie, Fernschüsse verfliegen.', err: 1.15, spd: 1, xg: 0.94, long: 1.8 },
+  snow: { name: 'Schnee', icon: '❄️', desc: 'Schnee: alles langsamer, sichere Pässe gewinnen. Kondition schonen.', err: 1.6, spd: 0.9, xg: 1.0, long: 1.4 },
+};
+// Kabinenansprache zur Halbzeit
+export const TALKS = {
+  push:   { name: 'Feuer machen', desc: 'Tempo und Schuss +4 %, kostet etwas Kondition.' },
+  calm:   { name: 'Ruhe bewahren', desc: 'Technik und Abwehr +4 % – weniger Fehler.' },
+  praise: { name: 'Loben', desc: 'Alle Werte +2 %, Kondition +5 %.' },
 };

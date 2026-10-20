@@ -46,7 +46,7 @@ export class Season {
   // ---------- Woche ----------
   prepareWeek(first = false) {
     this.trained = null; this.weekMsgs = []; this.extraTraining = false; this.oppMod = 0;
-    this.pickObjective(); this.pickDecision(first);
+    this.pickObjective(); this.pickDecision(first); this.pickWeather();
     for (const p of this.players) {
       if (!first) { p.fitness = clamp(p.fitness + 22, 0, 100); if (p.injured > 0) p.injured--; if (p.suspended > 0) p.suspended--; p.morale = clamp(p.morale + (p.morale < 60 ? 3 : -1), 20, 100); }
     }
@@ -105,6 +105,8 @@ export class Season {
     this.msg('hub', `${p.name} wechselt für ${gain} T€. Das Budget freut sich, die Kabine weniger.`);
     return { ok: true, gain };
   }
+  // ---------- Wetter ----------
+  pickWeather() { const x = this.r(); this.weather = x < 0.52 ? 'sun' : x < 0.77 ? 'rain' : x < 0.9 || this.day < 4 ? 'wind' : 'snow'; }
   // ---------- Kapitän, Elfmeterschütze ----------
   pickLeaders() {
     const inL = this.slots.map(id => this.players.find(p => p.id === id)).filter(p => p && this.available(p));

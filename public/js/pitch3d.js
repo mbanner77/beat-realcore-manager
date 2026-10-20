@@ -61,7 +61,7 @@ export class Pitch3D {
       for (const cy of [0, PH]) { g.beginPath(); g.arc(X(x0), Y(cy), 1 * px, 0, Math.PI * 2); g.stroke(); }
     }
     tex.update();
-    const ground = MeshBuilder.CreateGround('ground', { width: W, height: H, subdivisions: 2 }, scene);
+    const ground = this.ground = MeshBuilder.CreateGround('ground', { width: W, height: H, subdivisions: 2 }, scene);
     ground.position = new Vector3(PW / 2, 0, PH / 2);
     const gm = new StandardMaterial('gm', scene); gm.diffuseTexture = tex; gm.specularColor = new Color3(0.03, 0.05, 0.03); ground.material = gm;
     // Umgebung (dunkler Boden weit außen)
@@ -126,6 +126,7 @@ export class Pitch3D {
   buildFx() {
     const { ParticleSystem, DynamicTexture, Vector3, Color4 } = B, scene = this.scene;
     const t = new DynamicTexture('pt', { width: 32, height: 32 }, scene, false); const c = t.getContext(); const gr = c.createRadialGradient(16, 16, 2, 16, 16, 16); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); c.fillStyle = gr; c.fillRect(0, 0, 32, 32); t.update(); t.hasAlpha = true;
+    this.ptex = t;
     const ps = this.ps = new ParticleSystem('fx', 400, scene); ps.particleTexture = t; ps.emitter = new Vector3(PW / 2, 1, PH / 2);
     ps.minEmitBox = new Vector3(-0.3, 0, -0.3); ps.maxEmitBox = new Vector3(0.3, 0.5, 0.3); ps.minSize = 0.25; ps.maxSize = 0.6; ps.minLifeTime = 0.7; ps.maxLifeTime = 1.4;
     ps.emitRate = 0; ps.direction1 = new Vector3(-4, 6, -4); ps.direction2 = new Vector3(4, 12, 4); ps.minEmitPower = 1; ps.maxEmitPower = 2.2; ps.gravity = new Vector3(0, -14, 0); ps.updateSpeed = 0.012; ps.blendMode = ParticleSystem.BLENDMODE_STANDARD;
@@ -205,6 +206,21 @@ export class Pitch3D {
   setLamps(level) { const { Color3 } = B; this.lampLevel = level; for (const l of this.lamps) l.material.emissiveColor = new Color3(1, 0.96, 0.85).scale(level); if (!this.day) { this.hemi.intensity = 0.25 + 0.5 * level; this.sun.intensity = 0.2 + 0.75 * level; } }
   // Kamerafahrt (Intro): { alpha, beta, radius, tx, tz } oder null
   setCine(c) { this.cine = c; }
+  // Wetter: Regen/Schnee als Partikel, Himmel und Licht passend
+  setWeather(w) {
+    const { ParticleSystem, Vector3, Color4, Color3 } = B; this.weatherKind = w;
+    if (this.wps) { this.wps.dispose(); this.wps = null; }
+    if (w === 'rain' || w === 'snow') {
+      const ps = this.wps = new ParticleSystem('weather', w === 'rain' ? 4000 : 2500, this.scene); ps.particleTexture = this.ptex;
+      ps.emitter = new Vector3(PW / 2, 34, PH / 2); ps.minEmitBox = new Vector3(-PW * 0.75, 0, -PH * 0.8); ps.maxEmitBox = new Vector3(PW * 0.75, 4, PH * 0.8);
+      if (w === 'rain') { ps.minSize = 0.06; ps.maxSize = 0.1; ps.minScaleY = 7; ps.maxScaleY = 10; ps.emitRate = 2600; ps.direction1 = new Vector3(-1, -30, 0); ps.direction2 = new Vector3(1, -36, 0); ps.minLifeTime = 1.0; ps.maxLifeTime = 1.2; ps.color1 = new Color4(0.75, 0.85, 1, 0.45); ps.color2 = new Color4(0.7, 0.8, 1, 0.3); ps.billboardMode = ParticleSystem.BILLBOARDMODE_STRETCHED; }
+      else { ps.minSize = 0.18; ps.maxSize = 0.35; ps.emitRate = 900; ps.direction1 = new Vector3(-2, -5, -1); ps.direction2 = new Vector3(2, -7, 1); ps.minLifeTime = 5; ps.maxLifeTime = 7; ps.color1 = new Color4(1, 1, 1, 0.9); ps.color2 = new Color4(0.9, 0.95, 1, 0.7); }
+      ps.minEmitPower = 1; ps.maxEmitPower = 1; ps.updateSpeed = 0.016; ps.colorDead = new Color4(1, 1, 1, 0); ps.blendMode = ParticleSystem.BLENDMODE_STANDARD; ps.preWarmCycles = 60; ps.start();
+    }
+    if (this.day) this.scene.clearColor = w === 'sun' ? new Color4(0.55, 0.72, 0.9, 1) : w === 'snow' ? new Color4(0.78, 0.8, 0.84, 1) : new Color4(0.42, 0.47, 0.52, 1);
+    this.weatherDim = w === 'rain' ? 0.8 : w === 'snow' ? 0.92 : w === 'wind' ? 0.95 : 1;
+    if (this.ground && w === 'snow') this.ground.material.diffuseColor = new Color3(1.15, 1.18, 1.2); else if (this.ground) this.ground.material.diffuseColor = new Color3(1, 1, 1);
+  }
   // Stimmung nach dem Spiel: Gewinner jubeln, Verlierer hängen die Köpfe (team: Index oder null)
   setMood(winTeam, ms = 6000) { this.mood = winTeam === null || winTeam === undefined ? null : { win: winTeam, until: performance.now() + ms }; }
   // Feuerwerk an/aus (Meisterfeier)
@@ -321,7 +337,7 @@ export class Pitch3D {
       const kc = Math.min(1, dt * 3); this.cam.alpha = want.alpha; this.cam.beta = lerp(this.cam.beta, want.beta, kc); this.cam.radius = lerp(this.cam.radius, want.radius, kc);
     }
     if (this.shake > 0) this.shake -= dt;
-    const baseH = this.day ? 1.0 : 0.25 + 0.5 * this.lampLevel; if (this.flash > 0) { this.flash -= dt * 1.4; this.hemi.intensity = baseH + Math.max(0, this.flash) * 0.6; } else this.hemi.intensity = baseH;
+    const baseH = (this.day ? 1.0 : 0.25 + 0.5 * this.lampLevel) * (this.weatherDim || 1); if (this.flash > 0) { this.flash -= dt * 1.4; this.hemi.intensity = baseH + Math.max(0, this.flash) * 0.6; } else this.hemi.intensity = baseH;
     if (this.fw && performance.now() > this.fwNext) {
       const { Color4 } = B; this.fwNext = performance.now() + 350 + Math.random() * 500;
       const cols = [[1, 0.3, 0.2], [1, 0.85, 0.3], [0.3, 1, 0.55], [0.4, 0.8, 1], [1, 0.5, 1], [1, 1, 1]], c = cols[Math.floor(Math.random() * cols.length)];

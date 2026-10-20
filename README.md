@@ -18,3 +18,5 @@ Der RealCore-Fußballmanager im Browser: Führe TechHub United durch sieben Spie
 - Spielanimation: Schuss-/Passbewegung, Torwartparaden, Grätschen, Protest bei Karten, Schiedsrichter, TV-Zoom im Angriffsdrittel, Torwiederholung in Zeitlupe aus der Torkamera, pulsierendes Publikum, Kick-Sounds
 - Untertitel: jede gesprochene Ansage (Sprecher, Lena, Legacy-KI, Live-Kommentar) wird auch als Text eingeblendet
 - Kommentar in deutscher Sprache (Inbetriebnahme, Schnellkorrektur, Änderungsantrag, Brandmauer …), Aussprachehilfen für englische Spielernamen in der Sprachausgabe; Halbzeitfazit, Nachspielzeit, gegnerische Auswechslungen
+- Live-Kommentar mit echter Stimme: Satzteile, Spieler-/Vereinsnamen und Zahlen werden einzeln produziert (`tools/voice/frags.mjs` + `gen_frags.py`, Ausgabe `public/audio/voice/<lang>/c/`) und im Browser per Web Audio nahtlos zusammengesetzt; Gerätestimme nur noch als Rückfall
+- Wetter (Sonne, Regen, Sturm, Schnee) mit Einfluss auf Pässe, Tempo und Abschlüsse sowie 3D-Regen/-Schnee; Kabinenansprache zur Halbzeit; Live-Konditionsanzeige mit Wechselhinweisen
