@@ -13,5 +13,5 @@ Der RealCore-Fußballmanager im Browser: Führe TechHub United durch sieben Spie
 - Störungen der Legacy-KI, Bestenliste mit RealCore-Benchmark, Gutschein-Flow, DE/EN
 - Filmisches Intro (Kamerafahrt durchs Stadion, Titelbutton „Intro“, einmalig vor der ersten Saison)
 - Oberfläche 2.0: Übersichts-Tab, Vereinswappen, Spieler-Avatare, Trikots auf dem Aufstellungsbrett, Spielzeitleiste, Ballbesitz, Spieler:in des Spiels, Saison-Auszeichnungen, Torjägerliste
-- Sprecher (DE/EN, Sprachausgabe des Geräts): Intro-Erzähler und Live-Kommentator im Spiel (Ereignisse + Füllkommentar), abschaltbar
+- Sprecher (DE/EN): echte, vorproduzierte Stimmen (Piper-TTS, gemastert) unter `public/audio/voice/<lang>/` für Intro, Lena, Legacy-KI, Abpfiff und Meisterfeier; der Live-Kommentar mit Spielernamen nutzt ergänzend die Sprachausgabe des Geräts. Abschaltbar. Neue Zeilen: Text in `tools/voice/lines.mjs` ergänzen und `tools/voice/gen_de.py` / `gen_en.py` (Piper-Modelle: thorsten-high, eva_k, ryan-high, hfc_female, alan) laufen lassen (Manifest = Text → Datei)
 - Intro läuft beim Start (Klick auf „Los geht's“ schaltet Ton frei), Abpfiff-Animation (Sieg/Remis/Niederlage) und Meisterfeier mit Feuerwerk, Pokal und Konfetti

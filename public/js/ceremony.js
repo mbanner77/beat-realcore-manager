@@ -23,7 +23,7 @@ export async function playCeremony({ canvas, season, rank, won, name, pitchEl, a
   canvas.hidden = !pitch;
   const onResize = () => { if (pitch) pitch.resize(canvas.clientWidth, canvas.clientHeight); }; window.addEventListener('resize', onResize);
   if (pitch) { pitch.setMood(won ? 0 : rank <= 3 ? 0 : null, 60000); pitch.setFireworks(won); pitch.setLamps(won ? 1 : 0.6); }
-  const line = won ? `Meister der Legacy League! ${name} und TechHub United haben den Monolithen gestürzt. Clean Core gewinnt Meisterschaften!`
+  const line = won ? 'Meister der Legacy League! TechHub United hat den Monolithen gestürzt. Clean Core gewinnt Meisterschaften!'
     : rank <= 3 ? `Saisonende. Platz ${rank} für TechHub United – stark gespielt, aber die Legacy-IT bleibt vorn. Nächste Saison holen wir den Titel.`
     : `Saisonende. Platz ${rank}. Die Legacy-KI hat diese Saison gewonnen – never touch a running system. Revanche?`;
   setTimeout(() => voice?.say(tr ? tr(line) : line, { lang, prio: 3, interrupt: true, rate: 0.98, pitch: won ? 1.05 : rank <= 3 ? 1 : 0.8 }), 900);

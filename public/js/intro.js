@@ -26,26 +26,29 @@ export async function playIntro({ canvas, captionEl, titleEl, skipBtn, audio, vo
   skipBtn.onclick = finish;
   // Demo-Spiel: TechHub United gegen den Monolithen
   try { const se = new Season({ difficulty: 'profi', seed: 4242 }); se.day = 6; const me = se.teamForMatch(), opp = se.opponentForMatch(); M = new Match(me, opp, { seed: 99 }); M.speed = 1; } catch { M = null; }
+  try { await Promise.race([voice?.ready, new Promise(r => setTimeout(r, 2500))]); } catch { /* ignore */ }
+  // Dauer jeder Einstellung an die gesprochene Zeile anpassen (nichts wird abgeschnitten)
+  const shots = SHOTS.map(sh => { const text = sh.title ? 'Beat RealCore – Legacy League. Saison starten!' : sh.text; const d = voice ? voice.durationOf(tr ? tr(text) : text, lang) : 0; return { ...sh, dur: Math.max(sh.dur, d ? d + 1.6 : sh.dur) }; });
   if (webglOk() && await loadBabylon()) { try { pitch = new Pitch3D(canvas); pitch.resize(canvas.clientWidth, canvas.clientHeight); pitch.setLamps(0); } catch { pitch = null; } }
   if (done) return;
   canvas.hidden = !pitch;
   const onResize = () => { if (pitch) pitch.resize(canvas.clientWidth, canvas.clientHeight); }; window.addEventListener('resize', onResize);
   let shotIdx = -1, shotT = 0;
   const showCaption = (sh) => {
-    if (sh.title) { captionEl.hidden = true; titleEl.hidden = false; titleEl.classList.add('in'); voice?.say(tr ? tr('Beat RealCore – Legacy League. Saison starten!') : 'Beat RealCore – Legacy League. Saison starten!', { lang, prio: 3, interrupt: true, rate: 0.95 }); return; }
+    if (sh.title) { captionEl.hidden = true; titleEl.hidden = false; titleEl.classList.add('in'); voice?.say(tr ? tr('Beat RealCore – Legacy League. Saison starten!') : 'Beat RealCore – Legacy League. Saison starten!', { lang, prio: 3, interrupt: false, rate: 0.95 }); return; }
     captionEl.hidden = false; captionEl.className = 'intro-cap in' + (sh.legacy ? ' legacy' : ''); captionEl.querySelector('b').textContent = sh.who; captionEl.querySelector('p').textContent = sh.text;
     audio?.play(sh.legacy ? 'legacy' : 'type');
-    voice?.say(tr ? tr(sh.text) : sh.text, { lang, prio: 3, interrupt: true, rate: 0.96, pitch: sh.legacy ? 0.75 : 1 });
+    voice?.say(tr ? tr(sh.text) : sh.text, { lang, prio: 3, interrupt: false, rate: 0.96, pitch: sh.legacy ? 0.75 : 1 });
   };
   const frame = (now) => {
     if (done) return;
     if (!t0) { t0 = now; last = now; }
     const dt = Math.min(0.05, (now - last) / 1000); last = now; const T = (now - t0) / 1000;
     // aktuelle Einstellung
-    let acc = 0, idx = 0; for (; idx < SHOTS.length; idx++) { if (T < acc + SHOTS[idx].dur) break; acc += SHOTS[idx].dur; }
-    if (idx >= SHOTS.length) { finish(); return; }
-    const sh = SHOTS[idx]; shotT = (T - acc) / sh.dur;
-    if (idx !== shotIdx) { shotIdx = idx; showCaption(sh); if (idx === SHOTS.length - 1) audio?.play('whistle3'); }
+    let acc = 0, idx = 0; for (; idx < shots.length; idx++) { if (T < acc + shots[idx].dur) break; acc += shots[idx].dur; }
+    if (idx >= shots.length) { finish(); return; }
+    const sh = shots[idx]; shotT = (T - acc) / sh.dur;
+    if (idx !== shotIdx) { shotIdx = idx; showCaption(sh); if (idx === shots.length - 1) audio?.play('whistle3'); }
     if (sh.title && shotT > 0.9) titleEl.classList.add('out');
     if (pitch && M) {
       const e = ease(shotT), f = sh.from, g = sh.to;

@@ -138,7 +138,7 @@ async function startBriefing() {
   S.brief = null;
   if (S.config.ai) { try { const b = await api('/api/ai/briefing', { lang: LANG, name: S.player.name, company: S.player.company, difficulty: S.diff }, 9000); if (b && b.text) { S.brief = b; lines[0][1] = b.text; if (b.taunt) lines[2][1] = b.taunt; } } catch { /* lokal */ } }
   const el = $('#brief-talk'); el.innerHTML = '';
-  for (let i = 0; i < lines.length; i++) { await new Promise(r => setTimeout(r, i ? 900 : 200)); if (S.screen !== 'brief') return; el.insertAdjacentHTML('beforeend', talkLine(...lines[i])); audio.play(lines[i][0] === 'legacy' ? 'legacy' : 'type'); }
+  for (let i = 0; i < lines.length; i++) { await new Promise(r => setTimeout(r, i ? 900 : 200)); if (S.screen !== 'brief') return; el.insertAdjacentHTML('beforeend', talkLine(...lines[i])); audio.play(lines[i][0] === 'legacy' ? 'legacy' : 'type'); if (i > 0) voice.say(tr(lines[i][1]), { lang: LANG, prio: 2, pitch: lines[i][0] === 'legacy' ? 0.75 : 1 }); }
   $('#btn-start').disabled = false;
 }
 $('#btn-start').addEventListener('click', () => { audio.play('confirm'); newSeason(); });
@@ -150,7 +150,7 @@ async function newSeason() {
   S.radioUnread = 0;
   S.season = new Season({ difficulty: S.diff, hooks: {
     onMessage: (m) => { S.radioUnread++; if (S.season) { renderRadio(); updateDots(); } },
-    onEvent: (ev) => { if (ev.type === 'director') { audio.play('legacy'); toast(`${EVENTS[ev.event].name}: ${ev.detail}`); renderWeek(); } },
+    onEvent: (ev) => { if (ev.type === 'director') { audio.play('legacy'); toast(`${EVENTS[ev.event].name}: ${ev.detail}`); const last = [...S.season.log].reverse().find(m => m.who === 'legacy'); if (last) voice.say(tr(last.text), { lang: LANG, prio: 2, pitch: 0.75 }); renderWeek(); } },
     onEnd: (r) => endSeason(r),
     onDecision: (d, note) => { $('#dec-note').textContent = note; },
     director: S.config.ai && S.gameId ? (summary) => api('/api/ai/director', { gameId: S.gameId, summary, lang: LANG }, 5500).then(d => d && d.event ? d : null) : null,
@@ -169,6 +169,7 @@ function renderWeek() {
   $('#wh-budget').textContent = money(se.budget); $('#wh-rank').textContent = se.day ? `${se.rank()}. (${se.table[0].pts} Pkt)` : '–';
   $('#wh-str').textContent = teamStrength(); const mor = Math.round(se.players.reduce((s, p) => s + p.morale, 0) / se.players.length); $('#wh-morale').textContent = mor >= 75 ? '😄 ' + mor : mor >= 55 ? '🙂 ' + mor : '😟 ' + mor;
   const ob = se.objective ? OBJECTIVES[se.objective] : null; $('#wh-obj').textContent = ob ? `🎯 Wochenziel: ${ob.name} (+${ob.bonus})` : '';
+  if (S.weekSpoken !== se.day) { S.weekSpoken = se.day; voice.say(tr(o.lena), { lang: LANG, prio: 1, interrupt: true }); }
   const dec = se.decision && !se.decision.chosen; $('#btn-decision').hidden = !dec;
   if (dec && S.decisionDay !== se.day) { S.decisionDay = se.day; openDecision(); }
   $$('#week-nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === S.tab)); $$('.wtab').forEach(t => t.classList.toggle('on', t.id === 'tab-' + S.tab));
@@ -404,7 +405,7 @@ function showFullTime(res, r, o) {
   $('#ft-sub').textContent = 'Abpfiff'; $('#ft-title').textContent = r.won ? 'SIEG!' : r.draw ? 'UNENTSCHIEDEN' : 'NIEDERLAGE';
   const hc = home ? { ...CLUB, me: true } : o, ac = home ? o : { ...CLUB, me: true };
   $('#ft-score').innerHTML = `<span>${crest(hc, 44)}${esc(home ? CLUB.short : o.short)}</span><b>${res.gh} : ${res.ga}</b><span>${esc(home ? o.short : CLUB.short)}${crest(ac, 44)}</span>`;
-  const line = r.won ? (r.objective?.ok ? `Lena: Sieg und Wochenziel erreicht – ${r.objective.name}! Plus ${fmt(r.pts)} Punkte.` : `Lena: Sauber deployed! Plus ${fmt(r.pts)} Punkte für die Liga.`) : r.draw ? 'Lena: Ein Punkt – nicht schön, aber stabil. Nächste Woche legen wir nach.' : 'Legacy-KI: Never touch a running system. Ich hab es euch gesagt.';
+  const line = r.won ? (r.objective?.ok ? 'Lena: Sieg und Wochenziel erreicht! Clean Core, wie es im Buche steht.' : 'Lena: Sauber deployed! Das gibt Punkte für die Liga.') : r.draw ? 'Lena: Ein Punkt – nicht schön, aber stabil. Nächste Woche legen wir nach.' : 'Legacy-KI: Never touch a running system. Ich hab es euch gesagt.';
   $('#ft-line').textContent = line;
   if (!ftFx) ftFx = new Confetti($('#ft-fx')); ftFx.stop();
   if (r.won) { ftFx.setRays(true, '#3ddc84'); ftFx.rain(220); } else if (r.draw) ftFx.setRays(true, '#ffc247');
