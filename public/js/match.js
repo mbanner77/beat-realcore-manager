@@ -10,27 +10,27 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 // Kommentar-Vorlagen mit SAP-Humor; {p} Spieler, {t} Team, {o} Gegner, {k} Torwart
 const COMMENT = {
-  kickoff: ['Anpfiff in der {s}! {t} stößt an.', 'Es geht los – Go-Live für 90 Minuten.'],
-  half: ['Halbzeit. Zeit für einen Hotfix in der Kabine.', 'Pause. Das Change Advisory Board tagt in der Kabine.'],
-  full: ['Abpfiff! Das Spiel ist deployed.', 'Schluss! Der Batchlauf ist durch.'],
-  goal: ['TOR! {p} integriert den Ball sauber ins Netz!', 'TOOOR für {t}! {p} – Schnittstelle sauber, Ball drin.', 'Go-Live! {p} trifft, {k} ohne Chance.', 'TOR! {p} schließt ab wie ein erfolgreicher Cutover.'],
-  goal_opp: ['Tor für {t}. {p} trifft – das riecht nach Altlast.', 'Gegentor durch {p}. Der Dump sitzt.', 'Tor für {t}: {p} nutzt eine Lücke, die nicht im Pflichtenheft stand.'],
-  save: ['{k} hält! Firewall-Regel greift.', 'Starke Parade von {k} – Zugriff verweigert.', '{p} zieht ab, {k} ist da. Request abgelehnt.'],
-  wide: ['{p} schießt – vorbei. Das ging ins Archiv.', 'Knapp daneben, {p}! Ticket geschlossen ohne Lösung.', '{p} aus der Distanz – über das Tor, wie ein Fax ins Nirgendwo.'],
-  post: ['PFOSTEN! {p} scheitert am Aluminium – Timeout an der Schnittstelle.', 'Latte! {p} hat den Treffer im Staging, aber nicht in Produktion.'],
-  block: ['Geblockt! Die Abwehr von {t2} steht wie ein Clean-Core-Turm.', '{p} zieht ab, aber der Schuss wird geblockt – Berechtigung fehlt.'],
-  yellow: ['Gelbe Karte für {p}. Der Schiedsrichter öffnet ein Ticket.', 'Gelb für {p} – unautorisierte Änderung am Gegenspieler.'],
+  kickoff: ['Anpfiff in der {s}! {t} stößt an.', 'Es geht los – Inbetriebnahme für 90 Minuten.'],
+  half: ['Halbzeit. Zeit für eine Schnellkorrektur in der Kabine.', 'Pause. Der Änderungsbeirat tagt in der Kabine.'],
+  full: ['Abpfiff! Das Spiel ist ausgerollt.', 'Schluss! Der Stapellauf ist durch.'],
+  goal: ['TOR! {p} integriert den Ball sauber ins Netz!', 'TOOOR für {t}! {p} – Schnittstelle sauber, Ball drin.', 'Inbetriebnahme! {p} trifft, {k} ohne Chance.', 'TOR! {p} schließt ab wie eine erfolgreiche Systemumstellung.'],
+  goal_opp: ['Tor für {t}. {p} trifft – das riecht nach Altlast.', 'Gegentor durch {p}. Der Absturz sitzt.', 'Tor für {t}: {p} nutzt eine Lücke, die nicht im Pflichtenheft stand.'],
+  save: ['{k} hält! Die Brandmauer greift.', 'Starke Parade von {k} – Zugriff verweigert.', '{p} zieht ab, {k} ist da. Anfrage abgelehnt.'],
+  wide: ['{p} schießt – vorbei. Das ging ins Archiv.', 'Knapp daneben, {p}! Vorgang geschlossen ohne Lösung.', '{p} aus der Distanz – über das Tor, wie ein Fax ins Nirgendwo.'],
+  post: ['PFOSTEN! {p} scheitert am Aluminium – Zeitüberschreitung an der Schnittstelle.', 'Latte! {p} hat den Treffer im Testsystem, aber nicht im Produktivsystem.'],
+  block: ['Geblockt! Die Abwehr von {t2} steht wie ein sauberer Systemkern.', '{p} zieht ab, aber der Schuss wird geblockt – Berechtigung fehlt.'],
+  yellow: ['Gelbe Karte für {p}. Der Schiedsrichter eröffnet einen Vorgang.', 'Gelb für {p} – ungenehmigte Änderung am Gegenspieler.'],
   red: ['ROT für {p}! Der Zugriff wird komplett entzogen.', 'Platzverweis {p} – Prozess beendet.'],
-  injury: ['{p} bleibt liegen. Der Basis-Admin rennt aufs Feld.', '{p} hat sich verletzt – zu viele Change Requests auf einmal.'],
-  sub: ['Wechsel bei {t}: {p} kommt für {p2}. Hotfix eingespielt.', 'Einwechslung: {p} ersetzt {p2} – Rolling Update ohne Downtime.'],
+  injury: ['{p} bleibt liegen. Der Basis-Administrator rennt aufs Feld.', '{p} hat sich verletzt – zu viele Änderungsanträge auf einmal.'],
+  sub: ['Wechsel bei {t}: {p} kommt für {p2}. Schnellkorrektur eingespielt.', 'Einwechslung: {p} ersetzt {p2} – Aktualisierung ohne Ausfallzeit.'],
   chance: ['{p} kommt frei zum Abschluss …', 'Großchance für {t}!'],
-  press: ['{t} presst wie am ersten Tag nach dem Go-Live.'],
-  koloss: ['Der Koloss setzt sich in Bewegung. Das Stadion wackelt.', 'Mainframe-Koloss mit dem Ball – langsam, aber unaufhaltsam.'],
+  press: ['{t} presst wie am ersten Tag nach der Inbetriebnahme.'],
+  koloss: ['Der Koloss setzt sich in Bewegung. Das Stadion wackelt.', 'Großrechner-Koloss mit dem Ball – langsam, aber unaufhaltsam.'],
   tackle: ['{p} grätscht dazwischen – Zugriff entzogen.'],
-  penalty: ['ELFMETER für {t}! {p} legt sich den Ball zurecht.', 'Strafstoß! Change Request mit Prio 1 – {p} tritt an.'],
-  pen_goal: ['{p} verwandelt den Elfmeter – eiskalt wie ein Cutover um Mitternacht.', 'TOR! {p} schiebt den Strafstoß ein. {k} war in der falschen Ecke.'],
-  pen_save: ['{k} HÄLT DEN ELFMETER! Zugriff verweigert, Ticket geschlossen.', 'Gehalten! {k} ahnt die Ecke von {p}.'],
-  pen_miss: ['{p} setzt den Elfmeter neben das Tor. Das ging an die falsche Adresse.', 'Vorbei! {p} verzieht vom Punkt – Timeout im Kopf.'],
+  penalty: ['ELFMETER für {t}! {p} legt sich den Ball zurecht.', 'Strafstoß! Änderungsantrag mit höchster Dringlichkeit – {p} tritt an.'],
+  pen_goal: ['{p} verwandelt den Elfmeter – eiskalt wie eine Umstellung um Mitternacht.', 'TOR! {p} schiebt den Strafstoß ein. {k} war in der falschen Ecke.'],
+  pen_save: ['{k} HÄLT DEN ELFMETER! Zugriff verweigert, Vorgang geschlossen.', 'Gehalten! {k} ahnt die Ecke von {p}.'],
+  pen_miss: ['{p} setzt den Elfmeter neben das Tor. Das ging an die falsche Adresse.', 'Vorbei! {p} verzieht vom Punkt – Aussetzer im Kopf.'],
 };
 
 export class Match {
@@ -98,6 +98,7 @@ export class Match {
     this.moveBall(dt);
     if (b.owner) this.decide(b.owner, dt);
     this.tackles(dt);
+    this.aiSubs();
   }
   spd(p) { const T = this.tempoOf(p.team); return (5.2 + p.tempo / 100 * 6.5) * (0.6 + 0.4 * p.energy) * T.k * (p.injured ? 0.55 : 1); }
   // Zielpunkt eines Spielers ohne Ball
@@ -299,6 +300,17 @@ export class Match {
     const sp = 30, dd = Math.hypot(g.x - b.x, ty - b.y) || 1;
     b.owner = null; b.mode = 'shot'; b.shooter = taker; b.outcome = outcome; b.blocker = null; b.penalty = true; b.vx = (g.x - b.x) / dd * sp; b.vy = (ty - b.y) / dd * sp;
     this.assist = null;
+  }
+  // Gegnerische Trainerbank: müde oder verletzte Spieler ab der 55. Minute auswechseln
+  aiSubs() {
+    if (this.min < 55 || (this.aiSubT && this.t < this.aiSubT)) return; this.aiSubT = this.t + 6 / (90 / MATCH_REAL);
+    for (let ti = 0; ti < 2; ti++) {
+      const T = this.teams[ti]; if (T.me || this.subsLeft[ti] <= 0 || !(T.benchP || []).length) continue;
+      const tired = this.alive(ti).filter(p => p.pos !== 'TW' && (p.injured || p.energy < 0.45)).sort((a, b) => (a.injured ? -1 : a.energy) - (b.injured ? -1 : b.energy))[0];
+      if (!tired) continue;
+      const inP = T.benchP.find(p => p.pos === tired.pos) || T.benchP[0];
+      this.sub(ti, tired.id, inP);
+    }
   }
   // ---------- Wechsel ----------
   sub(ti, outId, inP) {

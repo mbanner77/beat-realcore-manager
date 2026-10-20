@@ -186,7 +186,7 @@ export class Season {
   opponentForMatch() {
     const o = this.opponent, r = rng(o.seed * 7 + this.diffKey.length), ev = this.pendingEvent?.event;
     const base = (o.strength + (this.oppMod || 0)) * this.diff.opp * (1 + (ev === 'shadow_it' ? 0.08 : 0));
-    const F = FORMATIONS[o.style === 'wall' ? '5-3-2' : o.style === 'boss' || o.style === 'longshot' ? '4-3-3' : '4-4-2'];
+    const fk = o.style === 'wall' ? '5-3-2' : o.style === 'boss' || o.style === 'longshot' ? '4-3-3' : '4-4-2', F = FORMATIONS[fk];
     const players = F.slots.map(([pos, x, y], i) => {
       const k = 0.55 + base / 140, p = { id: 'o' + i, name: o.names[i] || `${o.short} ${i + 1}`, pos, slot: F.slots[i], num: i + 1 };
       const prof = { TW: [40, 50, 95, 15, 70], IV: [55, 55, 90, 30, 75], AV: [75, 60, 75, 40, 80], DM: [60, 65, 80, 45, 85], ZM: [70, 85, 55, 60, 75], FL: [90, 72, 30, 65, 75], ST: [80, 70, 25, 92, 70] }[pos];
@@ -201,7 +201,8 @@ export class Season {
     });
     if (o.style === 'boss' || ev === 'koloss') { const st = players.find(p => p.pos === 'ST'); Object.assign(st, { name: 'Mainframe-Koloss', nick: 'Der Koloss', koloss: true, tempo: 30, schuss: 97, technik: 60, abwehr: 60, kondition: 95 }); }
     if (ev === 'shadow_it') { const z = players.find(p => p.pos === 'ZM'); Object.assign(z, { name: 'Schatten-IT Sascha', technik: 92, tempo: 85, schuss: 80 }); }
-    return { name: o.club, short: o.short, color: o.color, color2: o.color2, players, bench: [], formation: 'opp', style: o.style === 'press' || ev === 'wave_now' ? 'agile' : o.style === 'wall' ? 'clean' : 'agile', tempo: o.style === 'wall' || o.style === 'silo' ? 'slow' : 'normal', ai: o.style, press: ev === 'wave_now' ? 1 : null, me: false };
+    const bench = ['ZM', 'ST', 'IV'].map((pos, i) => { const k = 0.55 + base / 140, p = { id: 'ob' + i, name: o.names[11 + i] || `${o.short} ${12 + i}`, pos, num: 12 + i }; const prof = { IV: [55, 55, 88, 30, 75], ZM: [70, 82, 55, 60, 75], ST: [78, 68, 25, 88, 70] }[pos]; ATTRS.forEach((a, j) => p[a] = clamp(prof[j] * k * 0.95 * (0.92 + r() * 0.16), 20, 99)); return p; });
+    return { name: o.club, short: o.short, color: o.color, color2: o.color2, players, bench, formation: fk, style: o.style === 'press' || ev === 'wave_now' ? 'agile' : o.style === 'wall' ? 'clean' : 'agile', tempo: o.style === 'wall' || o.style === 'silo' ? 'slow' : 'normal', ai: o.style, press: ev === 'wave_now' ? 1 : null, me: false };
   }
   // ---------- Störungen der Legacy-KI ----------
   summary() {

@@ -5,6 +5,16 @@ const PREF = {
   de: ['Anna', 'Petra', 'Google Deutsch', 'Microsoft Katja', 'Microsoft Hedda', 'Microsoft Stefan', 'Markus', 'Helena', 'Vicki'],
   en: ['Daniel', 'Samantha', 'Google UK English Male', 'Google UK English Female', 'Google US English', 'Microsoft Ryan', 'Microsoft George', 'Microsoft Zira', 'Microsoft David', 'Arthur', 'Karen'],
 };
+// Aussprachehilfen für die Sprachausgabe des Geräts (nur gesprochen, nie angezeigt): englische Namen in deutscher Lautschrift
+const SPOKEN_DE = [
+  [/Firewall/g, 'Feierwoll'], [/Gateway/g, 'Gehtwäi'], [/Joule/g, 'Dschuhl'], [/Max Mech/g, 'Max Meck'], [/Kyma/g, 'Kima'], [/Ops-Center/g, 'Opps-Senter'], [/Service-Center/g, 'Sörwis-Senter'],
+  [/Pipeline/g, 'Peiplein'], [/Clean-Core/g, 'Klien-Kohr'], [/Clean Core/g, 'Klien Kohr'], [/\bBTP\b/g, 'Beh-Teh-Peh'], [/\bCPI\b/g, 'Zeh-Peh-Ih'], [/\bABAP\b/g, 'Abapp'], [/AI4BIZ/g, 'Äi for Biss'],
+  [/Mainframe/g, 'Mehnfrehm'], [/COBOL/g, 'Kobol'], [/Legacy/g, 'Leggessi'], [/TechHub/g, 'Teck-Hab'], [/Excel/g, 'Exel'], [/Interface/g, 'Interfeis'], [/Monolith FC/g, 'Monolieth Eff-Zeh'],
+  [/Kickers/g, 'Kickers'], [/Spaghetti/g, 'Spagetti'], [/Security-Analyst/g, 'Sikjuriti-Analüst'], [/Security/g, 'Sikjuriti'], [/Hypercare/g, 'Heiper-Kähr'], [/Rollout/g, 'Rollaut'], [/Terraform/g, 'Terraform'],
+  [/Kubernetes/g, 'Kubernetes'], [/Native/g, 'Nehtiv'], [/OAuth/g, 'O-Auth'], [/Monitoring/g, 'Monitoring'], [/Low-Code/g, 'Lo-Kohd'], [/Yaml/g, 'Jammel'], [/Quantum/g, 'Kwantum'], [/Datasphere/g, 'Dätasfir'],
+  [/Governance/g, 'Gawwernens'], [/Integration/g, 'Integration'], [/Timeout/g, 'Teim-aut'], [/Flat-File/g, 'Flätt-Feil'], [/Mapping/g, 'Mäpping'], [/Middleware/g, 'Middelwähr'], [/IDoc/g, 'Ei-Dock'], [/P2P/g, 'Peh-zu-Peh'],
+  [/Incident/g, 'Inzident'], [/Reopen/g, 'Ri-open'], [/Deadline/g, 'Dädlein'], [/Hotline/g, 'Hottlein'], [/Never-Touch/g, 'Näwwer-Tatsch'], [/Running-System/g, 'Ranning-Sistem'], [/Uptime/g, 'App-Teim'], [/Root/g, 'Ruht'], [/Kernel/g, 'Körnel'], [/Dump/g, 'Damp'], [/Telex/g, 'Telex'],
+];
 export class Voice {
   constructor(lang = 'de') {
     this.lang = lang; this.q = []; this.busy = false; this.voices = []; this.cur = null; this.lastEnd = 0;
@@ -39,21 +49,22 @@ export class Voice {
     if (this.busy || !this.q.length) return;
     const it = this.q.shift();
     if (it.file) { // echte Stimme
-      const a = new Audio(it.file.src); a.preload = 'auto'; this.busy = true; this.audioEl = a; this.cur = a;
-      const done = () => { if (this.cur !== a) return; this.busy = false; this.cur = null; this.audioEl = null; this.lastEnd = performance.now(); setTimeout(() => this.pump(), 150); };
+      const a = new Audio(it.file.src); a.preload = 'auto'; this.busy = true; this.audioEl = a; this.cur = a; this.onLine?.(it.text, it.file.d * 1000);
+      const done = () => { if (this.cur !== a) return; this.busy = false; this.cur = null; this.audioEl = null; this.lastEnd = performance.now(); this.onLine?.(null); setTimeout(() => this.pump(), 150); };
       a.onended = done; a.onerror = done; a.play().catch(done); setTimeout(() => { if (this.cur === a) { try { a.pause(); } catch { /* ignore */ } done(); } }, (it.file.d + 2) * 1000);
       return;
     }
     if (!this.ok) { this.busy = false; setTimeout(() => this.pump(), 50); return; }
-    const u = new SpeechSynthesisUtterance(it.text);
+    let spoken = it.text; if (it.lang !== 'en') for (const [a, b] of SPOKEN_DE) spoken = spoken.replace(a, b);
+    const u = new SpeechSynthesisUtterance(spoken);
     const v = this.pick(it.lang); if (v) u.voice = v; u.lang = v ? v.lang : (it.lang === 'en' ? 'en-GB' : 'de-DE'); u.rate = it.rate; u.pitch = it.pitch; u.volume = 1;
-    this.busy = true; this.cur = u;
-    const done = () => { if (this.cur !== u) return; this.busy = false; this.cur = null; this.lastEnd = performance.now(); setTimeout(() => this.pump(), 120); };
+    this.busy = true; this.cur = u; this.onLine?.(it.text, Math.min(12000, 1500 + it.text.length * 65));
+    const done = () => { if (this.cur !== u) return; this.busy = false; this.cur = null; this.lastEnd = performance.now(); this.onLine?.(null); setTimeout(() => this.pump(), 120); };
     u.onend = done; u.onerror = done;
     try { window.speechSynthesis.speak(u); } catch { done(); }
     // Schutz: hängende Sprachausgabe (Chrome) nach 12 s freigeben
     setTimeout(() => { if (this.cur === u) { try { window.speechSynthesis.cancel(); } catch { /* ignore */ } done(); } }, 12000);
   }
-  cancel() { this.q = []; this.cur = null; this.busy = false; if (this.audioEl) { try { this.audioEl.pause(); } catch { /* ignore */ } this.audioEl = null; } try { window.speechSynthesis?.cancel(); } catch { /* ignore */ } }
+  cancel() { this.q = []; this.cur = null; this.busy = false; this.onLine?.(null); if (this.audioEl) { try { this.audioEl.pause(); } catch { /* ignore */ } this.audioEl = null; } try { window.speechSynthesis?.cancel(); } catch { /* ignore */ } }
   get idle() { return !this.busy && !this.q.length; }
 }

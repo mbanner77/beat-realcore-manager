@@ -15,6 +15,9 @@ import { Audio } from './audio.js';
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
 initI18n(); document.body.classList.add('on-title');
 const voice = new Voice(LANG); window.__voice = voice;
+// Untertitel: jede gesprochene Ansage auch als Text (nicht im Intro – dort gibt es eigene Tafeln)
+let subT = null;
+voice.onLine = (text, ms) => { const el = document.getElementById('subtitle'); if (!el) return; clearTimeout(subT); if (!text || S.screen === 'intro') { el.classList.remove('on'); return; } el.textContent = text; el.classList.add('on'); subT = setTimeout(() => el.classList.remove('on'), (ms || 4000) + 400); };
 $$('#lang-sw button').forEach(b => { b.classList.toggle('on', b.dataset.l === LANG); b.addEventListener('click', () => { if (b.dataset.l !== LANG) setLang(b.dataset.l); }); });
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const LOC = isEN ? 'en-US' : 'de-DE';
@@ -337,9 +340,9 @@ let bannerT = null;
 function banner(t, sub, opp, dur = 2200, p = null) { const el = $('#match-banner'); el.innerHTML = `${p ? avatar(p, M.teams[p.team], 54) : ''}<span>${esc(t)}<small>${esc(sub)}</small></span>`; el.className = 'banner' + (opp ? ' opp' : ''); el.hidden = false; clearTimeout(bannerT); bannerT = setTimeout(() => { el.hidden = true; }, dur); }
 // Füllkommentar zwischen den Ereignissen
 const FILLER = {
-  lead: ['{0}. Minute, {1} führt mit {2}. Der Gegner sucht noch nach einer Lücke im Pflichtenheft.', '{1} verwaltet die Führung – Clean Core im Mittelfeld, {0} Minuten gespielt.', 'Stand {2} nach {0} Minuten. {1} hat das Spiel im Griff wie ein sauberes Deployment.'],
-  behind: ['{0} Minuten gespielt, {1} liegt zurück. Zeit für einen Hotfix?', '{2} – {1} braucht jetzt ein Change Request mit Prio eins.', 'Die Uhr läuft: {0} Minuten, {1} im Rückstand.'],
-  level: ['Noch kein Unterschied nach {0} Minuten – beide Teams tasten sich ab wie bei einem Kick-off-Workshop.', '{0} Minuten, {2}. Die Abwehrreihen stehen wie zwei Firewalls.', 'Unentschieden nach {0} Minuten. Ballbesitz {3} Prozent für {1}.'],
+  lead: ['{0}. Minute, {1} führt mit {2}. Der Gegner sucht noch nach einer Lücke im Pflichtenheft.', '{1} verwaltet die Führung – sauberer Kern im Mittelfeld, {0} Minuten gespielt.', 'Stand {2} nach {0} Minuten. {1} hat das Spiel im Griff wie eine saubere Auslieferung.'],
+  behind: ['{0} Minuten gespielt, {1} liegt zurück. Zeit für eine Schnellkorrektur?', '{2} – {1} braucht jetzt einen Änderungsantrag mit höchster Dringlichkeit.', 'Die Uhr läuft: {0} Minuten, {1} im Rückstand.'],
+  level: ['Noch kein Unterschied nach {0} Minuten – beide Teams tasten sich ab wie beim Projektauftakt.', '{0} Minuten, {2}. Die Abwehrreihen stehen wie zwei Brandmauern.', 'Unentschieden nach {0} Minuten. Ballbesitz {3} Prozent für {1}.'],
   poss: ['{1} hat {3} Prozent Ballbesitz – die Integration läuft.', '{3} Prozent Ballbesitz für {1}, aber ein Tor braucht am Ende einen Abschluss.'],
 };
 function fillerLine() {
@@ -366,7 +369,7 @@ function onMatchEvent(e) {
   else if (e.type === 'penalty') { audio.play('whistle'); audio.play('chance'); banner('ELFMETER', `${e.p ? e.p.name : ''} tritt an`, !mine); }
   else if (e.type === 'pen_save' || e.type === 'pen_miss') audio.play('ooh', mine ? 1 : 0.6);
   else if (e.type === 'injury') { audio.play('ooh', 0.6); if (mine) banner('Verletzung', `${e.p.name} – Wechsel?`, false); }
-  else if (e.type === 'half') { audio.play('whistle'); $('#sc-phase').textContent = 'Halbzeit'; }
+  else if (e.type === 'half') { audio.play('whistle'); $('#sc-phase').textContent = 'Halbzeit'; const mi = S.myTeam, lead = M.score[mi] - M.score[1 - mi]; const pt = M.poss[0] + M.poss[1], pc = Math.round(100 * M.poss[mi] / Math.max(1, pt)); voice.say(tr(`Halbzeitfazit: Es steht ${M.score[0]}:${M.score[1]}. ${lead > 0 ? 'TechHub führt' : lead < 0 ? 'TechHub liegt zurück' : 'Alles offen'} – ${pc} Prozent Ballbesitz, ${M.shots[mi][0]} Schüsse.`), { lang: LANG, prio: 1 }); }
   else if (e.type === 'full') audio.play('whistle3');
   else if (e.type === 'kickoff') audio.play('whistle');
   $('#ts-stats').textContent = `Schüsse ${M.shots[0][0]} : ${M.shots[1][0]}`;
@@ -407,7 +410,7 @@ function showFullTime(res, r, o) {
   $('#ft-sub').textContent = 'Abpfiff'; $('#ft-title').textContent = r.won ? 'SIEG!' : r.draw ? 'UNENTSCHIEDEN' : 'NIEDERLAGE';
   const hc = home ? { ...CLUB, me: true } : o, ac = home ? o : { ...CLUB, me: true };
   $('#ft-score').innerHTML = `<span>${crest(hc, 44)}${esc(home ? CLUB.short : o.short)}</span><b>${res.gh} : ${res.ga}</b><span>${esc(home ? o.short : CLUB.short)}${crest(ac, 44)}</span>`;
-  const line = r.won ? (r.objective?.ok ? 'Lena: Sieg und Wochenziel erreicht! Clean Core, wie es im Buche steht.' : 'Lena: Sauber deployed! Das gibt Punkte für die Liga.') : r.draw ? 'Lena: Ein Punkt – nicht schön, aber stabil. Nächste Woche legen wir nach.' : 'Legacy-KI: Never touch a running system. Ich hab es euch gesagt.';
+  const line = r.won ? (r.objective?.ok ? 'Lena: Sieg und Wochenziel erreicht! Clean Core, wie es im Buche steht.' : 'Lena: Sauber ausgerollt! Das gibt Punkte für die Liga.') : r.draw ? 'Lena: Ein Punkt – nicht schön, aber stabil. Nächste Woche legen wir nach.' : 'Legacy-KI: Never touch a running system. Ich hab es euch gesagt.';
   $('#ft-line').textContent = line;
   if (!ftFx) ftFx = new Confetti($('#ft-fx')); ftFx.stop();
   if (r.won) { ftFx.setRays(true, '#3ddc84'); ftFx.rain(220); } else if (r.draw) ftFx.setRays(true, '#ffc247');
@@ -526,7 +529,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - lastT) / 1000 || 0.016); lastT = now;
   if (S.screen === 'match' && M) {
     if (!M.paused && !M.over) { if (M.speed >= 10) { let n = 0; while (!M.over && !M.paused && n++ < 400) M.step(1 / 30); } else M.tick(dt); }
-    const sc = M.score; if (!M.paused) { $('#sc-min').textContent = `${Math.floor(M.min)}'`; $('#tl-fill').style.width = Math.min(100, M.min / 90 * 100) + '%'; const pt = M.poss[0] + M.poss[1]; if (pt > 1 && (M.stepN || 0) % 20 === 0) { const l = Math.round(100 * M.poss[S.myTeam] / pt); $('#poss > i').style.width = l + '%'; $('#poss-l').textContent = l + ' %'; $('#poss-r').textContent = (100 - l) + ' %'; } }
+    const sc = M.score; if (!M.paused) { $('#sc-min').textContent = M.min > 90 ? `90+${Math.max(1, Math.floor(M.min - 90))}'` : M.halfDone === false && M.min > 45 ? `45+${Math.max(1, Math.floor(M.min - 45))}'` : `${Math.floor(M.min)}'`; $('#tl-fill').style.width = Math.min(100, M.min / 90 * 100) + '%'; const pt = M.poss[0] + M.poss[1]; if (pt > 1 && (M.stepN || 0) % 20 === 0) { const l = Math.round(100 * M.poss[S.myTeam] / pt); $('#poss > i').style.width = l + '%'; $('#poss-l').textContent = l + ' %'; $('#poss-r').textContent = (100 - l) + ' %'; } }
     if (S.ftOrbit && pitch && pitch.setCine) { const t = (now - S.ftOrbit.t0) / 1000, mine = M.players.filter(p => p.team === S.myTeam && !p.out); const cx = mine.reduce((a, p) => a + p.x, 0) / Math.max(1, mine.length), cz = mine.reduce((a, p) => a + p.y, 0) / Math.max(1, mine.length); pitch.setCine({ alpha: -Math.PI / 2 + t * 0.28, beta: 1.08, radius: 30 + t * 1.2, tx: cx, tz: cz, ty: 1.2 }); }
     if (pitch) pitch.draw(M, dt); if (pitch && pitch.kicked) { pitch.kicked = false; if (M.speed <= 2) audio.play('kick', 0.5); }
     const excite = Math.min(1, 0.4 + Math.abs(sc[0] - sc[1]) * 0.1 + (M.ball.mode === 'shot' ? 0.4 : 0)); audio.setCrowd(excite * 0.8);

@@ -9,7 +9,7 @@ add('lena', 'Ein neuer Verein fordert ihn heraus: TechHub United. Clean Core in 
 add('lena', 'Sieben Spieltage. Sieben Legacy-Clubs. Ein Ziel: die Legacy League – und das Finale gegen den Monolithen.');
 add('narr', 'Beat RealCore – Legacy League. Saison starten!');
 add('lena', 'Lena: Sieg und Wochenziel erreicht! Clean Core, wie es im Buche steht.');
-add('lena', 'Lena: Sauber deployed! Das gibt Punkte für die Liga.');
+add('lena', 'Lena: Sauber ausgerollt! Das gibt Punkte für die Liga.');
 add('lena', 'Lena: Ein Punkt – nicht schön, aber stabil. Nächste Woche legen wir nach.');
 add('legacy', 'Legacy-KI: Never touch a running system. Ich hab es euch gesagt.');
 add('narr', 'Meister der Legacy League! TechHub United hat den Monolithen gestürzt. Clean Core gewinnt Meisterschaften!');
