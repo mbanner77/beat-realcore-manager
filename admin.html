@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Legacy League – Admin</title>
+<style>
+  :root { --bg:#06100e; --p:#0c1c19; --l:rgba(255,255,255,.08); --g:#3ddc84; --o:#ff6a3d; --a:#ffc247; --t:#e3f2ec; --m:#8aa79d; }
+  body { margin:0; background:var(--bg); color:var(--t); font:14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  header { display:flex; gap:12px; align-items:center; padding:16px 22px; border-bottom:1px solid var(--l); flex-wrap:wrap; }
+  h1 { font-size:18px; margin:0 auto 0 0; } h1 b { color:var(--g); }
+  input, select, button { background:#0003; color:var(--t); border:1px solid var(--l); border-radius:8px; padding:7px 10px; font:inherit; }
+  button { cursor:pointer; } button.p { background:var(--g); color:#032113; border:0; font-weight:600; }
+  main { padding:16px 22px; }
+  .kpis { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .kpi { background:var(--p); border:1px solid var(--l); border-radius:10px; padding:10px 14px; min-width:140px; }
+  .kpi b { display:block; font-size:22px; } .kpi span { color:var(--m); font-size:12px; }
+  table { width:100%; border-collapse:collapse; background:var(--p); border-radius:10px; overflow:hidden; }
+  th, td { padding:8px 10px; border-bottom:1px solid var(--l); text-align:left; white-space:nowrap; }
+  th { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--m); position:sticky; top:0; background:#0e211d; }
+  tr.team td { background:rgba(255,106,61,.07); } tr.hid td { opacity:.45; }
+  td.s { font-family:ui-monospace, monospace; color:var(--g); text-align:right; }
+  .tag { font-size:10px; padding:2px 6px; border-radius:5px; font-weight:700; }
+  .tag.rc { background:rgba(255,106,61,.2); color:var(--o); } .tag.beat { background:rgba(255,194,71,.2); color:var(--a); } .tag.flag { background:#f443; color:#f88; }
+  .wrap { overflow:auto; max-height:calc(100vh - 210px); border-radius:10px; }
+  .hint { color:var(--m); font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Beat RealCore · <b>Admin</b></h1>
+  <label>Tag <input type="date" id="day"></label>
+  <select id="filter"><option value="all">Alle</option><option value="contact">Nur mit E-Mail</option><option value="beat">Nur „Beat RealCore“</option><option value="team">Nur Team</option></select>
+  <button id="reload">Aktualisieren</button>
+  <a href="/api/admin/scores.csv"><button class="p">CSV-Export</button></a>
+</header>
+<main>
+  <div class="kpis" id="kpis"></div>
+  <p class="hint" id="hint"></p>
+  <div class="wrap"><table><thead><tr><th>Zeit</th><th>Name</th><th>Unternehmen</th><th>E-Mail</th><th>Mission</th><th>Stufe</th><th>Erg.</th><th>Dauer</th><th>Punkte</th><th>Status</th><th>Gutschein</th><th>Aktionen</th></tr></thead><tbody id="rows"></tbody></table></div>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const M = { league: 'Legacy League' };
+const D = { messe:'Messe', profi:'Profi', gf:'GF' };
+$('#day').value = new Date().toLocaleDateString('sv-SE');
+async function load() {
+  const day = $('#day').value;
+  const r = await fetch('/api/admin/scores' + (day ? '?day=' + day : '')).then(r => r.json());
+  const bench = {};
+  for (const x of r.rows) if (x.team && !x.hidden) { const k = x.mission + x.difficulty; bench[k] = Math.max(bench[k] || 0, x.score); }
+  let rows = r.rows.map(x => ({ ...x, beat: !x.team && !x.hidden && bench[x.mission + x.difficulty] !== undefined && x.score > bench[x.mission + x.difficulty] }));
+  const f = $('#filter').value;
+  if (f === 'contact') rows = rows.filter(x => x.email); if (f === 'beat') rows = rows.filter(x => x.beat); if (f === 'team') rows = rows.filter(x => x.team);
+  $('#kpis').innerHTML = [['Spiele', r.rows.length], ['Mit E-Mail', r.rows.filter(x => x.email).length], ['Beat RealCore', r.rows.filter(x => !x.team && bench[x.mission + x.difficulty] !== undefined && x.score > bench[x.mission + x.difficulty]).length], ['Gutscheine vergeben', r.rows.filter(x => x.voucher).length]].map(([k, v]) => `<div class="kpi"><b>${v}</b><span>${k}</span></div>`).join('');
+  $('#hint').textContent = r.teamCodeSet ? 'Teamcode ist gesetzt – Team-Ergebnisse bilden den Benchmark je Mission und Stufe.' : 'Hinweis: TEAM_CODE ist nicht gesetzt.';
+  $('#rows').innerHTML = rows.map(x => `<tr class="${x.team ? 'team' : ''} ${x.hidden ? 'hid' : ''}">
+    <td>${new Date(x.created).toLocaleString('de-DE', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}</td>
+    <td>${esc(x.name)}</td><td>${esc(x.company)}</td><td>${x.email ? `<a style="color:#7df" href="mailto:${esc(x.email)}">${esc(x.email)}</a>` : '–'}</td>
+    <td>${M[x.mission] || x.mission}</td><td>${D[x.difficulty] || x.difficulty}</td><td>${x.won ? 'Sieg' : '–'}</td><td>${Math.floor(x.duration / 60)}:${String(x.duration % 60).padStart(2, '0')}</td>
+    <td class="s">${x.score.toLocaleString('de-DE')}</td>
+    <td>${x.team ? '<span class="tag rc">TEAM</span>' : ''} ${x.beat ? '<span class="tag beat">BEAT</span>' : ''} ${x.hidden ? '<span class="tag flag">AUSGEBLENDET</span>' : ''}</td>
+    <td><input type="checkbox" data-id="${x.id}" data-f="voucher" ${x.voucher ? 'checked' : ''}></td>
+    <td><button data-id="${x.id}" data-f="hidden" data-v="${x.hidden ? 0 : 1}">${x.hidden ? 'Einblenden' : 'Ausblenden'}</button> <button data-id="${x.id}" data-f="team" data-v="${x.team ? 0 : 1}">${x.team ? 'Kein Team' : 'Als Team'}</button> <button data-id="${x.id}" data-f="delete">Löschen</button></td>
+  </tr>`).join('') || '<tr><td colspan="12" class="hint">Keine Einträge.</td></tr>';
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('button[data-id]'); if (!b) return;
+  const body = { id: +b.dataset.id };
+  if (b.dataset.f === 'delete') { if (!confirm('Eintrag endgültig löschen?')) return; body.delete = true; } else body[b.dataset.f] = +b.dataset.v;
+  await fetch('/api/admin/update', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) }); load();
+});
+document.addEventListener('change', async e => {
+  const c = e.target.closest('input[data-f="voucher"]'); if (!c) return;
+  await fetch('/api/admin/update', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ id: +c.dataset.id, voucher: c.checked }) }); load();
+});
+$('#reload').onclick = load; $('#day').onchange = load; $('#filter').onchange = load;
+load();
+</script>
+</body>
+</html>

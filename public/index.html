@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Beat RealCore – Legacy League</title>
+<meta name="description" content="Der RealCore-Fußballmanager: Führe TechHub United durch die Legacy League, besiege die Legacy-IT und schlage das RealCore-Team.">
+<meta name="theme-color" content="#06100e">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="RealCore Group">
+<meta property="og:locale" content="de_DE">
+<meta property="og:url" content="https://beat-realcore-league.onrender.com/">
+<meta property="og:title" content="Beat RealCore – Legacy League">
+<meta property="og:description" content="Der SAP-Fußballmanager im Browser: Trainiere TechHub United, besiege die Legacy-Clubs – und schlage das RealCore-Team.">
+<meta property="og:image" content="https://beat-realcore-league.onrender.com/img/og-share.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Beat RealCore – Legacy League">
+<meta name="twitter:description" content="Der SAP-Fußballmanager im Browser: Trainiere TechHub United, besiege die Legacy-Clubs – und schlage das RealCore-Team.">
+<meta name="twitter:image" content="https://beat-realcore-league.onrender.com/img/og-share.jpg">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 107 107'%3E%3Cpath fill='%2385c916' fill-rule='evenodd' d='M107 0H0V107H107V0ZM53 92C74.5 92 92 74.5 92 53C92 31.5 74.5 14 53 14C31.5 14 14 31.5 14 53C14 74.5 31.5 92 53 92Z'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div id="wipe"></div>
+<div class="lang-sw" id="lang-sw" data-nt><button data-l="de" title="Deutsch">DE</button><button data-l="en" title="English">EN</button></div>
+
+<!-- ============ Titel ============ -->
+<section id="screen-title" class="screen active">
+  <div class="title-wrap">
+    <div class="title-left">
+      <a class="rc-logo" href="https://www.realcore.de" target="_blank" rel="noopener" title="realcore.de"><svg class="rc-mark" viewBox="0 0 107 107" aria-hidden="true"><path fill-rule="evenodd" d="M107 0H0V107H107V0ZM53 92C74.5391 92 92 74.5391 92 53C92 31.4609 74.5391 14 53 14C31.4609 14 14 31.4609 14 53C14 74.5391 31.4609 92 53 92Z"/></svg><img src="/img/realcore-wordmark.png" alt="the real core" width="532" height="223"></a>
+      <div class="pres">RealCore <b>TechHub</b> präsentiert</div>
+      <h1 class="title"><span class="t1">BEAT</span><span class="t2">REALCORE</span><span class="t3">LEGACY LEAGUE</span></h1>
+      <p class="pitch-text">Übernimm <b>TechHub United</b>, trainiere dein Team aus CPI-Flügeln, BTP-Panzern und Joule-Jets – und stürze die Legacy-Clubs der Legacy-KI. Die besten Manager:innen gewinnen <em>TechHub-Gutscheine</em>.</p>
+      <div class="menu">
+        <button class="menu-item primary" id="btn-play"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M7 4l13 8-13 8z" fill="currentColor" fill-opacity=".25"/></svg><span><b>Saison starten</b><small>Sieben Spieltage bis zum Finale gegen den Monolithen</small></span><span class="k">Enter</span></button>
+        <button class="menu-item" id="btn-board"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg><span><b>Bestenliste</b><small>„Beat RealCore“-Liga</small></span><span class="k">B</span></button>
+        <button class="menu-item" id="btn-howto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span><b>So geht's</b><small>Kader, Taktik, Punkte</small></span><span class="k">?</span></button>
+        <button class="menu-item" id="btn-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span><b>Einstellungen</b><small>Ton, Sprache</small></span><span class="k">O</span></button>
+      </div>
+    </div>
+    <div class="title-right">
+      <div class="card board-card"><div class="card-head"><span>▸ Liga · Top heute</span><span class="tag" id="title-board-tag">Alle Stufen</span></div><div id="title-board" class="mini-board">Lade …</div></div>
+      <div class="card news-card"><div class="card-head"><span>▸ Sportschau</span><span class="tag live">LIVE</span></div><div id="title-news"><p class="news-t">Die Legacy League startet. TechHub United sucht noch eine:n Manager:in.</p><p class="news-s">— Lena Hoff · Sportdirektorin</p></div></div>
+    </div>
+  </div>
+  <div class="ticker" id="ticker"><div class="ticker-in" id="ticker-in"></div></div>
+  <footer class="title-foot"><span>RealCore Group · SAP · BTP · KI · <span class="ver">v1.0</span></span><span><a href="#" id="link-privacy">Datenschutz</a></span><p class="tm-note">SAP, SAP S/4HANA, SAP HANA, SAP BTP, SAP Fiori, SAP Integration Suite, SAP Datasphere, ABAP, Joule, Kyma und SAP R/3 sind Marken oder eingetragene Marken der SAP SE oder ihrer verbundenen Unternehmen in Deutschland und anderen Ländern. Dieses Spiel ist nicht von SAP SE oder einem verbundenen Unternehmen autorisiert oder gesponsert.</p></footer>
+</section>
+
+<!-- ============ Aufstellung (Setup) ============ -->
+<section id="screen-setup" class="screen">
+  <div class="panel">
+    <header class="panel-head"><button class="back" data-go="title">‹ Zurück</button><h2 data-k="// SCHRITT 1 · VEREINSÜBERNAHME">Neue Saison</h2><span class="step">1 / 2</span></header>
+    <div class="setup-body">
+      <div class="setup-col">
+        <h3>Wer übernimmt TechHub United?</h3>
+        <label class="field"><span>Name / Managername *</span><input id="in-name" maxlength="32" autocomplete="off" placeholder="z. B. Alex"></label>
+        <label class="field"><span>Unternehmen</span><input id="in-company" maxlength="48" autocomplete="off" placeholder="z. B. Muster AG"></label>
+        <details class="team-box"><summary>+ Ich bin vom RealCore-Team</summary><label class="field"><span>Teamcode</span><input id="in-team" maxlength="32" autocomplete="off" placeholder="Code vom Stand"></label><p class="hint">Team-Ergebnisse setzen den RealCore-Benchmark, den Kunden schlagen müssen.</p></details>
+      </div>
+      <div class="setup-col">
+        <h3>Schwierigkeit</h3>
+        <div class="diff-cards" id="diff-cards"></div>
+        <h3>Die Saison</h3>
+        <ol class="season-list" id="season-list"></ol>
+        <p class="hint">Sieben Spieltage, zwischen den Spielen eine Trainingswoche: Kader, Taktik, Training, Transfers. Die Legacy-KI stört, wo sie kann.</p>
+      </div>
+    </div>
+    <footer class="panel-foot"><span class="hint" id="setup-err"></span><button class="btn primary big" id="btn-brief">Verein übernehmen ›</button></footer>
+  </div>
+</section>
+
+<!-- ============ Briefing ============ -->
+<section id="screen-brief" class="screen">
+  <div class="panel">
+    <header class="panel-head"><button class="back" data-go="setup">‹ Zurück</button><h2 data-k="// SAISONAUFTAKT" id="brief-title">Pressekonferenz</h2><span class="step">2 / 2</span></header>
+    <div class="brief-body">
+      <div class="talk" id="brief-talk"></div>
+      <div class="brief-aside">
+        <div class="card"><div class="card-head"><span>▸ Saisonziel</span></div><p id="brief-goal">Meister der Legacy League werden – und den Legacy-Monolith FC am letzten Spieltag stürzen.</p></div>
+        <div class="card"><div class="card-head"><span>▸ Punkte</span></div><ul class="plain"><li>Sieg 1.000 · Remis 400 · Tor 120 · Zu-null 300</li><li>Meister +3.000 · Platz 2 +1.500 · Platz 3 +800</li><li>Restbudget zählt mit – Transfers mit Augenmaß</li></ul></div>
+      </div>
+    </div>
+    <footer class="panel-foot"><span class="hint">Tipp: Erst Kader und Taktik prüfen, dann Training wählen.</span><button class="btn primary big" id="btn-start" disabled>In die Trainingswoche ›</button></footer>
+  </div>
+</section>
+
+<!-- ============ Trainingswoche ============ -->
+<section id="screen-week" class="screen">
+  <header class="week-head">
+    <div class="wh-left"><span class="wh-day" id="wh-day">Spieltag 1 / 7</span><b id="wh-opp">vs. FC Datensilo</b><small id="wh-where">Heimspiel · Clean-Core-Arena</small></div>
+    <div class="wh-mid"><div class="kpi"><small>Budget</small><b id="wh-budget">2.200 T€</b></div><div class="kpi"><small>Tabelle</small><b id="wh-rank">–</b></div><div class="kpi"><small>Teamstärke</small><b id="wh-str">–</b></div><div class="kpi"><small>Stimmung</small><b id="wh-morale">–</b></div></div>
+    <div class="wh-right"><button class="icon-btn" id="btn-sound" title="Ton">🔊</button><button class="btn primary big" id="btn-match">Zum Spiel ›</button></div>
+  </header>
+  <div class="week-body">
+    <nav class="week-nav" id="week-nav">
+      <button class="on" data-tab="squad">Kader & Aufstellung</button>
+      <button data-tab="tactics">Taktik</button>
+      <button data-tab="training">Training <i class="dot" id="dot-training"></i></button>
+      <button data-tab="market">Transfermarkt</button>
+      <button data-tab="table">Tabelle</button>
+      <button data-tab="radio">Funk <i class="dot" id="dot-radio"></i></button>
+      <button data-tab="quit" class="dim">Saison abbrechen</button>
+    </nav>
+    <main class="week-main">
+      <section class="wtab on" id="tab-squad">
+        <div class="squad-grid">
+          <div class="board-col"><div class="board-head"><h3>Aufstellung <small id="lineup-form"></small></h3><button class="btn sm" id="btn-auto">Auto-Aufstellung</button></div><div class="lineup-board" id="lineup-board"></div><p class="hint" id="lineup-hint">Klicke eine Position und dann eine:n Spieler:in in der Liste.</p><ul class="problems" id="lineup-problems"></ul></div>
+          <div class="list-col"><div class="board-head"><h3>Kader <small id="squad-n"></small></h3><span class="legend"><i class="st-ok"></i> fit <i class="st-tired"></i> müde <i class="st-inj"></i> verletzt <i class="st-ban"></i> gesperrt</span></div><div class="player-list" id="player-list"></div></div>
+        </div>
+      </section>
+      <section class="wtab" id="tab-tactics">
+        <h3>Formation</h3><div class="seg big" id="formations"></div>
+        <h3>Spielstil</h3><div class="style-cards" id="styles"></div>
+        <h3>Tempo</h3><div class="seg" id="tempos"></div>
+        <div class="card opp-card" id="opp-card"></div>
+      </section>
+      <section class="wtab" id="tab-training"><p class="lead">Ein Schwerpunkt pro Woche. Die Werte steigen dauerhaft – junge Spieler:innen lernen schneller.</p><div class="train-cards" id="train-cards"></div></section>
+      <section class="wtab" id="tab-market"><p class="lead">Freie Spieler:innen aus der Cloud. Verkäufe bringen 60 % des Marktwerts. Kader: 14 bis 22.</p><div class="market-cards" id="market-cards"></div></section>
+      <section class="wtab" id="tab-table"><div class="table-wrap"><table class="league" id="league-table"><thead><tr><th>#</th><th>Verein</th><th>Sp</th><th>S</th><th>U</th><th>N</th><th>Tore</th><th>Pkt</th></tr></thead><tbody></tbody></table></div><h3>Bisherige Spiele</h3><ul class="results" id="results-list"></ul></section>
+      <section class="wtab" id="tab-radio"><div class="radio" id="radio"></div></section>
+    </main>
+  </div>
+  <div id="tip" hidden></div>
+</section>
+
+<!-- ============ Spieltag ============ -->
+<section id="screen-match" class="screen">
+  <div class="match-top">
+    <div class="score" id="score"><span class="tm home" id="sc-home">TechHub</span><b id="sc-val">0 : 0</b><span class="tm away" id="sc-away">Datensilo</span></div>
+    <div class="clock"><b id="sc-min">0'</b><span id="sc-phase">1. Halbzeit</span></div>
+    <div class="speed" id="speed"><button data-s="1" class="on">1×</button><button data-s="2">2×</button><button data-s="4">4×</button><button data-s="skip" title="Spiel durchlaufen lassen">⏭</button><button id="btn-tactics-live" title="Taktik / Wechsel">⏸ Taktik</button></div>
+  </div>
+  <div class="match-body">
+    <div class="pitch-wrap"><canvas id="pitch"></canvas><div class="banner" id="match-banner" hidden></div></div>
+    <aside class="ticker-side"><div class="ts-head"><span>▸ Live-Ticker</span><span id="ts-stats"></span></div><div class="ticker-list" id="ticker-list"></div></aside>
+  </div>
+  <div class="overlay" id="half" hidden>
+    <div class="panel sm">
+      <header class="panel-head"><span></span><h2 data-k="// KABINE" id="half-title">Halbzeit</h2><span class="step" id="half-score"></span></header>
+      <div class="half-body">
+        <div><h3>Spielstil</h3><div class="seg" id="half-styles"></div><h3>Tempo</h3><div class="seg" id="half-tempos"></div><p class="hint" id="half-advice"></p></div>
+        <div><h3>Wechsel <small id="half-subs"></small></h3><div class="sub-grid"><div><small>Raus</small><div class="sub-list" id="sub-out"></div></div><div><small>Rein</small><div class="sub-list" id="sub-in"></div></div></div><button class="btn sm" id="btn-sub" disabled>Wechsel durchführen</button></div>
+      </div>
+      <footer class="panel-foot"><span></span><button class="btn primary big" id="btn-resume">Weiter spielen ›</button></footer>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Spielbericht ============ -->
+<section id="screen-report" class="screen">
+  <div class="panel">
+    <header class="panel-head"><span></span><h2 data-k="// SPIELBERICHT" id="rep-title">Abpfiff</h2><span class="step" id="rep-day"></span></header>
+    <div class="report-body">
+      <div class="rep-score" id="rep-score"></div>
+      <div class="rep-grid">
+        <div class="card"><div class="card-head"><span>▸ Torschützen & Statistik</span></div><div id="rep-stats"></div></div>
+        <div class="card"><div class="card-head"><span>▸ Noten</span></div><div class="ratings" id="rep-ratings"></div></div>
+        <div class="card talk" id="rep-talk"></div>
+        <div class="card"><div class="card-head"><span>▸ Kasse</span></div><div id="rep-money"></div></div>
+      </div>
+    </div>
+    <footer class="panel-foot"><span class="hint" id="rep-hint"></span><button class="btn primary big" id="btn-next-week">Weiter ›</button></footer>
+  </div>
+</section>
+
+<!-- ============ Saisonende ============ -->
+<section id="screen-result" class="screen">
+  <div class="panel wide result-panel">
+    <div class="result-head" id="result-head"><h1 id="result-title">MEISTER!</h1><p id="result-reason"></p><div class="grade" id="grade"><b></b><small>NOTE</small></div></div>
+    <div class="result-grid">
+      <div class="result-left">
+        <div class="score-box"><small>Punkte</small><b id="result-score">0</b><span id="result-rank">Wird gewertet …</span></div>
+        <table class="breakdown" id="result-breakdown"></table>
+        <div class="beat" id="result-beat"></div>
+        <form class="voucher" id="voucher-form"><h3 id="voucher-title">Gutschein-Verlosung</h3><p id="voucher-text">Tragt eure E-Mail ein: Die besten Ergebnisse gewinnen einen TechHub-Gutschein.</p><input type="email" id="in-email" placeholder="name@firma.de" required><label class="check"><input type="checkbox" id="in-consent" required><span>Ich willige ein, dass RealCore mich zur Gutschein-Vergabe und zum Gespräch über die Spielthemen per E-Mail kontaktiert. Widerruf jederzeit möglich.</span></label><button class="btn primary" type="submit">Teilnehmen</button><p class="hint" id="voucher-msg"></p></form>
+      </div>
+      <div class="result-right">
+        <div class="card debrief" id="debrief"><div class="card-head"><span>▸ Im Spiel gelöst – wie sieht das bei euch aus?</span><span class="tag" id="debrief-tag">Analyse</span></div><h3 id="debrief-head"></h3><p id="debrief-text"></p><ul id="debrief-q" class="questions"></ul><div class="offer" id="debrief-offer"></div><div class="cta"><p>Sprecht uns direkt am Stand an – wir zeigen euch, wie das in eurer Landschaft aussieht.</p><p class="cta-mail">Nicht auf der Messe? Schreibt uns einfach: <a href="mailto:info@realcore.de">info@realcore.de</a></p></div></div>
+        <div class="card"><div class="card-head"><span>▸ Abschlusstabelle</span></div><div class="table-wrap"><table class="league" id="final-table"><thead><tr><th>#</th><th>Verein</th><th>Sp</th><th>Tore</th><th>Pkt</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="card"><div class="card-head"><span>▸ Saisonverlauf</span></div><ul class="results" id="final-results"></ul></div>
+      </div>
+    </div>
+    <footer class="panel-foot"><button class="btn ghost" id="btn-new">Neue:r Manager:in</button><span></span><button class="btn" id="btn-board2">Bestenliste</button><button class="btn primary big" id="btn-again">Nochmal spielen</button></footer>
+  </div>
+</section>
+
+<!-- ============ Bestenliste ============ -->
+<section id="screen-board" class="screen">
+  <div class="panel wide">
+    <header class="panel-head"><button class="back" data-go="back">‹ Zurück</button><h2 data-k="// LIGA-TERMINAL">„Beat RealCore“-Liga</h2><span></span></header>
+    <div class="board-filters"><div class="seg" id="board-diff"></div><div class="seg" id="board-period"></div></div>
+    <div class="bench big" id="board-bench"></div>
+    <table class="board" id="board-table"><thead><tr><th>#</th><th>Manager:in</th><th>Unternehmen</th><th>Stufe</th><th>Platz</th><th>Punkte</th></tr></thead><tbody></tbody></table>
+  </div>
+</section>
+
+<!-- ============ So geht's ============ -->
+<section id="screen-howto" class="screen">
+  <div class="panel">
+    <header class="panel-head"><button class="back" data-go="back">‹ Zurück</button><h2 data-k="// HANDBUCH">So geht's</h2><span></span></header>
+    <div class="howto">
+      <h3>Die Saison</h3><p>Sieben Spieltage gegen die Clubs der Legacy-IT – vom <b>FC Datensilo</b> bis zum Finale gegen den <b>Legacy-Monolith FC</b>. Zwischen den Spielen hast du eine Trainingswoche.</p>
+      <h3>Kader & Aufstellung</h3><p>Dein Team kommt aus dem TechHub: <b>CPI-Integratoren</b> im Mittelfeld, der <b>BTP-Panzer</b> in der Abwehr, der <b>Joule-Jet</b> im Sturm, die <b>Firewall</b> im Tor. Jede:r hat fünf Werte: Tempo, Technik, Abwehr, Schuss, Kondition. Auf fremder Position sinkt die Leistung.</p>
+      <h3>Taktik</h3><p><b>Clean Core</b> steht kompakt, <b>Agile Pressing</b> stört früh (kostet Kondition), <b>Big Bang</b> wirft alles nach vorn. Lena Hoff gibt vor jedem Spiel einen Tipp.</p>
+      <h3>Training & Transfers</h3><p>Ein Schwerpunkt pro Woche verbessert die Werte dauerhaft. Auf dem Transfermarkt findest du Cloud-Talente – Verkäufe bringen 60 % des Marktwerts. Das Budget zählt am Ende mit.</p>
+      <h3>Die Legacy-KI</h3><p>Sie stört jede Woche: Release-Freeze (Sperre), Change-Request-Flut (Verletzung), Budgetkürzung, Schatten-IT oder der Mainframe-Koloss im gegnerischen Sturm.</p>
+      <h3>Punkte</h3><p>Sieg 1.000, Remis 400, jedes Tor 120, Zu-null 300. Meister +3.000, Platz 2 +1.500, Platz 3 +800, plus 15 % vom Restbudget. Wer den Benchmark des RealCore-Teams schlägt, ist im Gutschein-Rennen.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Datenschutz ============ -->
+<section id="screen-privacy" class="screen">
+  <div class="panel">
+    <header class="panel-head"><button class="back" data-go="back">‹ Zurück</button><h2 data-k="// RECHTLICHES">Datenschutz</h2><span></span></header>
+    <div class="howto">
+      <p>Für die Bestenliste speichern wir den angegebenen Managernamen, optional das Unternehmen sowie Spielergebnisse. Name und Unternehmen erscheinen öffentlich in der Bestenliste.</p>
+      <p>Eine E-Mail-Adresse speichern wir nur, wenn ihr sie für die Gutschein-Vergabe freiwillig angebt und in die Kontaktaufnahme einwilligt. Sie ist nicht öffentlich sichtbar und wird nur zur Gutschein-Vergabe und zur vereinbarten Kontaktaufnahme genutzt.</p>
+      <p>Für die KI-Texte werden anonyme Spielstände (z. B. Ergebnisse, Budget) an einen KI-Dienst übermittelt. Bitte keine vertraulichen Informationen eingeben.</p>
+      <p>Auskunft, Berichtigung oder Löschung: Sprecht uns am Stand an oder schreibt an die RealCore Group GmbH, <a href="mailto:info@realcore.de">info@realcore.de</a>.</p>
+      <h3>Markenhinweis</h3>
+      <p>SAP, SAP S/4HANA, SAP HANA, SAP BTP, SAP Fiori, SAP Integration Suite, SAP Datasphere, ABAP, Joule, Kyma und SAP R/3 sind Marken oder eingetragene Marken der SAP SE oder ihrer verbundenen Unternehmen in Deutschland und anderen Ländern.</p>
+      <p>Dieses Spiel ist nicht von SAP SE oder einem verbundenen Unternehmen autorisiert oder gesponsert.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ Einstellungen ============ -->
+<div class="overlay" id="settings" hidden>
+  <div class="panel sm">
+    <header class="panel-head"><span></span><h2 data-k="// SYSTEM">Einstellungen</h2><button class="back" id="set-close">Schließen ✕</button></header>
+    <div class="set-body">
+      <section><h3>Ton</h3>
+        <label class="sl"><span>Stadion</span><input type="range" min="0" max="100" id="vol-music"><b id="vol-music-v"></b></label>
+        <label class="sl"><span>Effekte</span><input type="range" min="0" max="100" id="vol-sfx"><b id="vol-sfx-v"></b></label>
+      </section>
+      <section><h3 data-nt>Sprache · Language</h3><div class="seg" id="set-lang" data-nt></div></section>
+    </div>
+  </div>
+</div>
+<div id="toast" class="toast" hidden></div>
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>
