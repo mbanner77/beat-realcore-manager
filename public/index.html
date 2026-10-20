@@ -39,7 +39,7 @@
       <a class="rc-logo" href="https://www.realcore.de" target="_blank" rel="noopener" title="realcore.de"><svg class="rc-mark" viewBox="0 0 107 107" aria-hidden="true"><path fill-rule="evenodd" d="M107 0H0V107H107V0ZM53 92C74.5391 92 92 74.5391 92 53C92 31.4609 74.5391 14 53 14C31.4609 14 14 31.4609 14 53C14 74.5391 31.4609 92 53 92Z"/></svg><img src="/img/realcore-wordmark.png" alt="the real core" width="532" height="223"></a>
       <div class="pres">RealCore <b>TechHub</b> präsentiert</div>
       <h1 class="title"><span class="t1">BEAT</span><span class="t2">REALCORE</span><span class="t3">LEGACY LEAGUE</span></h1>
-      <p class="pitch-text">Übernimm <b>TechHub United</b>, trainiere dein Team aus CPI-Flügeln, BTP-Panzern und Joule-Jets – und stürze die Legacy-Clubs der Legacy-KI. Die besten Manager:innen gewinnen <em>TechHub-Gutscheine</em>.</p>
+      <p class="pitch-text">Übernimm <b>TechHub United</b>, trainiere dein Team aus CPI-Flügeln, BTP-Bollwerken und Joule-Sprintern – und stürze die Legacy-Clubs der Legacy-KI. Die besten Manager:innen gewinnen <em>TechHub-Gutscheine</em>.</p>
       <div class="menu">
         <button class="menu-item primary" id="btn-play"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M7 4l13 8-13 8z" fill="currentColor" fill-opacity=".25"/></svg><span><b>Saison starten</b><small>Sieben Spieltage bis zum Finale gegen den Monolithen</small></span><span class="k">Enter</span></button>
         <button class="menu-item" id="btn-board"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg><span><b>Bestenliste</b><small>„Beat RealCore“-Liga</small></span><span class="k">B</span></button>
@@ -97,9 +97,9 @@
 <!-- ============ Trainingswoche ============ -->
 <section id="screen-week" class="screen">
   <header class="week-head">
-    <div class="wh-left"><span class="wh-day" id="wh-day">Spieltag 1 / 7</span><b id="wh-opp">vs. FC Datensilo</b><small id="wh-where">Heimspiel · Clean-Core-Arena</small></div>
+    <div class="wh-left"><span class="wh-day" id="wh-day">Spieltag 1 / 7</span><b id="wh-opp">vs. FC Datensilo</b><small id="wh-where">Heimspiel · Clean-Core-Arena</small><small class="wh-obj" id="wh-obj"></small></div>
     <div class="wh-mid"><div class="kpi"><small>Budget</small><b id="wh-budget">2.200 T€</b></div><div class="kpi"><small>Tabelle</small><b id="wh-rank">–</b></div><div class="kpi"><small>Teamstärke</small><b id="wh-str">–</b></div><div class="kpi"><small>Stimmung</small><b id="wh-morale">–</b></div></div>
-    <div class="wh-right"><button class="icon-btn" id="btn-sound" title="Ton">🔊</button><button class="btn primary big" id="btn-match">Zum Spiel ›</button></div>
+    <div class="wh-right"><button class="btn sm" id="btn-decision" hidden>Vorstand <i class="dot on"></i></button><button class="icon-btn" id="btn-sound" title="Ton">🔊</button><button class="btn primary big" id="btn-match">Zum Spiel ›</button></div>
   </header>
   <div class="week-body">
     <nav class="week-nav" id="week-nav">
@@ -108,7 +108,7 @@
       <button data-tab="training">Training <i class="dot" id="dot-training"></i></button>
       <button data-tab="market">Transfermarkt</button>
       <button data-tab="table">Tabelle</button>
-      <button data-tab="radio">Funk <i class="dot" id="dot-radio"></i></button>
+      <button data-tab="radio">Presse <i class="dot" id="dot-radio"></i></button>
       <button data-tab="quit" class="dim">Saison abbrechen</button>
     </nav>
     <main class="week-main">
@@ -131,6 +131,14 @@
     </main>
   </div>
   <div id="tip" hidden></div>
+<!-- Vorstandsentscheidung -->
+<div class="overlay" id="decision" hidden>
+  <div class="panel sm">
+    <header class="panel-head"><span></span><h2 data-k="// VORSTAND" id="dec-title">Entscheidung</h2><span class="step" id="dec-day"></span></header>
+    <div class="dec-body"><p id="dec-text"></p><div class="dec-opts" id="dec-opts"></div><p class="hint" id="dec-note"></p></div>
+    <footer class="panel-foot"><button class="btn" id="btn-dec-later">Später entscheiden</button><button class="btn primary" id="btn-dec-close" hidden>Weiter ›</button></footer>
+  </div>
+</div>
 </section>
 
 <!-- ============ Spieltag ============ -->
@@ -142,7 +150,7 @@
   </div>
   <div class="match-body">
     <div class="pitch-wrap"><canvas id="pitch"></canvas><div class="banner" id="match-banner" hidden></div></div>
-    <aside class="ticker-side"><div class="ts-head"><span>▸ Live-Ticker</span><span id="ts-stats"></span></div><div class="ticker-list" id="ticker-list"></div></aside>
+    <aside class="ticker-side"><div class="ts-head"><span>▸ Live-Ticker</span><span id="ts-stats"></span></div><div class="live-tactics" id="live-tactics"></div><div class="ticker-list" id="ticker-list"></div></aside>
   </div>
   <div class="overlay" id="half" hidden>
     <div class="panel sm">
@@ -210,9 +218,10 @@
     <header class="panel-head"><button class="back" data-go="back">‹ Zurück</button><h2 data-k="// HANDBUCH">So geht's</h2><span></span></header>
     <div class="howto">
       <h3>Die Saison</h3><p>Sieben Spieltage gegen die Clubs der Legacy-IT – vom <b>FC Datensilo</b> bis zum Finale gegen den <b>Legacy-Monolith FC</b>. Zwischen den Spielen hast du eine Trainingswoche.</p>
-      <h3>Kader & Aufstellung</h3><p>Dein Team kommt aus dem TechHub: <b>CPI-Integratoren</b> im Mittelfeld, der <b>BTP-Panzer</b> in der Abwehr, der <b>Joule-Jet</b> im Sturm, die <b>Firewall</b> im Tor. Jede:r hat fünf Werte: Tempo, Technik, Abwehr, Schuss, Kondition. Auf fremder Position sinkt die Leistung.</p>
+      <h3>Kader & Aufstellung</h3><p>Dein Team kommt aus dem TechHub: <b>CPI-Integratoren</b> im Mittelfeld, der <b>BTP-Bollwerk</b> in der Abwehr, der <b>Joule-Sprinter</b> im Sturm, die <b>Firewall</b> im Tor. Jede:r hat fünf Werte: Tempo, Technik, Abwehr, Schuss, Kondition. Auf fremder Position sinkt die Leistung.</p>
       <h3>Taktik</h3><p><b>Clean Core</b> steht kompakt, <b>Agile Pressing</b> stört früh (kostet Kondition), <b>Big Bang</b> wirft alles nach vorn. Lena Hoff gibt vor jedem Spiel einen Tipp.</p>
       <h3>Training & Transfers</h3><p>Ein Schwerpunkt pro Woche verbessert die Werte dauerhaft. Auf dem Transfermarkt findest du Cloud-Talente – Verkäufe bringen 60 % des Marktwerts. Das Budget zählt am Ende mit.</p>
+      <h3>Wochenziel, Vorstand, Kapitän</h3><p>Lena gibt jede Woche ein <b>Wochenziel</b> vor (z. B. zu null spielen) – erfüllt bringt es Bonuspunkte. Ab dem zweiten Spieltag stellt der <b>Vorstand</b> eine Entscheidung mit Abwägung (Sponsor, Talent, Zusatzschicht …). Im Kader bestimmst du <b>Kapitän</b> (spart Kondition, stützt die Stimmung) und <b>Elfmeterschütze</b>. Junge Spieler:innen mit hohem <b>Potenzial</b> (★) lernen im Training und nach guten Spielen dazu. Während des Spiels kannst du den Spielstil live umstellen.</p>
       <h3>Die Legacy-KI</h3><p>Sie stört jede Woche: Release-Freeze (Sperre), Change-Request-Flut (Verletzung), Budgetkürzung, Schatten-IT oder der Mainframe-Koloss im gegnerischen Sturm.</p>
       <h3>Punkte</h3><p>Sieg 1.000, Remis 400, jedes Tor 120, Zu-null 300. Meister +3.000, Platz 2 +1.500, Platz 3 +800, plus 15 % vom Restbudget. Wer den Benchmark des RealCore-Teams schlägt, ist im Gutschein-Rennen.</p>
     </div>
@@ -243,6 +252,7 @@
       <section><h3>Ton</h3>
         <label class="sl"><span>Stadion</span><input type="range" min="0" max="100" id="vol-music"><b id="vol-music-v"></b></label>
         <label class="sl"><span>Effekte</span><input type="range" min="0" max="100" id="vol-sfx"><b id="vol-sfx-v"></b></label>
+        <label class="sl chk"><span>3D-Stadion</span><input type="checkbox" id="opt-3d"><b>Babylon.js</b></label>
       </section>
       <section><h3 data-nt>Sprache · Language</h3><div class="seg" id="set-lang" data-nt></div></section>
     </div>

@@ -1,11 +1,13 @@
 // Saison- und Vereinslogik: Kader, Training, Transfers, Taktik, Tabelle, Störungen der Legacy-KI, Punktewertung
-import { DIFFICULTY, FORMATIONS, STYLES, TEMPO, SQUAD, MARKET_POOL, MARKET_SELL_FACTOR, TRAINING, OPPONENTS, SEASON_SCORE, EVENTS, TAUNTS, POS_GROUP, CLUB } from './data.js';
+import { DIFFICULTY, FORMATIONS, STYLES, TEMPO, SQUAD, MARKET_POOL, MARKET_SELL_FACTOR, TRAINING, OPPONENTS, SEASON_SCORE, EVENTS, TAUNTS, POS_GROUP, CLUB, OBJECTIVES, DECISIONS } from './data.js';
 
 // Deterministischer Zufall (für Tages-Challenge und Tests)
 export function rng(seed) { let s = (seed >>> 0) || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return (s >>> 0) / 4294967296; }; }
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const pick = (r, arr) => arr[Math.floor(r() * arr.length)];
 export const ATTRS = ['tempo', 'technik', 'abwehr', 'schuss', 'kondition'];
+// Potenzial 1–5 Sterne: junge Spieler:innen entwickeln sich schneller
+export function potentialOf(p, r = Math.random) { const base = p.age <= 21 ? 4.3 : p.age <= 24 ? 3.6 : p.age <= 28 ? 2.8 : p.age <= 31 ? 2.0 : 1.3; return Math.max(1, Math.min(5, Math.round(base + (r() - 0.5) * 1.4))); }
 // Gesamtstärke je Position (0–99)
 export function rating(p, pos = p.pos) {
   const w = { TW: [0.05, 0.1, 0.75, 0, 0.1], IV: [0.12, 0.15, 0.55, 0.05, 0.13], AV: [0.25, 0.2, 0.35, 0.05, 0.15], DM: [0.15, 0.25, 0.35, 0.1, 0.15], ZM: [0.2, 0.4, 0.15, 0.15, 0.1], FL: [0.35, 0.3, 0.05, 0.2, 0.1], ST: [0.25, 0.2, 0.0, 0.45, 0.1] }[pos];
@@ -26,12 +28,14 @@ export class Season {
     this.diffKey = o.difficulty; this.diff = DIFFICULTY[o.difficulty];
     this.hooks = o.hooks || {}; this.r = rng(o.seed || (Date.now() & 0xffffffff));
     this.day = 0; this.budget = this.diff.budget; this.over = false;
-    this.players = SQUAD.map(p => ({ ...p, fitness: 100, morale: 70, form: 0, injured: 0, suspended: 0, yellows: 0, goals: 0, assists: 0, apps: 0, own: true }));
+    this.players = SQUAD.map(p => ({ ...p, fitness: 100, morale: 70, form: 0, injured: 0, suspended: 0, yellows: 0, goals: 0, assists: 0, apps: 0, own: true, pot: potentialOf(p, this.r) }));
     this.formation = '4-4-2'; this.style = 'clean'; this.tempo = 'normal';
     this.slots = []; this.autoLineup();
+    this.captain = null; this.penTaker = null; this.pickLeaders();
+    this.objective = null; this.decision = null; this.decided = []; this.sponsorPerWin = false; this.oppMod = 0; this.extraTraining = false;
     this.results = []; this.log = []; this.events = []; this.trained = null; this.market = [];
     this.table = [{ id: 'techhub', club: CLUB.name, short: CLUB.short, pts: 0, gf: 0, ga: 0, w: 0, d: 0, l: 0, me: true }, ...OPPONENTS.map(o => ({ id: o.id, club: o.club, short: o.short, pts: 0, gf: 0, ga: 0, w: 0, d: 0, l: 0 }))];
-    this.stats = { goals: 0, conceded: 0, wins: 0, draws: 0, losses: 0, transfersIn: 0, transfersOut: 0, trainings: 0, cleanSheets: 0 };
+    this.stats = { goals: 0, conceded: 0, wins: 0, draws: 0, losses: 0, transfersIn: 0, transfersOut: 0, trainings: 0, cleanSheets: 0, bonus: 0, objectives: 0, developed: 0 };
     this.pendingEvent = null; this.weekMsgs = [];
     this.prepareWeek(true);
   }
@@ -41,16 +45,18 @@ export class Season {
 
   // ---------- Woche ----------
   prepareWeek(first = false) {
-    this.trained = null; this.weekMsgs = [];
+    this.trained = null; this.weekMsgs = []; this.extraTraining = false; this.oppMod = 0;
+    this.pickObjective(); this.pickDecision(first);
     for (const p of this.players) {
       if (!first) { p.fitness = clamp(p.fitness + 22, 0, 100); if (p.injured > 0) p.injured--; if (p.suspended > 0) p.suspended--; p.morale = clamp(p.morale + (p.morale < 60 ? 3 : -1), 20, 100); }
     }
     this.genMarket();
     this.pendingEvent = null;
-    if (!first) this.fillLineup();
+    if (!first) { this.fillLineup(); this.pickLeaders(); }
     if (!first) this.requestEvent();
     const o = this.opponent;
     this.msg('hub', o.lena);
+    if (this.objective) this.msg('hub', `Wochenziel: ${OBJECTIVES[this.objective].name} (+${OBJECTIVES[this.objective].bonus} Punkte).`);
     this.hooks.onWeek?.(this);
   }
   genMarket() {
@@ -61,6 +67,7 @@ export class Season {
       const t = pool.splice(Math.floor(r() * pool.length), 1)[0];
       const k = 0.9 + r() * 0.22 + this.day * 0.02;
       const p = { id: 'm' + this.day + '_' + i, name: t.name, nick: t.nick || '', pos: t.pos, age: 19 + Math.floor(r() * 14), desc: t.desc, unit: 'market', fitness: 100, morale: 65, form: 0, injured: 0, suspended: 0, yellows: 0, goals: 0, assists: 0, apps: 0 };
+      p.pot = potentialOf(p, r);
       ATTRS.forEach((a, j) => p[a] = clamp(Math.round(t.base[j] * k), 30, 97));
       p.value = Math.round((rating(p) ** 2) / 9 + (p.age < 24 ? 120 : 0)) * 10 / 10;
       p.value = Math.round(p.value / 10) * 10;
@@ -68,10 +75,10 @@ export class Season {
     }
   }
   train(k) {
-    if (this.trained || !TRAINING[k]) return false;
-    const T = TRAINING[k]; this.trained = k; this.stats.trainings++;
+    if ((this.trained && !this.extraTraining) || !TRAINING[k]) return false;
+    const T = TRAINING[k]; if (this.trained) this.extraTraining = false; this.trained = k; this.stats.trainings++;
     for (const p of this.players) {
-      if (T.group.includes(POS_GROUP[p.pos])) for (const a in T.gain) p[a] = clamp(p[a] + T.gain[a] * (p.age < 25 ? 1.3 : p.age > 31 ? 0.6 : 1), 1, 99);
+      if (T.group.includes(POS_GROUP[p.pos])) for (const a in T.gain) p[a] = clamp(p[a] + T.gain[a] * (0.5 + (p.pot || 3) * 0.2), 1, 99);
       if (T.fit) p.fitness = 100;
       if (T.morale) p.morale = clamp(p.morale + T.morale, 0, 100);
       if (!T.fit && !T.morale) p.fitness = clamp(p.fitness - 6, 0, 100);
@@ -97,6 +104,52 @@ export class Season {
     this.slots = this.slots.map(s => s === id ? null : s); this.fillLineup();
     this.msg('hub', `${p.name} wechselt für ${gain} T€. Das Budget freut sich, die Kabine weniger.`);
     return { ok: true, gain };
+  }
+  // ---------- Kapitän, Elfmeterschütze ----------
+  pickLeaders() {
+    const inL = this.slots.map(id => this.players.find(p => p.id === id)).filter(p => p && this.available(p));
+    if (!inL.find(p => p.id === this.captain)) { const c = inL.filter(p => p.pos !== 'TW').sort((a, b) => (b.age + rating(b) / 3) - (a.age + rating(a) / 3))[0]; this.captain = c ? c.id : null; }
+    if (!inL.find(p => p.id === this.penTaker)) { const t = inL.filter(p => p.pos !== 'TW').sort((a, b) => b.schuss - a.schuss)[0]; this.penTaker = t ? t.id : null; }
+  }
+  setCaptain(id) { if (this.players.find(p => p.id === id)) { this.captain = id; const p = this.players.find(x => x.id === id); p.morale = clamp(p.morale + 5, 0, 100); } }
+  setPenTaker(id) { if (this.players.find(p => p.id === id)) this.penTaker = id; }
+  // ---------- Wochenziel ----------
+  pickObjective() {
+    const keys = Object.keys(OBJECTIVES).filter(k => k !== this.objective && !(k === 'margin' && this.opponent.strength >= 76));
+    this.objective = keys[Math.floor(this.r() * keys.length)];
+  }
+  checkObjective(res, gf, ga) {
+    const k = this.objective; if (!k) return null; const mi = res.mine === 'home' ? 0 : 1;
+    const myEv = (res.events || []).filter(e => e.team === mi);
+    const ok = k === 'clean' ? ga === 0 : k === 'goals2' ? gf >= 2 : k === 'margin' ? gf - ga >= 2 : k === 'poss' ? (res.poss?.[mi] || 0) > (res.poss?.[1 - mi] || 0)
+      : k === 'fair' ? !myEv.some(e => e.type === 'yellow' || e.type === 'red') : k === 'young' ? (res.scorers || []).some(id => (this.players.find(p => p.id === id)?.age || 99) < 24)
+      : k === 'early' ? myEv.some(e => e.type === 'goal' && e.min < 45) : k === 'shots' ? (res.shots?.[mi]?.[0] || 0) >= 10 : false;
+    return { key: k, name: OBJECTIVES[k].name, ok, bonus: ok ? OBJECTIVES[k].bonus : 0 };
+  }
+  // ---------- Vorstandsentscheidung ----------
+  pickDecision(first) {
+    this.decision = null; if (first) return;
+    const keys = Object.keys(DECISIONS).filter(k => !this.decided.includes(k) && (k !== 'offer' || this.offerCandidate()));
+    if (!keys.length) return;
+    const key = keys[Math.floor(this.r() * keys.length)]; const d = { key, ...DECISIONS[key], chosen: null };
+    if (key === 'offer') { const p = this.offerCandidate(); d.pid = p.id; d.price = Math.round(p.value * 1.5 / 10) * 10; d.text = d.text.replace('{p}', p.name); d.options = d.options.map(o => ({ ...o, effect: o.effect.replace('{v}', d.price) })); }
+    this.decision = d;
+  }
+  offerCandidate() { const inL = new Set(this.slots); return [...this.players].filter(p => !inL.has(p.id) && this.players.length > 14).sort((a, b) => b.value - a.value)[0] || null; }
+  decide(optKey) {
+    const d = this.decision; if (!d || d.chosen) return false; const o = d.options.find(x => x.key === optKey); if (!o) return false;
+    d.chosen = optKey; this.decided.push(d.key); const r = this.r; let note = '';
+    if (d.key === 'sponsor') { if (optKey === 'now') { this.budget += 300; note = 'Data Lake GmbH überweist 300 T€.'; } else { this.sponsorPerWin = true; note = 'Data Lake GmbH zahlt ab jetzt 150 T€ pro Sieg.'; } }
+    else if (d.key === 'talent') { if (optKey === 'promote') { const t = { id: 'y' + this.day, name: ['Yara Young', 'Timo Trainee', 'Neo Newbie'][this.day % 3], nick: 'Das Talent', pos: ['ZM', 'FL', 'ST', 'AV'][Math.floor(r() * 4)], age: 18, desc: 'Frisch aus der Akademie. Noch roh, aber lernt in jedem Training.', unit: 'academy', fitness: 100, morale: 80, form: 0, injured: 0, suspended: 0, yellows: 0, goals: 0, assists: 0, apps: 0, pot: 5, own: false }; ATTRS.forEach(a => t[a] = 46 + Math.floor(r() * 14)); t.value = 180; if (this.players.length < 22) { this.players.push(t); note = `${t.name} rückt in den Kader auf.`; } else { this.budget += 120; note = 'Kader voll – das Talent wird verliehen (+120 T€).'; } } else { this.budget += 120; note = 'Das Talent spielt auf Leihbasis – 120 T€ für die Kasse.'; } }
+    else if (d.key === 'fanday') { if (optKey === 'yes') { this.budget -= 120; for (const p of this.players) p.morale = clamp(p.morale + 10, 0, 100); note = 'Der Fan-Tag war ein Erfolg – die Kabine strahlt.'; } else note = 'Kein Fan-Tag diese Woche.'; }
+    else if (d.key === 'overtime') { if (optKey === 'yes') { this.extraTraining = true; for (const p of this.players) p.fitness = clamp(p.fitness - 12, 0, 100); note = 'Zweite Trainingseinheit freigeschaltet.'; } else { for (const p of this.players) p.fitness = clamp(p.fitness + 6, 0, 100); note = 'Regeneration – alle etwas frischer.'; } }
+    else if (d.key === 'press') { if (optKey === 'bold') { for (const p of this.players) p.morale = clamp(p.morale + 6, 0, 100); this.oppMod += 4; note = 'Die Kampfansage macht die Runde – der Gegner ist gewarnt.'; } else { for (const p of this.players) p.morale = clamp(p.morale + 2, 0, 100); note = 'Bescheiden und ruhig – so mag es Lena.'; } }
+    else if (d.key === 'scout') { if (optKey === 'buy') { this.budget -= 100; this.oppMod -= 6; note = 'Die Analyse liegt vor: Der Gegner hat Lücken hinter den Außenverteidigern.'; } else note = 'Keine Analyse – wir vertrauen auf Lenas Bauchgefühl.'; }
+    else if (d.key === 'hypercare') { if (optKey === 'yes') { this.budget += 200; const c = this.slots.map(id => this.players.find(p => p.id === id)).filter(p => p && p.pos !== 'TW'); const p = c[Math.floor(r() * c.length)]; if (p) { p.fitness = clamp(p.fitness - 45, 0, 100); note = `${p.name} hilft beim Go-Live – und kommt müde zurück. +200 T€.`; } } else note = 'Der Betrieb muss ohne uns auskommen.'; }
+    else if (d.key === 'offer') { const p = this.players.find(x => x.id === d.pid); if (optKey === 'sell' && p && this.players.length > 14) { this.budget += d.price; this.players = this.players.filter(x => x !== p); this.stats.transfersOut++; this.fillLineup(); note = `${p.name} wechselt für ${d.price} T€.`; } else if (p) { p.morale = clamp(p.morale + 8, 0, 100); note = `${p.name} bleibt – und freut sich über das Vertrauen.`; } }
+    this.msg('hub', `Vorstand: ${d.title} – ${note}`);
+    this.hooks.onDecision?.(d, note);
+    return true;
   }
   // ---------- Aufstellung ----------
   available(p) { return p.injured <= 0 && p.suspended <= 0; }
@@ -128,11 +181,11 @@ export class Season {
     const F = FORMATIONS[this.formation];
     const players = this.slots.map((id, i) => { const p = this.players.find(x => x.id === id); if (!p) return null; const pos = F.slots[i][0]; return { ref: p, id: p.id, name: p.name, nick: p.nick, pos, slot: F.slots[i], num: i + 1, ...this.effective(p, pos) }; }).filter(Boolean);
     const bench = this.bench().map((p, i) => ({ ref: p, id: p.id, name: p.name, nick: p.nick, pos: p.pos, num: 12 + i, ...this.effective(p, p.pos) }));
-    return { name: CLUB.name, short: CLUB.short, color: CLUB.color, color2: CLUB.color2, players, bench, formation: this.formation, style: this.style, tempo: this.tempo, ai: null, me: true };
+    return { name: CLUB.name, short: CLUB.short, color: CLUB.color, color2: CLUB.color2, players, bench, formation: this.formation, style: this.style, tempo: this.tempo, ai: null, me: true, captain: this.captain, penTaker: this.penTaker };
   }
   opponentForMatch() {
     const o = this.opponent, r = rng(o.seed * 7 + this.diffKey.length), ev = this.pendingEvent?.event;
-    const base = o.strength * this.diff.opp * (1 + (ev === 'shadow_it' ? 0.08 : 0));
+    const base = (o.strength + (this.oppMod || 0)) * this.diff.opp * (1 + (ev === 'shadow_it' ? 0.08 : 0));
     const F = FORMATIONS[o.style === 'wall' ? '5-3-2' : o.style === 'boss' || o.style === 'longshot' ? '4-3-3' : '4-4-2'];
     const players = F.slots.map(([pos, x, y], i) => {
       const k = 0.55 + base / 140, p = { id: 'o' + i, name: o.names[i] || `${o.short} ${i + 1}`, pos, slot: F.slots[i], num: i + 1 };
@@ -200,7 +253,7 @@ export class Season {
     this.stats.goals += gf; this.stats.conceded += ga; if (ga === 0) this.stats.cleanSheets++;
     // Spieler
     for (const p of this.players) {
-      if (res.played?.includes(p.id)) { p.apps++; p.fitness = clamp(p.fitness - (res.minutes?.[p.id] ?? 90) * 0.34, 0, 100); p.form = clamp(p.form + (won ? 1 : draw ? 0 : -1), -3, 3); p.morale = clamp(p.morale + (won ? 6 : draw ? 1 : -6), 0, 100); }
+      if (res.played?.includes(p.id)) { p.apps++; p.fitness = clamp(p.fitness - (res.minutes?.[p.id] ?? 90) * 0.34, 0, 100); p.form = clamp(p.form + (won ? 1 : draw ? 0 : -1), -3, 3); p.morale = clamp(p.morale + (won ? 6 : draw ? 1 : -6) + (res.played.includes(this.captain) && !won ? 2 : 0), 0, 100); }
       else p.morale = clamp(p.morale - 2, 0, 100);
       if (res.yellows?.includes(p.id)) { p.yellows++; if (p.yellows % 2 === 0) { p.suspended = 1; this.msg('hub', `${p.name} hat die zweite gelbe Karte – ein Spiel Sperre.`); } }
       if (res.reds?.includes(p.id)) { p.suspended = 1; this.msg('hub', `${p.name} sieht Rot und fehlt im nächsten Spiel.`); }
@@ -208,17 +261,26 @@ export class Season {
       p.goals += (res.scorers || []).filter(id => id === p.id).length; p.assists += (res.assists || []).filter(id => id === p.id).length;
     }
     // Einnahmen: Zuschauer, Prämie, Sponsor „Data Lake“
-    const income = Math.round((this.home ? 260 : 140) + (won ? 220 : draw ? 90 : 30) + gf * 25 + this.day * 20);
+    const mor = this.players.reduce((a, p) => a + p.morale, 0) / Math.max(1, this.players.length);
+    let income = Math.round(((this.home ? 260 : 140) + (won ? 220 : draw ? 90 : 30) + gf * 25 + this.day * 20) * (0.85 + mor / 100 * 0.3));
+    if (won && this.sponsorPerWin) { income += 150; this.msg('hub', 'Data Lake GmbH zahlt den Siegbonus: +150 T€.'); }
     this.budget += income;
-    const pts = (won ? SEASON_SCORE.win : draw ? SEASON_SCORE.draw : 0) + gf * SEASON_SCORE.goal + (ga === 0 ? SEASON_SCORE.cleanSheet : 0);
-    this.results.push({ day: this.day, opp: o.id, club: o.club, home: this.home, gf, ga, won, draw, pts, income, event: this.pendingEvent?.event || null });
+    const obj = this.checkObjective(res, gf, ga);
+    if (obj) { this.stats.bonus += obj.bonus; if (obj.ok) this.stats.objectives++; this.msg('hub', obj.ok ? `Wochenziel erreicht: ${obj.name} (+${obj.bonus} Punkte).` : `Wochenziel verfehlt: ${obj.name}.`); }
+    const pts = (won ? SEASON_SCORE.win : draw ? SEASON_SCORE.draw : 0) + gf * SEASON_SCORE.goal + (ga === 0 ? SEASON_SCORE.cleanSheet : 0) + (obj ? obj.bonus : 0);
+    // Entwicklung: junge Spieler:innen mit guter Note lernen dazu
+    const dev = [];
+    for (const p of this.players) { const rt = res.ratings?.[p.id]; if (rt !== undefined && rt >= 7 && p.age < 27 && this.r() < 0.25 + (p.pot || 3) * 0.12) { const a = ATTRS[Math.floor(this.r() * ATTRS.length)]; p[a] = clamp(p[a] + 1 + (p.pot >= 5 ? 1 : 0), 1, 99); p.value = Math.round(p.value * 1.04 / 10) * 10; dev.push(p.name); this.stats.developed++; } }
+    if (dev.length) this.msg('hub', `Entwicklung: ${dev.join(', ')} ${dev.length > 1 ? 'haben' : 'hat'} im Spiel dazugelernt.`);
+    this.results.push({ day: this.day, opp: o.id, club: o.club, home: this.home, gf, ga, won, draw, pts, income, event: this.pendingEvent?.event || null, objective: obj });
     this.simulateOthers();
     this.msg(won ? 'hub' : 'legacy', won ? `${gf}:${ga} gegen ${o.club} – ${o.real}` : pick(this.r, TAUNTS.win));
     if (won) this.msg('legacy', pick(this.r, TAUNTS.lose));
     this.hooks.onEvent?.({ type: 'result', won, draw, gf, ga, income, pts });
     this.day++;
+    const ret = { won, draw, gf, ga, income, pts, objective: obj };
     if (this.day >= OPPONENTS.length) { this.over = true; this.finish(); } else this.prepareWeek();
-    return { won, draw, gf, ga, income, pts };
+    return ret;
   }
   simulateOthers() {
     // die anderen sechs Clubs spielen untereinander; Paarungen rotieren

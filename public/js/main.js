@@ -1,9 +1,10 @@
 // Beat RealCore – Legacy League: Oberfläche und Spielablauf
 import { initI18n, tr, isEN, LANG, setLang } from './i18n.js';
-import { DIFFICULTY, FORMATIONS, STYLES, TEMPO, TRAINING, OPPONENTS, POS, POS_GROUP, EVENTS, CLUB, SEASON_SCORE } from './data.js';
+import { OBJECTIVES, DIFFICULTY, FORMATIONS, STYLES, TEMPO, TRAINING, OPPONENTS, POS, POS_GROUP, EVENTS, CLUB, SEASON_SCORE } from './data.js';
 import { Season, rating, posFit, ATTRS } from './manager.js';
 import { Match, MATCH_REAL } from './match.js';
 import { Pitch } from './pitch.js';
+import { Pitch3D, loadBabylon, webglOk } from './pitch3d.js';
 import { Audio } from './audio.js';
 
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
@@ -43,7 +44,8 @@ $$('[data-go]').forEach(b => b.addEventListener('click', () => { audio.play('cli
 // ---------------- Einstellungen ----------------
 function openSettings() {
   const ov = $('#settings'); ov.hidden = false;
-  for (const k of ['music', 'sfx']) { const el = $('#vol-' + k), v = Math.round(audio.vol[k] * 100); el.value = v; $('#vol-' + k + '-v').textContent = v + '%'; el.oninput = () => { $('#vol-' + k + '-v').textContent = el.value + '%'; audio.setVolume(k, el.value / 100); if (k === 'music') audio.setCrowd(audio.target); }; el.onchange = () => audio.play('confirm'); }
+  const c3 = $('#opt-3d'); if (c3) { c3.checked = want3d(); c3.onchange = () => { try { localStorage.setItem('brcm-3d', c3.checked ? '1' : '0'); } catch { /* ignore */ } if (pitch) { pitch.dispose?.(); pitch = null; } audio.play('confirm'); }; }
+  for (const k of ['music', 'sfx']) { const el = $('#vol-' + k), v = Math.round(audio.vol[k] * 100); el.value = v; $('#vol-' + k + '-v').textContent = v + '%'; el.oninput = () => { $('#vol-' + k + '-v').textContent = el.value + '%'; audio.setVolume(k, el.value / 100); }; el.onchange = () => audio.play('confirm'); }
   const el = $('#set-lang'); el.innerHTML = [['de', 'Deutsch'], ['en', 'English']].map(([k, n]) => `<button class="${k === LANG ? 'on' : ''}" data-l="${k}">${n}</button>`).join(''); el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { if (b.dataset.l !== LANG) setLang(b.dataset.l); }));
 }
 $('#btn-settings').addEventListener('click', () => { audio.unlock(); audio.play('click'); openSettings(); });
@@ -62,14 +64,14 @@ const NEWS = [
   ['Die Legacy League startet. TechHub United sucht noch eine:n Manager:in.', 'Lena Hoff · Sportdirektorin'],
   ['Der FC Datensilo hat vier Kapitäne – einen pro Abteilung. Sie reden nicht miteinander.', 'Sportschau · Vorbericht'],
   ['Beim Spaghetti Interface SV wurden 312 Pässe gezählt. Keiner kam an.', 'Statistik · Spieltag'],
-  ['Der Mainframe-Koloss wurde zuletzt 1998 gewartet. Er trainiert trotzdem.', 'Aufklärung · Rechenzentrum'],
-  ['Die Excel-Makro Kickers haben sich in Version 47_final_FINAL umbenannt.', 'Funkspruch · Controlling'],
-  ['TechHub-Gutscheine für die besten Manager:innen – schlagt den RealCore-Benchmark.', 'TechHub · Einsatzleitung'],
+  ['Der Mainframe-Koloss wurde zuletzt 1998 gewartet. Er trainiert trotzdem.', 'Scouting · Rechenzentrum'],
+  ['Die Excel-Makro Kickers haben sich in Version 47_final_FINAL umbenannt.', 'Meldung · Controlling'],
+  ['TechHub-Gutscheine für die besten Manager:innen – schlagt den RealCore-Benchmark.', 'TechHub · Messestand'],
 ];
 let newsI = 0;
 function rotateNews() { const [t, s] = NEWS[newsI++ % NEWS.length]; $('#title-news').innerHTML = `<p class="news-t">${esc(t)}</p><p class="news-s">— ${esc(s)}</p>`; }
 setInterval(rotateNews, 7000);
-const TICK = ['Spaghetti-Monster blockiert Mittelfeld', 'TechHub United meldet stabile Werte', 'Release-Freeze droht – Kapitän gesperrt?', 'Datensilo in der Abwehr entdeckt', 'Fiori-Drohnen sichern die Flügel', 'TechHub-Gutscheine für die besten Manager:innen', 'Schatten-IT im gegnerischen Sturm gemeldet', 'Go-Live in Sicht – wenn die Legacy-KI es zulässt'];
+const TICK = ['Spaghetti-Monster blockiert Mittelfeld', 'TechHub United meldet stabile Werte', 'Release-Freeze droht – Kapitän gesperrt?', 'Datensilo in der Abwehr entdeckt', 'Fiori-Flitzer sichern die Flügel', 'TechHub-Gutscheine für die besten Manager:innen', 'Schatten-IT im gegnerischen Sturm gemeldet', 'Go-Live in Sicht – wenn die Legacy-KI es zulässt'];
 $('#ticker-in').innerHTML = (TICK.concat(TICK)).map(t => `<span>${esc(t)}</span>`).join('');
 async function loadTitleBoard() {
   try {
@@ -135,9 +137,11 @@ async function newSeason() {
     onMessage: (m) => { S.radioUnread++; if (S.season) { renderRadio(); updateDots(); } },
     onEvent: (ev) => { if (ev.type === 'director') { audio.play('legacy'); toast(`${EVENTS[ev.event].name}: ${ev.detail}`); renderWeek(); } },
     onEnd: (r) => endSeason(r),
+    onDecision: (d, note) => { $('#dec-note').textContent = note; },
     director: S.config.ai && S.gameId ? (summary) => api('/api/ai/director', { gameId: S.gameId, summary, lang: LANG }, 5500).then(d => d && d.event ? d : null) : null,
   } });
   S.tab = 'squad'; S.selSlot = null;
+  if (want3d() && webglOk()) loadBabylon();
   renderWeek(); show('week');
 }
 const SE = () => S.season;
@@ -149,11 +153,27 @@ function renderWeek() {
   $('#wh-where').textContent = se.home ? `Heimspiel · ${CLUB.stadium}` : `Auswärtsspiel · ${o.club}`;
   $('#wh-budget').textContent = money(se.budget); $('#wh-rank').textContent = se.day ? `${se.rank()}. (${se.table[0].pts} Pkt)` : '–';
   $('#wh-str').textContent = teamStrength(); const mor = Math.round(se.players.reduce((s, p) => s + p.morale, 0) / se.players.length); $('#wh-morale').textContent = mor >= 75 ? '😄 ' + mor : mor >= 55 ? '🙂 ' + mor : '😟 ' + mor;
+  const ob = se.objective ? OBJECTIVES[se.objective] : null; $('#wh-obj').textContent = ob ? `🎯 Wochenziel: ${ob.name} (+${ob.bonus})` : '';
+  const dec = se.decision && !se.decision.chosen; $('#btn-decision').hidden = !dec;
+  if (dec && S.decisionDay !== se.day) { S.decisionDay = se.day; openDecision(); }
   $$('#week-nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === S.tab)); $$('.wtab').forEach(t => t.classList.toggle('on', t.id === 'tab-' + S.tab));
   renderSquad(); renderTactics(); renderTraining(); renderMarket(); renderTable(); renderRadio(); updateDots();
   const prob = se.lineupProblems(); $('#btn-match').disabled = prob.some(p => /unbesetzt|verletzt|gesperrt/.test(p));
 }
 $$('#week-nav button').forEach(b => b.addEventListener('click', () => { audio.play('click'); if (b.dataset.tab === 'quit') { if (confirm(tr('Saison wirklich abbrechen? Der Spielstand geht verloren.'))) { S.season = null; show('title'); } return; } S.tab = b.dataset.tab; if (S.tab === 'radio') S.radioUnread = 0; renderWeek(); }));
+
+// Vorstandsentscheidung
+function openDecision() {
+  const se = SE(), d = se.decision; if (!d) return;
+  $('#dec-title').textContent = d.title; $('#dec-day').textContent = `Spieltag ${se.day + 1}`; $('#dec-text').textContent = d.text; $('#dec-note').textContent = '';
+  $('#dec-opts').innerHTML = d.options.map(o => `<button class="dopt ${d.chosen === o.key ? 'on' : ''}" data-k="${o.key}" ${d.chosen ? 'disabled' : ''}><b>${esc(o.label)}</b><small>${esc(o.effect)}</small></button>`).join('');
+  $$('#dec-opts .dopt').forEach(b => b.addEventListener('click', () => { if (se.decide(b.dataset.k)) { audio.play('confirm'); $$('#dec-opts .dopt').forEach(x => { x.disabled = true; x.classList.toggle('on', x === b); }); $('#btn-dec-later').hidden = true; $('#btn-dec-close').hidden = false; } }));
+  $('#btn-dec-later').hidden = !!d.chosen; $('#btn-dec-close').hidden = !d.chosen;
+  $('#decision').hidden = false;
+}
+$('#btn-dec-later').addEventListener('click', () => { audio.play('click'); $('#decision').hidden = true; });
+$('#btn-dec-close').addEventListener('click', () => { audio.play('click'); $('#decision').hidden = true; renderWeek(); });
+$('#btn-decision').addEventListener('click', () => { audio.play('click'); openDecision(); });
 
 // Kader & Aufstellung
 function attrsHtml(p) { const C = { tempo: '#38e1ff', technik: '#3ddc84', abwehr: '#ffc247', schuss: '#ff6a3d', kondition: '#b87cff' }; return `<div class="attrs">${ATTRS.map(a => `<i style="--v:${p[a]}%;--c:${C[a]}" title="${tr({ tempo: 'Tempo', technik: 'Technik', abwehr: 'Abwehr', schuss: 'Schuss', kondition: 'Kondition' }[a])} ${Math.round(p[a])}"><span>${{ tempo: 'TE', technik: 'TC', abwehr: 'AB', schuss: 'SC', kondition: 'KO' }[a]}</span></i>`).join('')}</div>`; }
@@ -170,19 +190,21 @@ function renderSquad() {
   const inL = new Set(se.slots);
   const list = [...se.players].sort((a, b) => { const o = ['TW', 'IV', 'AV', 'DM', 'ZM', 'FL', 'ST']; return o.indexOf(a.pos) - o.indexOf(b.pos) || rating(b) - rating(a); });
   $('#player-list').innerHTML = list.map(p => { const [st, stt] = statusOf(p); const r = rating(p); const canSell = se.players.length > 14 && !inL.has(p.id);
-    return `<div class="pl ${inL.has(p.id) ? 'in' : ''} ${se.available(p) ? '' : 'na'}" data-id="${p.id}"><span class="pos ${p.pos === 'TW' ? 'tw' : ''}">${esc(p.pos)}</span><span class="name"><b>${esc(p.name)}</b><small>${esc(p.nick || '')} · ${p.age} J. · ${money(p.value)}</small></span><span class="rt ${r >= 78 ? 'hi' : r < 62 ? 'lo' : ''}">${r}</span>${attrsHtml(p)}<span class="fit"><b>${Math.round(p.fitness)} %</b>Fitness</span><span class="stt"><i class="st st-${st}" title="${esc(stt)}"></i></span><span class="act">${canSell ? `<button class="btn xs" data-sell="${p.id}" title="Verkaufen">€</button>` : ''}</span></div>`; }).join('');
+    return `<div class="pl ${inL.has(p.id) ? 'in' : ''} ${se.available(p) ? '' : 'na'}" data-id="${p.id}"><span class="pos ${p.pos === 'TW' ? 'tw' : ''}">${esc(p.pos)}</span><span class="name"><b>${esc(p.name)}${p.id === se.captain ? ' <i class="cap" title="Kapitän">C</i>' : ''}${p.id === se.penTaker ? ' <i class="pen" title="Elfmeterschütze">11m</i>' : ''}</b><small>${esc(p.nick || '')} · ${p.age} J. · <span class="stars" title="Potenzial">${'★'.repeat(p.pot || 3)}<i>${'★'.repeat(5 - (p.pot || 3))}</i></span> · ${money(p.value)}</small></span><span class="rt ${r >= 78 ? 'hi' : r < 62 ? 'lo' : ''}">${r}</span>${attrsHtml(p)}<span class="fit"><b>${Math.round(p.fitness)} %</b>Fitness</span><span class="stt"><i class="st st-${st}" title="${esc(stt)}"></i></span><span class="act">${inL.has(p.id) && p.pos !== 'TW' && p.id !== se.captain ? `<button class="btn xs" data-cap="${p.id}" title="Zum Kapitän machen">C</button>` : ''}${inL.has(p.id) && p.pos !== 'TW' && p.id !== se.penTaker ? `<button class="btn xs" data-pen="${p.id}" title="Elfmeterschütze">11m</button>` : ''}${canSell ? `<button class="btn xs" data-sell="${p.id}" title="Verkaufen">€</button>` : ''}</span></div>`; }).join('');
   $$('#player-list .pl').forEach(el => {
-    el.addEventListener('click', (e) => { if (e.target.dataset.sell) return; const id = el.dataset.id; const p = se.players.find(x => x.id === id);
+    el.addEventListener('click', (e) => { if (e.target.dataset.sell || e.target.dataset.cap || e.target.dataset.pen) return; const id = el.dataset.id; const p = se.players.find(x => x.id === id);
       if (S.selSlot !== null) { if (!se.available(p)) { toast(p.injured > 0 ? 'Verletzt – nicht einsetzbar.' : 'Gesperrt – nicht einsetzbar.'); audio.play('deny'); return; } se.setSlot(S.selSlot, id); S.selSlot = null; audio.play('confirm'); renderWeek(); }
       else showTip(el, p); });
     el.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') showTip(el, se.players.find(x => x.id === el.dataset.id)); });
     el.addEventListener('pointerleave', () => { $('#tip').hidden = true; });
   });
+  $$('[data-cap]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); se.setCaptain(b.dataset.cap); audio.play('confirm'); toast(`${se.players.find(p => p.id === b.dataset.cap).name} trägt die Kapitänsbinde.`); renderWeek(); }));
+  $$('[data-pen]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); se.setPenTaker(b.dataset.pen); audio.play('confirm'); renderWeek(); }));
   $$('[data-sell]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); const p = se.players.find(x => x.id === b.dataset.sell); if (confirm(tr(`${p.name} für ${money(Math.round(p.value * 0.6))} verkaufen?`))) { const r = se.sell(p.id); if (r.ok) { audio.play('cash'); } else { toast(r.reason); audio.play('deny'); } renderWeek(); } }));
   $('#lineup-problems').innerHTML = se.lineupProblems().map(p => `<li>${esc(p)}</li>`).join('');
   $('#lineup-hint').textContent = S.selSlot !== null ? 'Jetzt eine:n Spieler:in in der Liste wählen – oder eine zweite Position zum Tauschen.' : 'Klicke eine Position und dann eine:n Spieler:in in der Liste.';
 }
-function showTip(el, p) { const t = $('#tip'); if (!p) return; t.innerHTML = `<b>${esc(p.name)} <small>· ${esc(POS[p.pos])}</small></b><small>${esc(p.desc || '')}</small><br><small>Fitness ${Math.round(p.fitness)} % · Stimmung ${Math.round(p.morale)} · Form ${p.form > 0 ? '+' + p.form : p.form} · Tore ${p.goals} · Vorlagen ${p.assists}</small>`; t.hidden = false; const r = el.getBoundingClientRect(); t.style.left = Math.min(innerWidth - 310, r.left) + 'px'; t.style.top = (r.bottom + 6 + 150 > innerHeight ? r.top - 110 : r.bottom + 6) + 'px'; }
+function showTip(el, p) { const t = $('#tip'); if (!p) return; t.innerHTML = `<b>${esc(p.name)} <small>· ${esc(POS[p.pos])}</small></b><small>${esc(p.desc || '')}</small><br><small>Fitness ${Math.round(p.fitness)} % · Stimmung ${Math.round(p.morale)} · Form ${p.form > 0 ? '+' + p.form : p.form} · Potenzial ${'★'.repeat(p.pot || 3)} · Tore ${p.goals} · Vorlagen ${p.assists}</small>`; t.hidden = false; const r = el.getBoundingClientRect(); t.style.left = Math.min(innerWidth - 310, r.left) + 'px'; t.style.top = (r.bottom + 6 + 150 > innerHeight ? r.top - 110 : r.bottom + 6) + 'px'; }
 $('#btn-auto').addEventListener('click', () => { SE().autoLineup(); S.selSlot = null; audio.play('confirm'); renderWeek(); });
 
 // Taktik
@@ -200,13 +222,14 @@ function renderTactics() {
 // Training
 function renderTraining() {
   const se = SE();
-  $('#train-cards').innerHTML = Object.entries(TRAINING).map(([k, t]) => `<button class="tcard ${se.trained === k ? 'done' : ''}" data-k="${k}" ${se.trained && se.trained !== k ? 'disabled' : ''}><b>${esc(t.name)}</b><small>${esc(t.desc)}</small></button>`).join('');
+  $('#train-cards').innerHTML = Object.entries(TRAINING).map(([k, t]) => `<button class="tcard ${se.trained === k ? 'done' : ''}" data-k="${k}" ${se.trained && !se.extraTraining ? 'disabled' : ''}><b>${esc(t.name)}</b><small>${esc(t.desc)}</small></button>`).join('');
+  $('#train-extra')?.remove(); if (se.extraTraining && se.trained) $('#train-cards').insertAdjacentHTML('beforebegin', '<p class="hint" id="train-extra">Zusatzschicht: Eine zweite Einheit ist möglich.</p>');
   $$('#train-cards .tcard').forEach(b => b.addEventListener('click', () => { if (se.train(b.dataset.k)) { audio.play('confirm'); toast(`Training: ${TRAINING[b.dataset.k].name}`); } renderWeek(); }));
 }
 // Transfermarkt
 function renderMarket() {
   const se = SE();
-  $('#market-cards').innerHTML = se.market.map(p => `<div class="mcard2"><div class="top"><b>${esc(p.name)}</b><span class="rt">${rating(p)}</span></div><div class="meta">${esc(POS[p.pos])} · ${p.age} J.</div>${attrsHtml(p)}<p>${esc(p.desc)}</p><div class="foot"><span class="price">${money(p.value)}</span><button class="btn sm ${p.value <= se.budget ? 'primary' : ''}" data-buy="${p.id}" ${p.value > se.budget ? 'disabled' : ''}>Verpflichten</button></div></div>`).join('') || '<p class="hint">Diese Woche ist der Markt leer.</p>';
+  $('#market-cards').innerHTML = se.market.map(p => `<div class="mcard2"><div class="top"><b>${esc(p.name)}</b><span class="rt">${rating(p)}</span></div><div class="meta">${esc(POS[p.pos])} · ${p.age} J. · <span class="stars">${'★'.repeat(p.pot || 3)}<i>${'★'.repeat(5 - (p.pot || 3))}</i></span></div>${attrsHtml(p)}<p>${esc(p.desc)}</p><div class="foot"><span class="price">${money(p.value)}</span><button class="btn sm ${p.value <= se.budget ? 'primary' : ''}" data-buy="${p.id}" ${p.value > se.budget ? 'disabled' : ''}>Verpflichten</button></div></div>`).join('') || '<p class="hint">Diese Woche ist der Markt leer.</p>';
   $$('[data-buy]').forEach(b => b.addEventListener('click', () => { const r = se.buy(b.dataset.buy); if (r.ok) { audio.play('cash'); toast('Transfer abgeschlossen.'); } else { audio.play('deny'); toast(r.reason); } renderWeek(); }));
 }
 // Tabelle & Ergebnisse
@@ -218,9 +241,17 @@ function renderRadio() { const se = SE(); if (!se) return; const el = $('#radio'
 
 // ---------------- Spieltag ----------------
 let M = null, pitch = null, lastT = 0, matchRun = false;
-function sizePitch() { const wrap = $('.pitch-wrap'); if (!pitch) pitch = new Pitch($('#pitch')); pitch.resize(wrap.clientWidth, wrap.clientHeight); }
+function sizePitch() { const wrap = $('.pitch-wrap'); if (!pitch) return; pitch.resize(wrap.clientWidth, wrap.clientHeight); }
+// 3D-Rasen (Babylon.js), sonst 2D-Darstellung
+const want3d = () => { try { return localStorage.getItem('brcm-3d') !== '0'; } catch { return true; } };
+async function ensurePitch() {
+  if (pitch) return;
+  if (want3d() && webglOk() && await loadBabylon()) { try { pitch = new Pitch3D($('#pitch')); } catch (e) { console.warn('3D nicht verfügbar', e); pitch = null; } }
+  if (!pitch) pitch = new Pitch($('#pitch'));
+  S.pitch3d = pitch instanceof Pitch3D; $('.pitch-wrap').classList.toggle('three', S.pitch3d);
+}
 window.addEventListener('resize', () => { sizeBg(); if (S.screen === 'match') sizePitch(); });
-$('#btn-match').addEventListener('click', () => { audio.unlock(); audio.play('whistle'); startMatch(); });
+$('#btn-match').addEventListener('click', async () => { audio.unlock(); audio.play('whistle'); $('#btn-match').disabled = true; await ensurePitch(); $('#btn-match').disabled = false; startMatch(); });
 function startMatch() {
   const se = SE(), o = se.opponent; se.autoFillIfNeeded?.();
   const me = se.teamForMatch(), opp = se.opponentForMatch();
@@ -230,10 +261,15 @@ function startMatch() {
   M.hooks = { onEvent: (e) => onMatchEvent(e), onHalf: () => openHalf('Halbzeit'), onFull: (r) => endMatch(r), onGoal: (ti) => { pitch.goalFlash(ti); }, injMul: DIFFICULTY[S.diff].inj };
   $('#sc-home').textContent = home.short; $('#sc-away').textContent = away.short; $('#sc-val').textContent = '0 : 0'; $('#sc-min').textContent = "0'"; $('#sc-phase').textContent = '1. Halbzeit';
   $('#ticker-list').innerHTML = ''; $('#ts-stats').textContent = ''; $('#match-banner').hidden = true;
-  if (!pitch) sizePitch();
+  renderLiveTactics();
   onMatchEvent(M.events[0]);
   setSpeed(1); matchRun = true; show('match'); audio.setCrowd(0.5);
   banner(`${home.short} – ${away.short}`, `Spieltag ${se.day + 1} · ${se.home ? CLUB.stadium : o.club}`, false, 2600);
+}
+function renderLiveTactics() {
+  const T = M.teams[S.myTeam], se = SE();
+  $('#live-tactics').innerHTML = `<small>Spielstil live</small><div class="seg">${Object.entries(STYLES).map(([k, v]) => `<button class="${k === T.style ? 'on' : ''}" data-k="${k}">${esc(v.name)}</button>`).join('')}</div>`;
+  $$('#live-tactics button').forEach(b => b.addEventListener('click', () => { T.style = b.dataset.k; se.style = b.dataset.k; audio.play('click'); renderLiveTactics(); }));
 }
 function setSpeed(s) { if (!M) return; M.speed = s === 'skip' ? 40 : s; $$('#speed button[data-s]').forEach(b => b.classList.toggle('on', String(b.dataset.s) === String(s))); }
 $$('#speed button[data-s]').forEach(b => b.addEventListener('click', () => { audio.play('click'); setSpeed(b.dataset.s === 'skip' ? 'skip' : +b.dataset.s); }));
@@ -247,7 +283,10 @@ function onMatchEvent(e) {
   const list = $('#ticker-list'); list.prepend(li); while (list.children.length > 60) list.lastChild.remove();
   if (e.type === 'goal') { $('#sc-val').textContent = `${e.score[0]} : ${e.score[1]}`; $('#sc-val').classList.remove('flash'); void $('#sc-val').offsetWidth; $('#sc-val').classList.add('flash'); audio.play(mine ? 'goal' : 'goal_opp'); banner(mine ? 'TOOOR!' : 'Gegentor', `${e.p ? e.p.name : ''} · ${e.min}'`, !mine); if (M.speed < 10) pitch.burst(M.ball.x, M.ball.y, mine ? '#3ddc84' : '#ff6a3d'); }
   else if (e.type === 'save' || e.type === 'post' || e.type === 'wide') audio.play('ooh', mine ? 0.8 : 0.5);
+  else if (e.type === 'chance' && mine) audio.play('chance');
   else if (e.type === 'yellow' || e.type === 'red') { audio.play('card'); if (e.type === 'red') banner('ROT', e.p.name, !mine); }
+  else if (e.type === 'penalty') { audio.play('whistle'); audio.play('chance'); banner('ELFMETER', `${e.p ? e.p.name : ''} tritt an`, !mine); }
+  else if (e.type === 'pen_save' || e.type === 'pen_miss') audio.play('ooh', mine ? 1 : 0.6);
   else if (e.type === 'injury') { audio.play('ooh', 0.6); if (mine) banner('Verletzung', `${e.p.name} – Wechsel?`, false); }
   else if (e.type === 'half') { audio.play('whistle'); $('#sc-phase').textContent = 'Halbzeit'; }
   else if (e.type === 'full') audio.play('whistle3');
@@ -276,7 +315,7 @@ function renderSubs() {
   $('#btn-sub').disabled = !(S.subOut && S.subIn && M.subsLeft[S.myTeam] > 0);
 }
 $('#btn-sub').addEventListener('click', () => { const T = M.teams[S.myTeam], inP = (T.benchP || []).find(p => p.id === S.subIn); if (inP && M.sub(S.myTeam, S.subOut, inP)) { audio.play('confirm'); } S.subOut = S.subIn = null; renderSubs(); });
-$('#btn-resume').addEventListener('click', () => { $('#half').hidden = true; M.paused = false; audio.play('whistle'); audio.setCrowd(0.5); if (M.halfDone && M.min < 46) $('#sc-phase').textContent = '2. Halbzeit'; });
+$('#btn-resume').addEventListener('click', () => { $('#half').hidden = true; M.paused = false; renderLiveTactics(); audio.play('whistle'); audio.setCrowd(0.5); if (M.halfDone && M.min < 46) $('#sc-phase').textContent = '2. Halbzeit'; });
 function endMatch(res) {
   matchRun = false; audio.setCrowd(0.2);
   const se = SE(), o = se.opponent, r = se.applyResult(res);
@@ -298,7 +337,8 @@ function showReport(res, r, o) {
   $('#rep-ratings').innerHTML = mine.map(p => { const v = Math.max(1, Math.min(10, p.rating)); return `<div class="${v >= 7.5 ? 'hi' : v < 5.5 ? 'lo' : ''}"><span>${esc(p.name)} <small style="color:var(--muted)">${esc(p.pos)}${p.goals ? ' · ⚽' + p.goals : ''}${p.injured ? ' · 🚑' : ''}</small></span><b>${v.toFixed(1)}</b></div>`; }).join('');
   const lastMsgs = se.log.slice(-3);
   $('#rep-talk').innerHTML = `<div class="card-head"><span>▸ Nach dem Spiel</span></div>` + lastMsgs.map(m => talkLine(m.who, m.text)).join('');
-  $('#rep-money').innerHTML = `<div class="money"><div><span>Einnahmen (Zuschauer, Prämie, Sponsor)</span><b>+${money(r.income)}</b></div><div><span>Punkte für die Liga</span><b>+${fmt(r.pts)}</b></div><div><span>Budget jetzt</span><b>${money(se.budget)}</b></div></div>`;
+  const ob = r.objective ? `<div class="${r.objective.ok ? 'ok' : 'miss'}"><span>🎯 Wochenziel: ${esc(r.objective.name)}</span><b>${r.objective.ok ? '+' + fmt(r.objective.bonus) : '✕'}</b></div>` : '';
+  $('#rep-money').innerHTML = `<div class="money">${ob}<div><span>Einnahmen (Zuschauer, Prämie, Sponsor)</span><b>+${money(r.income)}</b></div><div><span>Punkte für die Liga</span><b>+${fmt(r.pts)}</b></div><div><span>Budget jetzt</span><b>${money(se.budget)}</b></div></div>`;
   $('#rep-hint').textContent = se.over ? 'Die Saison ist vorbei – weiter zur Auswertung.' : `Nächster Gegner: ${se.opponent.club}`;
   audio.play(r.won ? 'win' : r.draw ? 'confirm' : 'lose');
   show('report');
@@ -374,7 +414,7 @@ function frame(now) {
   if (S.screen === 'match' && M) {
     if (!M.paused && !M.over) { if (M.speed >= 10) { let n = 0; while (!M.over && !M.paused && n++ < 400) M.step(1 / 30); } else M.tick(dt); }
     const sc = M.score; if (!M.paused) { $('#sc-min').textContent = `${Math.floor(M.min)}'`; }
-    pitch.draw(M, dt);
+    if (pitch) pitch.draw(M, dt);
     const excite = Math.min(1, 0.4 + Math.abs(sc[0] - sc[1]) * 0.1 + (M.ball.mode === 'shot' ? 0.4 : 0)); audio.setCrowd(excite * 0.8);
   } else if (S.screen === 'title' || S.screen === 'setup' || S.screen === 'brief' || S.screen === 'board' || S.screen === 'howto' || S.screen === 'privacy' || S.screen === 'result' || S.screen === 'report') {
     if (bgMatch) { bgMatch.tick(dt); if (bgMatch.over) newBg(); bgPitch.draw(bgMatch, dt); bgPitch.ctx.setTransform(bgPitch.dpr, 0, 0, bgPitch.dpr, 0, 0); bgPitch.ctx.fillStyle = 'rgba(3,8,7,0.62)'; bgPitch.ctx.fillRect(0, 0, bgPitch.w, bgPitch.h); }

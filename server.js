@@ -76,17 +76,17 @@ async function llm(system, user, maxTokens = 500) {
 }
 
 const PERSONA = `Du bist die „Legacy-KI“ – Trainer des Legacy-Monolith FC und Gegenspieler im Fußballmanager „Beat RealCore – Legacy League“ der RealCore Group (SAP-Beratung, BTP, KI, Retail).
-Die Liga besteht aus Clubs der Legacy-IT: FC Datensilo, Spaghetti Interface SV, Excel-Makro Kickers, Z-Report Zombies 1998, SV Ticketflut, Fax-Kanonen Werk Süd, Legacy-Monolith FC. Der Spieler managt TechHub United (RealCore).
+Die Liga besteht aus Clubs der Legacy-IT: FC Datensilo, Spaghetti Interface SV, Excel-Makro Kickers, Z-Report Zombies 1998, SV Ticketflut, Fax-Werk Süd, Legacy-Monolith FC. Der Spieler managt TechHub United (RealCore).
 Ton: frech, selbstironisch, SAP-Insider-Humor und Fußball-Floskeln, nie beleidigend, nie anzüglich, keine Politik, keine echten Firmen schlecht machen. Deutsch, Du/Ihr-Form.
 Antworte AUSSCHLIESSLICH mit einem JSON-Objekt, ohne Erklärtext.`;
 
 const EN_NOTE = '\nWICHTIG: Schreibe alle Texte (text, taunt, headline, message usw.) ausschließlich auf Englisch. JSON-Schlüssel und IDs bleiben unverändert.';
 async function aiBriefing(b) {
-  const user = `Erzeuge den Text einer Pressekonferenz zum Saisonstart (Sprecher: neutrale Sportschau-Stimme) und eine Kampfansage der Legacy-KI.
+  const user = `Erzeuge den Text einer Pressekonferenz zum Saisonstart (Sprecher: neutrale Sportschau-Stimme) und eine Spitze der Legacy-KI.
 Manager: ${clean(b.name, 32) || 'unbekannt'}; Unternehmen: ${clean(b.company, 48) || 'nicht angegeben'}; Schwierigkeit: ${b.difficulty}.
 JSON-Felder:
 - "text": Pressekonferenz, 2–3 Sätze, max. 330 Zeichen, nennt Manager und ggf. Unternehmen, Saisonziel: Meister der Legacy League, Finale gegen den Legacy-Monolith FC
-- "taunt": spöttische Kampfansage der Legacy-KI, max. 150 Zeichen`;
+- "taunt": spöttische Spitze der Legacy-KI, max. 150 Zeichen`;
   const r = await llm(PERSONA + (b.lang === 'en' ? EN_NOTE : ''), user, 400);
   if (!r) return null;
   return { text: clean(r.text, 420), taunt: clean(r.taunt, 180) };
@@ -102,7 +102,7 @@ Erlaubte Störungen:
 - koloss: der Mainframe-Koloss stürmt beim Gegner (nicht wiederholen, wenn lastEvent = koloss)
 - wave_now: der Gegner presst das ganze Spiel
 Regeln: Reagiere auf die Lage (viel Budget → budget_cut, Siegesserie → koloss/shadow_it, viele Verletzte → eher wave_now). Wiederhole nicht lastEvent. Fair bleiben: nach zwei Niederlagen in Folge eher harmlose Störung.
-JSON-Felder: "event" (eine der erlaubten), "message" (deine freche Funkmeldung an den Manager, max. 140 Zeichen, nimmt Bezug auf seine Saison).`;
+JSON-Felder: "event" (eine der erlaubten), "message" (deine freche Nachricht an den Manager, max. 140 Zeichen, nimmt Bezug auf seine Saison).`;
   const r = await llm(PERSONA + (s.lang === 'en' ? EN_NOTE : ''), user, 250);
   if (!r || !EVENTS.includes(r.event)) return null;
   return { event: r.event, message: clean(r.message, 160) };
@@ -139,7 +139,8 @@ function benchFor(mission, difficulty) {
 // Plausibilitätsprüfung des Punktestands
 function maxScore(difficulty) {
   const mult = { messe: 0.8, profi: 1, gf: 1.5 }[difficulty] || 1;
-  return Math.round((7 * 1000 + 45 * 120 + 7 * 300 + 3000 + 1500) * mult);
+  // Siege, Tore, Zu-null, Platz, Wochenziele (max. 400 je Spieltag), Restbudget (15 % von realistisch max. 6.000 T€)
+  return Math.round((7 * 1000 + 45 * 120 + 7 * 300 + 3000 + 7 * 400 + 900) * mult);
 }
 
 // ---------------- HTTP ----------------
@@ -187,13 +188,18 @@ function serveStatic(req, res, url) {
       if (!path.extname(p)) return serveFile(res, path.join(PUBLIC, 'index.html'));
       return send(res, 404, 'nicht gefunden');
     }
-    serveFile(res, file);
+    serveFile(res, file, false, req);
   });
 }
-function serveFile(res, file, admin = false) {
+function serveFile(res, file, admin = false, req = null) {
   const ext = path.extname(file);
   const sec = admin ? { ...SEC_HEADERS, 'content-security-policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:" } : SEC_HEADERS;
-  res.writeHead(200, { 'content-type': MIME[ext] || 'application/octet-stream', 'cache-control': ext === '.html' || file.endsWith('sw.js') ? 'no-cache' : 'public, max-age=300', ...sec });
+  const vendor = file.includes(`${path.sep}vendor${path.sep}`);
+  const headers = { 'content-type': MIME[ext] || 'application/octet-stream', 'cache-control': ext === '.html' || file.endsWith('sw.js') ? 'no-cache' : vendor ? 'public, max-age=31536000, immutable' : 'public, max-age=300', ...sec };
+  // vorkomprimierte Variante (datei.gz) ausliefern, wenn der Browser gzip annimmt
+  const gz = file + '.gz';
+  if (req && /\bgzip\b/.test(req.headers['accept-encoding'] || '') && fs.existsSync(gz)) { res.writeHead(200, { ...headers, 'content-encoding': 'gzip', vary: 'accept-encoding' }); fs.createReadStream(gz).pipe(res); return; }
+  res.writeHead(200, headers);
   fs.createReadStream(file).pipe(res);
 }
 
