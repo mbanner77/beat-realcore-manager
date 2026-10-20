@@ -18,7 +18,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 export class Pitch3D {
   constructor(canvas) {
     this.c = canvas; this.M = null; this.figs = new Map(); this.t = 0; this.rot = false; this.flash = 0; this.shake = 0; this.focus = null;
-    this.ballH = 0; this.flight = null; this.camT = null; this.ownerRingT = 0;
+    this.ballH = 0; this.flight = null; this.camT = null; this.ownerRingT = 0; this.cine = null; this.celeb = null; this.lamps = []; this.day = false; this.lampLevel = 1;
     const { Engine, Scene, Color4, Vector3, HemisphericLight, DirectionalLight, ArcRotateCamera } = B;
     this.engine = new Engine(canvas, true, { stencil: false, preserveDrawingBuffer: false, antialias: true });
     this.engine.setHardwareScalingLevel(1 / Math.min(1.5, devicePixelRatio || 1));
@@ -103,7 +103,7 @@ export class Pitch3D {
     // Flutlichtmasten
     for (const [x, z] of [[-MX - 6, -MZ - 6], [PW + MX + 6, -MZ - 6], [-MX - 6, PH + MZ + 6], [PW + MX + 6, PH + MZ + 6]]) {
       const pole = MeshBuilder.CreateCylinder('pole', { height: 34, diameter: 0.8 }, scene); pole.position = new Vector3(x, 17, z); pole.material = this.mat('pm', '#3a4446');
-      const lamp = MeshBuilder.CreateBox('lamp', { width: 5, height: 2.4, depth: 0.6 }, scene); lamp.position = new Vector3(x, 34, z); lamp.material = this.mat('lm', '#ffffff', { em: '#fff6d8' }); lamp.lookAt(new Vector3(PW / 2, 0, PH / 2));
+      const lamp = MeshBuilder.CreateBox('lamp', { width: 5, height: 2.4, depth: 0.6 }, scene); lamp.position = new Vector3(x, 34, z); lamp.material = this.mat('lm' + x, '#ffffff', { em: '#fff6d8' }); lamp.lookAt(new Vector3(PW / 2, 0, PH / 2)); this.lamps.push(lamp);
     }
     // Bandenwerbung
     const adTex = new DynamicTexture('ad', { width: 2048, height: 128 }, scene, false); const ac = adTex.getContext();
@@ -175,6 +175,18 @@ export class Pitch3D {
     fig.tex.update();
   }
   // ---------- Laufzeit ----------
+  // Tageszeit: Tag (Heimspiel) oder Flutlicht (Auswärts / Intro)
+  setDaylight(day) {
+    const { Color4, Color3 } = B; this.day = day;
+    this.scene.clearColor = day ? new Color4(0.55, 0.72, 0.9, 1) : new Color4(0.012, 0.03, 0.028, 1);
+    this.hemi.intensity = day ? 1.0 : 0.75; this.sun.intensity = day ? 1.25 : 0.95; this.hemi.groundColor = day ? new Color3(0.2, 0.3, 0.2) : new Color3(0.08, 0.15, 0.1);
+    this.setLamps(day ? 0 : 1);
+  }
+  setLamps(level) { const { Color3 } = B; this.lampLevel = level; for (const l of this.lamps) l.material.emissiveColor = new Color3(1, 0.96, 0.85).scale(level); if (!this.day) { this.hemi.intensity = 0.25 + 0.5 * level; this.sun.intensity = 0.2 + 0.75 * level; } }
+  // Kamerafahrt (Intro): { alpha, beta, radius, tx, tz } oder null
+  setCine(c) { this.cine = c; }
+  // Torjubel: Schütze reißt die Arme hoch, Kamera fährt heran
+  celebrate(p) { if (p) this.celeb = { p, until: performance.now() + 2100 }; }
   resize(w, h) { this.w = w; this.h = h; this.rot = h > w * 1.15; this.engine.resize(); this.cam.fov = this.rot ? 0.95 : 0.78; }
   goalFlash(team) { this.flash = 1; this.shake = 0.7; }
   burst(x, y, color) {
@@ -212,6 +224,9 @@ export class Pitch3D {
       f.legs[0].rotation.x = sw; f.legs[1].rotation.x = -sw; f.arms[0].rotation.x = -sw * 0.8; f.arms[1].rotation.x = sw * 0.8;
       f.arms[0].rotation.z = 0.25; f.arms[1].rotation.z = -0.25;
       f.root.position.y = Math.abs(Math.sin(f.phase)) * 0.07 * run;
+      if (this.celeb && this.celeb.until > performance.now() && p.team === this.celeb.p.team && (p === this.celeb.p || Math.hypot(p.x - this.celeb.p.x, p.y - this.celeb.p.y) < 12)) { // Jubel
+        const j = Math.abs(Math.sin(this.t * 9 + p.num)); f.arms[0].rotation.x = -2.9; f.arms[1].rotation.x = -2.9; f.arms[0].rotation.z = 0.5; f.arms[1].rotation.z = -0.5; f.root.position.y = j * (p === this.celeb.p ? 0.6 : 0.35); f.root.rotation.x = 0; f.legs[0].rotation.x = f.legs[1].rotation.x = -j * 0.4;
+      }
       if (p.injured) { f.root.rotation.x = 0.35; }
       this.label(f, p);
     }
@@ -221,16 +236,21 @@ export class Pitch3D {
     const bv = Math.hypot(b.vx, b.vy); this.ball.rotation.z -= b.vx * dt * 2.2; this.ball.rotation.x += b.vy * dt * 2.2; if (bv < 0.1 && b.owner) { this.ball.rotation.z -= dt * 6; }
     // Ring unter Ballbesitzer / Fokus
     const o = b.owner || this.focus; this.ring.isVisible = !!o; if (o) { this.ring.position.set(o.x, 0.06, o.y); this.ring.rotation.y += dt * 1.5; const T = M.teams[o.team]; this.ring.material.emissiveColor = B.Color3.FromHexString(T.color); this.ring.material.diffuseColor = this.ring.material.emissiveColor; }
-    // Kamera: folgt dem Ball weich
+    // Kamera: Kamerafahrt (Intro), Torjubel oder TV-Kamera, die dem Ball folgt
     const land = !this.rot;
-    const tx = land ? Math.max(30, Math.min(PW - 30, b.x)) : PW / 2 + (b.x - PW / 2) * 0.25, tz = land ? PH / 2 + (b.y - PH / 2) * 0.2 : PH / 2 + (b.y - PH / 2) * 0.1;
-    if (!this.camT) this.camT = new Vector3(tx, 0, tz);
-    this.camT.x = lerp(this.camT.x, tx, Math.min(1, dt * 1.6)); this.camT.z = lerp(this.camT.z, tz, Math.min(1, dt * 1.6));
-    this.cam.target.set(this.camT.x + (this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0), 0.5, this.camT.z + (this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0));
-    if (land) { this.cam.alpha = -Math.PI / 2; this.cam.beta = 0.9; this.cam.radius = 74 + Math.max(0, 1.7 - this.w / this.h) * 26; }
-    else { this.cam.alpha = Math.PI; this.cam.beta = 0.52; this.cam.radius = 96 + Math.max(0, 1.9 - this.h / this.w) * 30; }
+    if (this.cine) { const c = this.cine; this.cam.alpha = c.alpha; this.cam.beta = c.beta; this.cam.radius = c.radius; this.cam.target.set(c.tx, c.ty ?? 0.5, c.tz); this.camT = null; }
+    else {
+      const cel = this.celeb && this.celeb.until > performance.now() && M.speed < 10 ? this.celeb : null;
+      const tx = cel ? cel.p.x : land ? Math.max(30, Math.min(PW - 30, b.x)) : PW / 2 + (b.x - PW / 2) * 0.25, tz = cel ? cel.p.y : land ? PH / 2 + (b.y - PH / 2) * 0.2 : PH / 2 + (b.y - PH / 2) * 0.1;
+      if (!this.camT) this.camT = new Vector3(tx, 0, tz);
+      const k = Math.min(1, dt * (cel ? 4 : 1.6)); this.camT.x = lerp(this.camT.x, tx, k); this.camT.z = lerp(this.camT.z, tz, k);
+      this.cam.target.set(this.camT.x + (this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0), cel ? 1.2 : 0.5, this.camT.z + (this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0));
+      const want = land ? { alpha: -Math.PI / 2, beta: 0.9, radius: 74 + Math.max(0, 1.7 - this.w / this.h) * 26 } : { alpha: Math.PI, beta: 0.52, radius: 96 + Math.max(0, 1.9 - this.h / this.w) * 30 };
+      if (cel) { want.radius = 26; want.beta = 1.1; }
+      const kc = Math.min(1, dt * 3); this.cam.alpha = want.alpha; this.cam.beta = lerp(this.cam.beta, want.beta, kc); this.cam.radius = lerp(this.cam.radius, want.radius, kc);
+    }
     if (this.shake > 0) this.shake -= dt;
-    if (this.flash > 0) { this.flash -= dt * 1.4; this.hemi.intensity = 0.75 + Math.max(0, this.flash) * 0.6; } else this.hemi.intensity = 0.75;
+    const baseH = this.day ? 1.0 : 0.25 + 0.5 * this.lampLevel; if (this.flash > 0) { this.flash -= dt * 1.4; this.hemi.intensity = baseH + Math.max(0, this.flash) * 0.6; } else this.hemi.intensity = baseH;
     this.scene.render();
   }
   dispose() { try { this.engine.dispose(); } catch { /* ignore */ } }

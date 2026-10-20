@@ -5,6 +5,8 @@ import { Season, rating, posFit, ATTRS } from './manager.js';
 import { Match, MATCH_REAL } from './match.js';
 import { Pitch } from './pitch.js';
 import { Pitch3D, loadBabylon, webglOk } from './pitch3d.js';
+import { playIntro } from './intro.js';
+import { crest, avatar, shirt, ring, icon, formChips } from './ui.js';
 import { Audio } from './audio.js';
 
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
@@ -82,13 +84,20 @@ async function loadTitleBoard() {
   } catch { $('#title-board').innerHTML = '<p class="empty">Bestenliste offline.</p>'; }
 }
 async function loadConfig() { try { S.config = await api('/api/config'); } catch { S.config = { ai: false }; } }
-$('#btn-play').addEventListener('click', () => { audio.unlock(); audio.play('click'); showSetup(); });
+$('#btn-play').addEventListener('click', () => { audio.unlock(); audio.play('click'); let seen = false; try { seen = localStorage.getItem('brcm-intro') === '1'; } catch { /* ignore */ } if (seen && !params.has('intro')) showSetup(); else startIntro(showSetup); });
+$('#btn-intro').addEventListener('click', () => { audio.unlock(); audio.play('click'); startIntro(() => show('title')); });
+function startIntro(next) {
+  try { localStorage.setItem('brcm-intro', '1'); } catch { /* ignore */ }
+  const cap = $('#intro-cap'), ttl = $('#intro-title'); cap.hidden = true; ttl.hidden = true; ttl.className = 'intro-title';
+  show('intro');
+  playIntro({ canvas: $('#intro-canvas'), captionEl: cap, titleEl: ttl, skipBtn: $('#btn-intro-skip'), audio, onDone: () => { if (S.screen === 'intro') next(); } });
+}
 $('#btn-board').addEventListener('click', () => { audio.unlock(); audio.play('click'); showBoard(); });
 $('#btn-howto').addEventListener('click', () => { audio.unlock(); audio.play('click'); show('howto'); });
 $('#link-privacy').addEventListener('click', (e) => { e.preventDefault(); show('privacy'); });
 window.addEventListener('keydown', (e) => {
   if (S.screen !== 'title' || e.target.tagName === 'INPUT') return;
-  const m = { Enter: '#btn-play', b: '#btn-board', '?': '#btn-howto', o: '#btn-settings' }[e.key.length === 1 ? e.key.toLowerCase() : e.key];
+  const m = { Enter: '#btn-play', b: '#btn-board', '?': '#btn-howto', o: '#btn-settings', i: '#btn-intro' }[e.key.length === 1 ? e.key.toLowerCase() : e.key];
   if (m) { e.preventDefault(); $(m).click(); }
 });
 
@@ -140,7 +149,7 @@ async function newSeason() {
     onDecision: (d, note) => { $('#dec-note').textContent = note; },
     director: S.config.ai && S.gameId ? (summary) => api('/api/ai/director', { gameId: S.gameId, summary, lang: LANG }, 5500).then(d => d && d.event ? d : null) : null,
   } });
-  S.tab = 'squad'; S.selSlot = null;
+  S.tab = 'home'; S.selSlot = null;
   if (want3d() && webglOk()) loadBabylon();
   renderWeek(); show('week');
 }
@@ -157,11 +166,42 @@ function renderWeek() {
   const dec = se.decision && !se.decision.chosen; $('#btn-decision').hidden = !dec;
   if (dec && S.decisionDay !== se.day) { S.decisionDay = se.day; openDecision(); }
   $$('#week-nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === S.tab)); $$('.wtab').forEach(t => t.classList.toggle('on', t.id === 'tab-' + S.tab));
-  renderSquad(); renderTactics(); renderTraining(); renderMarket(); renderTable(); renderRadio(); updateDots();
+  renderHome(); renderSquad(); renderTactics(); renderTraining(); renderMarket(); renderTable(); renderRadio(); updateDots();
   const prob = se.lineupProblems(); $('#btn-match').disabled = prob.some(p => /unbesetzt|verletzt|gesperrt/.test(p));
 }
+$$('#week-nav button[data-ico]').forEach(b => b.insertAdjacentHTML('afterbegin', icon(b.dataset.ico)));
 $$('#week-nav button').forEach(b => b.addEventListener('click', () => { audio.play('click'); if (b.dataset.tab === 'quit') { if (confirm(tr('Saison wirklich abbrechen? Der Spielstand geht verloren.'))) { S.season = null; show('title'); } return; } S.tab = b.dataset.tab; if (S.tab === 'radio') S.radioUnread = 0; renderWeek(); }));
 
+// Übersicht
+function renderHome() {
+  const se = SE(), o = se.opponent, me = { ...CLUB, me: true }, str = teamStrength();
+  const ob = se.objective ? OBJECTIVES[se.objective] : null, d = se.decision, ev = se.pendingEvent ? EVENTS[se.pendingEvent.event] : null;
+  const form = [...se.players].filter(p => se.available(p)).sort((a, b) => (b.form * 4 + rating(b)) - (a.form * 4 + rating(a))).slice(0, 3);
+  const inj = se.players.filter(p => p.injured > 0 || p.suspended > 0);
+  const last = se.log.slice(-3).reverse();
+  const bar = (v, max) => `<i class="bar"><b style="width:${Math.round(v / max * 100)}%"></b></i>`;
+  $('#home-grid').innerHTML = `
+    <div class="hcard hero">
+      <div class="hero-top"><span class="tag">${icon('whistle')} Spieltag ${se.day + 1} / ${OPPONENTS.length}</span><span class="tag ${se.home ? 'home' : 'away'}">${se.home ? 'Heimspiel' : 'Auswärtsspiel'} · ${se.home ? '☀️ Tag' : '💡 Flutlicht'}</span></div>
+      <div class="hero-vs">
+        <div class="club">${crest(me, 72)}<b>${esc(CLUB.name)}</b><small>${se.day ? se.rank() + '. Platz · ' + se.table[0].pts + ' Pkt' : 'Saisonstart'}</small><div class="str"><span>Stärke ${str}</span>${bar(str, 99)}</div></div>
+        <div class="vs">VS</div>
+        <div class="club">${crest(o, 72)}<b>${esc(o.club)}</b><small>${esc(STYLES[o.style === 'press' ? 'agile' : o.style === 'wall' ? 'clean' : 'agile'].name)} · ${esc(o.names[0])}</small><div class="str"><span>Stärke ${o.strength + (se.oppMod || 0)}</span>${bar(o.strength + (se.oppMod || 0), 99)}</div></div>
+      </div>
+      <p class="hero-teaser">${esc(o.teaser)}</p>
+      <div class="tipp">${icon('star')} <span>${esc(o.lena)}</span></div>
+      <div class="hero-actions"><button class="btn" data-go="tactics">${icon('tactics')} Taktik prüfen</button><button class="btn" data-go="squad">${icon('squad')} Aufstellung</button><button class="btn primary" id="btn-match2">Zum Spiel ›</button></div>
+    </div>
+    <div class="hcard obj"><div class="hc-head">${icon('target')} Wochenziel</div>${ob ? `<b>${esc(ob.name)}</b><p>${esc(ob.desc)}</p><span class="bonus">+${ob.bonus} Punkte</span>` : '<p>–</p>'}</div>
+    <div class="hcard dec ${d && !d.chosen ? 'open' : ''}"><div class="hc-head">${icon('board')} Vorstand</div>${d ? `<b>${esc(d.title)}</b><p>${esc(d.text)}</p>${d.chosen ? `<span class="done">✓ ${esc(d.options.find(x => x.key === d.chosen)?.label || '')}</span>` : `<div class="dec-mini">${d.options.map(x => `<button class="btn sm" data-dec="${x.key}" title="${esc(x.effect)}">${esc(x.label)}</button>`).join('')}</div>`}` : '<p>Der Vorstand meldet sich ab dem zweiten Spieltag.</p>'}</div>
+    <div class="hcard ev ${ev ? 'on' : ''}"><div class="hc-head">${icon('bolt')} Legacy-KI</div>${ev ? `<b>${esc(ev.name)}</b><p>${esc(ev.desc)}</p>` : '<p>Diese Woche keine Störung gemeldet – noch nicht.</p>'}</div>
+    <div class="hcard form"><div class="hc-head">${icon('up')} Form</div><div class="chips">${formChips(se.results)}</div><div class="top3">${form.map(p => `<div class="tp">${avatar(p, CLUB, 40)}<span><b>${esc(p.name.split(' ')[0])}</b><small>${esc(POS[p.pos])} · Form ${p.form > 0 ? '+' + p.form : p.form}</small></span><em>${rating(p)}</em></div>`).join('')}</div>${inj.length ? `<p class="inj">${icon('injury')} ${inj.map(p => esc(p.name) + (p.injured > 0 ? ' (verletzt)' : ' (gesperrt)')).join(', ')}</p>` : ''}</div>
+    <div class="hcard kpis"><div class="hc-head">${icon('money')} Verein</div><div class="kgrid"><div><small>Budget</small><b>${money(se.budget)}</b></div><div><small>Training</small><b>${se.trained ? esc(TRAINING[se.trained].name) : '<span class="warn">offen</span>'}</b></div><div><small>Kader</small><b>${se.players.length} · Ø ${Math.round(se.players.reduce((a, p) => a + p.age, 0) / se.players.length)} J.</b></div><div><small>Stimmung</small><b>${Math.round(se.players.reduce((a, p) => a + p.morale, 0) / se.players.length)}</b></div></div></div>
+    <div class="hcard press"><div class="hc-head">${icon('press')} Presse</div>${last.map(m => `<div class="pm ${m.who}"><b>${esc((SPK[m.who] || SPK.hub).n)}</b><p>${esc(m.text)}</p></div>`).join('') || '<p>–</p>'}</div>`;
+  $$('#home-grid [data-go]').forEach(b => b.addEventListener('click', () => { S.tab = b.dataset.go; audio.play('click'); renderWeek(); }));
+  $$('#home-grid [data-dec]').forEach(b => b.addEventListener('click', () => { if (se.decide(b.dataset.dec)) { audio.play('confirm'); toast($('#dec-note').textContent || ''); } renderWeek(); }));
+  const bm = $('#btn-match2'); if (bm) { bm.disabled = $('#btn-match').disabled; bm.addEventListener('click', () => $('#btn-match').click()); }
+}
 // Vorstandsentscheidung
 function openDecision() {
   const se = SE(), d = se.decision; if (!d) return;
@@ -184,13 +224,13 @@ function renderSquad() {
   const board = $('#lineup-board');
   board.innerHTML = '<div class="box"></div><div class="box b"></div>' + F.slots.map(([pos, fx, fy], i) => {
     const p = se.players.find(x => x.id === se.slots[i]); const bad = p && (posFit(p, pos) < 0.8 || !se.available(p));
-    return `<div class="slot ${pos === 'TW' ? 'tw' : ''} ${p ? '' : 'empty'} ${bad ? 'bad' : ''} ${S.selSlot === i ? 'sel' : ''}" data-i="${i}" style="left:${fy * 100}%;top:${(0.97 - fx * 0.96) * 100}%"><div class="chip">${p ? rating(p, pos) : '+'}</div><span class="nm">${p ? esc(p.name.split(' ')[0]) : esc(pos)}</span><span class="ps">${esc(pos)}</span></div>`;
+    return `<div class="slot ${pos === 'TW' ? 'tw' : ''} ${p ? '' : 'empty'} ${bad ? 'bad' : ''} ${S.selSlot === i ? 'sel' : ''}" data-i="${i}" style="left:${fy * 100}%;top:${(0.97 - fx * 0.96) * 100}%">${p ? shirt(i + 1, CLUB, 44, pos === 'TW') + `<em class="rt">${rating(p, pos)}</em>` : '<div class="chip">+</div>'}<span class="nm">${p ? esc(p.name.split(' ')[0]) : esc(pos)}</span><span class="ps">${esc(pos)}</span></div>`;
   }).join('');
   $$('#lineup-board .slot').forEach(el => el.addEventListener('click', () => { const i = +el.dataset.i; if (S.selSlot === i) S.selSlot = null; else if (S.selSlot !== null) { const a = se.slots[S.selSlot]; se.slots[S.selSlot] = se.slots[i]; se.slots[i] = a; S.selSlot = null; audio.play('confirm'); } else { S.selSlot = i; audio.play('click'); } renderWeek(); }));
   const inL = new Set(se.slots);
   const list = [...se.players].sort((a, b) => { const o = ['TW', 'IV', 'AV', 'DM', 'ZM', 'FL', 'ST']; return o.indexOf(a.pos) - o.indexOf(b.pos) || rating(b) - rating(a); });
   $('#player-list').innerHTML = list.map(p => { const [st, stt] = statusOf(p); const r = rating(p); const canSell = se.players.length > 14 && !inL.has(p.id);
-    return `<div class="pl ${inL.has(p.id) ? 'in' : ''} ${se.available(p) ? '' : 'na'}" data-id="${p.id}"><span class="pos ${p.pos === 'TW' ? 'tw' : ''}">${esc(p.pos)}</span><span class="name"><b>${esc(p.name)}${p.id === se.captain ? ' <i class="cap" title="Kapitän">C</i>' : ''}${p.id === se.penTaker ? ' <i class="pen" title="Elfmeterschütze">11m</i>' : ''}</b><small>${esc(p.nick || '')} · ${p.age} J. · <span class="stars" title="Potenzial">${'★'.repeat(p.pot || 3)}<i>${'★'.repeat(5 - (p.pot || 3))}</i></span> · ${money(p.value)}</small></span><span class="rt ${r >= 78 ? 'hi' : r < 62 ? 'lo' : ''}">${r}</span>${attrsHtml(p)}<span class="fit"><b>${Math.round(p.fitness)} %</b>Fitness</span><span class="stt"><i class="st st-${st}" title="${esc(stt)}"></i></span><span class="act">${inL.has(p.id) && p.pos !== 'TW' && p.id !== se.captain ? `<button class="btn xs" data-cap="${p.id}" title="Zum Kapitän machen">C</button>` : ''}${inL.has(p.id) && p.pos !== 'TW' && p.id !== se.penTaker ? `<button class="btn xs" data-pen="${p.id}" title="Elfmeterschütze">11m</button>` : ''}${canSell ? `<button class="btn xs" data-sell="${p.id}" title="Verkaufen">€</button>` : ''}</span></div>`; }).join('');
+    return `<div class="pl ${inL.has(p.id) ? 'in' : ''} ${se.available(p) ? '' : 'na'}" data-id="${p.id}">${avatar(p, CLUB, 40)}<span class="pos ${p.pos === 'TW' ? 'tw' : ''}">${esc(p.pos)}</span><span class="name"><b>${esc(p.name)}${p.id === se.captain ? ' <i class="cap" title="Kapitän">C</i>' : ''}${p.id === se.penTaker ? ' <i class="pen" title="Elfmeterschütze">11m</i>' : ''}</b><small>${esc(p.nick || '')} · ${p.age} J. · <span class="stars" title="Potenzial">${'★'.repeat(p.pot || 3)}<i>${'★'.repeat(5 - (p.pot || 3))}</i></span> · ${money(p.value)}</small></span><span class="rt ${r >= 78 ? 'hi' : r < 62 ? 'lo' : ''}">${r}</span>${attrsHtml(p)}<span class="fit"><b>${Math.round(p.fitness)} %</b>Fitness</span><span class="stt"><i class="st st-${st}" title="${esc(stt)}"></i></span><span class="act">${inL.has(p.id) && p.pos !== 'TW' && p.id !== se.captain ? `<button class="btn xs" data-cap="${p.id}" title="Zum Kapitän machen">C</button>` : ''}${inL.has(p.id) && p.pos !== 'TW' && p.id !== se.penTaker ? `<button class="btn xs" data-pen="${p.id}" title="Elfmeterschütze">11m</button>` : ''}${canSell ? `<button class="btn xs" data-sell="${p.id}" title="Verkaufen">€</button>` : ''}</span></div>`; }).join('');
   $$('#player-list .pl').forEach(el => {
     el.addEventListener('click', (e) => { if (e.target.dataset.sell || e.target.dataset.cap || e.target.dataset.pen) return; const id = el.dataset.id; const p = se.players.find(x => x.id === id);
       if (S.selSlot !== null) { if (!se.available(p)) { toast(p.injured > 0 ? 'Verletzt – nicht einsetzbar.' : 'Gesperrt – nicht einsetzbar.'); audio.play('deny'); return; } se.setSlot(S.selSlot, id); S.selSlot = null; audio.play('confirm'); renderWeek(); }
@@ -217,7 +257,7 @@ function renderTactics() {
   $('#tempos').innerHTML = Object.entries(TEMPO).map(([k, t]) => `<button class="${k === se.tempo ? 'on' : ''}" data-k="${k}">${esc(t.name)}</button>`).join('');
   $$('#tempos button').forEach(b => b.addEventListener('click', () => { se.tempo = b.dataset.k; audio.play('click'); renderTactics(); }));
   const ev = se.pendingEvent ? `<p><b style="color:var(--orange)">Störung: ${esc(EVENTS[se.pendingEvent.event].name)}</b> – ${esc(EVENTS[se.pendingEvent.event].desc)}</p>` : '';
-  $('#opp-card').innerHTML = `<div class="card-head"><span>▸ Gegner: ${esc(o.club)}</span><span class="tag">Stärke ${o.strength}</span></div><div class="oc"><div class="crest" style="background:${o.color};border-color:${o.color2}">${esc(o.short[0])}</div><div><b>${esc(o.club)}</b><p>${esc(o.teaser)}</p></div></div>${ev}<div class="tipp">💬 ${esc(o.lena)}</div>`;
+  $('#opp-card').innerHTML = `<div class="card-head"><span>Gegner: ${esc(o.club)}</span><span class="tag">Stärke ${o.strength}</span></div><div class="oc"><div class="crest" style="background:${o.color};border-color:${o.color2}">${esc(o.short[0])}</div><div><b>${esc(o.club)}</b><p>${esc(o.teaser)}</p></div></div>${ev}<div class="tipp">💬 ${esc(o.lena)}</div>`;
 }
 // Training
 function renderTraining() {
@@ -229,13 +269,13 @@ function renderTraining() {
 // Transfermarkt
 function renderMarket() {
   const se = SE();
-  $('#market-cards').innerHTML = se.market.map(p => `<div class="mcard2"><div class="top"><b>${esc(p.name)}</b><span class="rt">${rating(p)}</span></div><div class="meta">${esc(POS[p.pos])} · ${p.age} J. · <span class="stars">${'★'.repeat(p.pot || 3)}<i>${'★'.repeat(5 - (p.pot || 3))}</i></span></div>${attrsHtml(p)}<p>${esc(p.desc)}</p><div class="foot"><span class="price">${money(p.value)}</span><button class="btn sm ${p.value <= se.budget ? 'primary' : ''}" data-buy="${p.id}" ${p.value > se.budget ? 'disabled' : ''}>Verpflichten</button></div></div>`).join('') || '<p class="hint">Diese Woche ist der Markt leer.</p>';
+  $('#market-cards').innerHTML = se.market.map(p => `<div class="mcard2"><div class="top">${avatar(p, { color: '#5aa9ff', color2: '#1b3a6b' }, 40)}<b>${esc(p.name)}</b>${ring(rating(p), 40)}</div><div class="meta">${esc(POS[p.pos])} · ${p.age} J. · <span class="stars">${'★'.repeat(p.pot || 3)}<i>${'★'.repeat(5 - (p.pot || 3))}</i></span></div>${attrsHtml(p)}<p>${esc(p.desc)}</p><div class="foot"><span class="price">${money(p.value)}</span><button class="btn sm ${p.value <= se.budget ? 'primary' : ''}" data-buy="${p.id}" ${p.value > se.budget ? 'disabled' : ''}>Verpflichten</button></div></div>`).join('') || '<p class="hint">Diese Woche ist der Markt leer.</p>';
   $$('[data-buy]').forEach(b => b.addEventListener('click', () => { const r = se.buy(b.dataset.buy); if (r.ok) { audio.play('cash'); toast('Transfer abgeschlossen.'); } else { audio.play('deny'); toast(r.reason); } renderWeek(); }));
 }
 // Tabelle & Ergebnisse
-function tableRows(tb, full) { tb.innerHTML = SE().standings().map((t, i) => `<tr class="${t.me ? 'me' : ''}"><td>${i + 1}</td><td>${esc(t.club)}</td><td class="r">${t.w + t.d + t.l}</td>${full ? `<td class="r">${t.w}</td><td class="r">${t.d}</td><td class="r">${t.l}</td>` : ''}<td class="r">${t.gf}:${t.ga}</td><td class="r"><b>${t.pts}</b></td></tr>`).join(''); }
-function resultRows(ul) { const se = SE(); ul.innerHTML = se.results.length ? se.results.map(r => `<li class="${r.won ? 'w' : r.draw ? 'd' : 'l'}"><small>Spieltag ${r.day + 1}</small><span>${r.home ? 'TechHub United – ' + esc(r.club) : esc(r.club) + ' – TechHub United'}</span><span class="sc">${r.home ? r.gf + ':' + r.ga : r.ga + ':' + r.gf}</span><small>+${fmt(r.pts)}</small></li>`).join('') : '<li><span>Noch kein Spiel gespielt.</span></li>'; }
-function renderTable() { tableRows($('#league-table tbody'), true); resultRows($('#results-list')); }
+function tableRows(tb, full) { tb.innerHTML = SE().standings().map((t, i) => { const o = t.me ? { ...CLUB, me: true } : OPPONENTS.find(x => x.id === t.id); return `<tr class="${t.me ? 'me' : ''}"><td>${i + 1}</td><td class="cl">${crest(o, 22)} ${esc(t.club)}</td><td class="r">${t.w + t.d + t.l}</td>${full ? `<td class="r">${t.w}</td><td class="r">${t.d}</td><td class="r">${t.l}</td>` : ''}<td class="r">${t.gf}:${t.ga}</td><td class="r"><b>${t.pts}</b></td></tr>`; }).join(''); }
+function resultRows(ul) { const se = SE(); ul.innerHTML = se.results.length ? se.results.map(r => `<li class="${r.won ? 'w' : r.draw ? 'd' : 'l'}"><small>Spieltag ${r.day + 1}</small><span>${r.home ? 'TechHub United – ' + esc(r.club) : esc(r.club) + ' – TechHub United'}</span><span class="sc">${r.home ? r.gf + ':' + r.ga : r.ga + ':' + r.gf}</span><small>+${fmt(r.pts)}</small></li>`).join('') : '<li class="none"><span>Noch kein Spiel gespielt.</span></li>'; }
+function renderTable() { tableRows($('#league-table tbody'), true); resultRows($('#results-list')); const se = SE(); const top = [...se.players].filter(p => p.goals || p.assists).sort((a, b) => b.goals - a.goals || b.assists - a.assists).slice(0, 6); $('#scorers').innerHTML = top.length ? top.map((p, i) => `<div class="sc-row"><span class="n">${i + 1}</span>${avatar(p, CLUB, 34)}<span class="nm"><b>${esc(p.name)}</b><small>${esc(POS[p.pos])}</small></span><span class="g">${p.goals} <small>Tore</small></span><span class="a">${p.assists} <small>Vorl.</small></span></div>`).join('') : '<p class="hint">Noch keine Torschützen.</p>'; }
 // Funk
 function renderRadio() { const se = SE(); if (!se) return; const el = $('#radio'); el.innerHTML = [...se.log].reverse().slice(0, 30).map(m => { const P = SPK[m.who] || SPK.hub; return `<div class="msg ${m.who}"><div class="av">${P.av}</div><div><b>${esc(P.n)} · Spieltag ${m.day + 1}</b><p>${esc(m.text)}</p></div></div>`; }).join(''); }
 
@@ -259,7 +299,8 @@ function startMatch() {
   M = new Match(home, away, { seed: (Date.now() & 0xffff) + se.day, hooks: { injMul: DIFFICULTY[S.diff].inj } });
   S.match = M; S.myTeam = se.home ? 0 : 1;
   M.hooks = { onEvent: (e) => onMatchEvent(e), onHalf: () => openHalf('Halbzeit'), onFull: (r) => endMatch(r), onGoal: (ti) => { pitch.goalFlash(ti); }, injMul: DIFFICULTY[S.diff].inj };
-  $('#sc-home').textContent = home.short; $('#sc-away').textContent = away.short; $('#sc-val').textContent = '0 : 0'; $('#sc-min').textContent = "0'"; $('#sc-phase').textContent = '1. Halbzeit';
+  $('#sc-home').textContent = home.short; $('#sc-away').textContent = away.short; $('#sc-val').textContent = '0 : 0'; $('#sc-home-crest').innerHTML = crest(home, 30); $('#sc-away-crest').innerHTML = crest(away, 30); $('#tl-marks').innerHTML = ''; $('#tl-fill').style.width = '0%';
+  if (pitch && pitch.setDaylight) pitch.setDaylight(se.home); $('#sc-min').textContent = "0'"; $('#sc-phase').textContent = '1. Halbzeit';
   $('#ticker-list').innerHTML = ''; $('#ts-stats').textContent = ''; $('#match-banner').hidden = true;
   renderLiveTactics();
   onMatchEvent(M.events[0]);
@@ -281,7 +322,8 @@ function onMatchEvent(e) {
   if (['intercept', 'corner', 'press'].includes(e.type)) return;
   const li = document.createElement('div'); const key = e.type === 'goal' ? (mine ? 'goal' : 'goal_opp') : e.type; li.className = 'te ' + key; li.innerHTML = `<b>${e.min}'</b><span>${esc(e.text)}</span>`;
   const list = $('#ticker-list'); list.prepend(li); while (list.children.length > 60) list.lastChild.remove();
-  if (e.type === 'goal') { $('#sc-val').textContent = `${e.score[0]} : ${e.score[1]}`; $('#sc-val').classList.remove('flash'); void $('#sc-val').offsetWidth; $('#sc-val').classList.add('flash'); audio.play(mine ? 'goal' : 'goal_opp'); banner(mine ? 'TOOOR!' : 'Gegentor', `${e.p ? e.p.name : ''} · ${e.min}'`, !mine); if (M.speed < 10) pitch.burst(M.ball.x, M.ball.y, mine ? '#3ddc84' : '#ff6a3d'); }
+  if (['goal', 'yellow', 'red', 'injury', 'sub', 'penalty'].includes(e.type)) { const mk = document.createElement('i'); mk.className = 'tm ' + e.type + (mine ? ' me' : ' opp'); mk.style.left = Math.min(100, e.min / 90 * 100) + '%'; mk.title = `${e.min}' ${e.p ? e.p.name : ''}`; mk.innerHTML = icon(e.type === 'goal' ? 'ball' : e.type === 'yellow' || e.type === 'red' ? 'card' : e.type === 'penalty' ? 'pen' : e.type); $('#tl-marks').appendChild(mk); }
+  if (e.type === 'goal') { $('#sc-val').textContent = `${e.score[0]} : ${e.score[1]}`; if (pitch && pitch.celebrate && M.speed < 10) pitch.celebrate(e.p); $('#sc-val').classList.remove('flash'); void $('#sc-val').offsetWidth; $('#sc-val').classList.add('flash'); audio.play(mine ? 'goal' : 'goal_opp'); banner(mine ? 'TOOOR!' : 'Gegentor', `${e.p ? e.p.name : ''} · ${e.min}'`, !mine); if (M.speed < 10) pitch.burst(M.ball.x, M.ball.y, mine ? '#3ddc84' : '#ff6a3d'); }
   else if (e.type === 'save' || e.type === 'post' || e.type === 'wide') audio.play('ooh', mine ? 0.8 : 0.5);
   else if (e.type === 'chance' && mine) audio.play('chance');
   else if (e.type === 'yellow' || e.type === 'red') { audio.play('card'); if (e.type === 'red') banner('ROT', e.p.name, !mine); }
@@ -327,14 +369,18 @@ function showReport(res, r, o) {
   $('#rep-title').textContent = r.won ? 'Sieg!' : r.draw ? 'Unentschieden' : 'Niederlage';
   const hn = home ? CLUB.name : o.club, an = home ? o.club : CLUB.name;
   $('#rep-score').className = 'rep-score ' + (r.won ? 'w' : r.draw ? 'd' : 'l');
-  $('#rep-score').innerHTML = `<div class="tm">${esc(hn)}<small>${home ? 'HEIM' : 'GAST'}</small></div><b>${res.gh} : ${res.ga}</b><div class="tm">${esc(an)}<small>${home ? 'GAST' : 'HEIM'}</small></div>`;
+  const hc = home ? { ...CLUB, me: true } : o, ac = home ? o : { ...CLUB, me: true };
+  $('#rep-score').innerHTML = `<div class="tm">${crest(hc, 56)}<span>${esc(hn)}<small>${home ? 'HEIM' : 'GAST'}</small></span></div><b>${res.gh} : ${res.ga}</b><div class="tm r">${crest(ac, 56)}<span>${esc(an)}<small>${home ? 'GAST' : 'HEIM'}</small></span></div>`;
+  const tev = res.events.filter(e => ['goal', 'yellow', 'red', 'injury', 'penalty'].includes(e.type));
+  $('#rep-timeline').innerHTML = `<div class="tl-line"><span class="h">HZ</span></div>` + tev.map(e => `<i class="tm ${e.type} ${e.team === S.myTeam ? 'me' : 'opp'}" style="left:${Math.min(100, e.min / 90 * 100)}%" title="${e.min}' ${esc(e.p ? e.p.name : '')}">${icon(e.type === 'goal' ? 'ball' : e.type === 'yellow' || e.type === 'red' ? 'card' : e.type === 'penalty' ? 'pen' : e.type)}</i>`).join('');
   const byId = {}; for (const p of res.players) byId[p.id] = p;
   const goals = res.events.filter(e => e.type === 'goal');
   const mi = S.myTeam, poss = Math.round(100 * res.poss[mi] / Math.max(1, res.poss[0] + res.poss[1]));
   $('#rep-stats').innerHTML = `<ul class="scorers">${goals.length ? goals.map(e => `<li>${e.min}' ${esc(e.p.name)} (${esc(M.teams[e.team].short)})${e.p2 ? ` <small>Vorlage ${esc(e.p2.name)}</small>` : ''}</li>`).join('') : '<li>Keine Tore.</li>'}</ul>
     <div class="statline"><span>${res.shots[mi][0]}</span><span>SCHÜSSE</span><span>${res.shots[1 - mi][0]}</span></div><div class="statline"><span>${res.shots[mi][1]}</span><span>AUFS TOR</span><span>${res.shots[1 - mi][1]}</span></div><div class="statline"><span>${poss} %</span><span>BALLBESITZ</span><span>${100 - poss} %</span></div><div class="statline"><span>${res.yellows.length}</span><span>KARTEN</span><span>${res.players.filter(p => p.team !== mi && p.yellow).length}</span></div>`;
   const mine = res.players.filter(p => p.team === mi).sort((a, b) => b.rating - a.rating);
-  $('#rep-ratings').innerHTML = mine.map(p => { const v = Math.max(1, Math.min(10, p.rating)); return `<div class="${v >= 7.5 ? 'hi' : v < 5.5 ? 'lo' : ''}"><span>${esc(p.name)} <small style="color:var(--muted)">${esc(p.pos)}${p.goals ? ' · ⚽' + p.goals : ''}${p.injured ? ' · 🚑' : ''}</small></span><b>${v.toFixed(1)}</b></div>`; }).join('');
+  const mvp = mine[0]; if (mvp) $('#rep-mvp').innerHTML = `${avatar(mvp, CLUB, 64)}<div><small>${icon('star')} Spieler:in des Spiels</small><b>${esc(mvp.name)}</b><span>${esc(POS[mvp.pos])} · Note ${Math.max(1, Math.min(10, mvp.rating)).toFixed(1)}${mvp.goals ? ' · ' + mvp.goals + ' Tor' + (mvp.goals > 1 ? 'e' : '') : ''}${mvp.assists ? ' · ' + mvp.assists + ' Vorlage' + (mvp.assists > 1 ? 'n' : '') : ''}</span></div>`;
+  $('#rep-ratings').innerHTML = mine.map(p => { const v = Math.max(1, Math.min(10, p.rating)); return `<div class="${v >= 7.5 ? 'hi' : v < 5.5 ? 'lo' : ''}">${avatar(p, CLUB, 30)}<span>${esc(p.name)} <small style="color:var(--muted)">${esc(p.pos)}${p.goals ? ' · ⚽' + p.goals : ''}${p.injured ? ' · 🚑' : ''}</small></span><i class="rbar"><b style="width:${v * 10}%"></b></i><b>${v.toFixed(1)}</b></div>`; }).join('');
   const lastMsgs = se.log.slice(-3);
   $('#rep-talk').innerHTML = `<div class="card-head"><span>▸ Nach dem Spiel</span></div>` + lastMsgs.map(m => talkLine(m.who, m.text)).join('');
   const ob = r.objective ? `<div class="${r.objective.ok ? 'ok' : 'miss'}"><span>🎯 Wochenziel: ${esc(r.objective.name)}</span><b>${r.objective.ok ? '+' + fmt(r.objective.bonus) : '✕'}</b></div>` : '';
@@ -343,17 +389,20 @@ function showReport(res, r, o) {
   audio.play(r.won ? 'win' : r.draw ? 'confirm' : 'lose');
   show('report');
 }
-$('#btn-next-week').addEventListener('click', () => { audio.play('click'); const se = SE(); if (se.over) showResult(se.result); else { S.tab = 'squad'; S.radioUnread = 0; renderWeek(); show('week'); } });
+$('#btn-next-week').addEventListener('click', () => { audio.play('click'); const se = SE(); if (se.over) showResult(se.result); else { S.tab = 'home'; S.radioUnread = 0; renderWeek(); show('week'); } });
 
 // ---------------- Saisonende ----------------
 function endSeason(r) { S.finalResult = r; }
 async function showResult(r) {
   const se = SE(); S.finalResult = r; audio.setCrowd(0);
   const head = $('#result-head'); head.className = 'result-head ' + (r.won ? 'win' : 'lose');
-  $('#result-title').textContent = r.won ? 'MEISTER!' : r.rank <= 3 ? `PLATZ ${r.rank}` : 'ABGESTIEGEN';
+  $('#result-title').textContent = r.won ? 'MEISTER!' : r.rank <= 6 ? `PLATZ ${r.rank}` : 'ABGESTIEGEN';
   $('#result-reason').textContent = `${r.reason} · ${DIFFICULTY[se.diffKey].name}`;
   const grade = r.score >= 12000 ? 'S' : r.score >= 9000 ? 'A' : r.score >= 6500 ? 'B' : r.score >= 4000 ? 'C' : 'D';
   const gr = $('#grade'); gr.className = 'grade g-' + grade; gr.querySelector('b').textContent = grade;
+  const ps = se.players, byG = [...ps].sort((a, b) => b.goals - a.goals || b.assists - a.assists)[0], byA = [...ps].sort((a, b) => b.assists - a.assists || b.goals - a.goals)[0], byR = [...ps].filter(p => p.apps).sort((a, b) => rating(b) - rating(a))[0], young = [...ps].filter(p => p.age < 24 && p.apps).sort((a, b) => b.goals + b.assists - a.goals - a.assists || rating(b) - rating(a))[0];
+  const aw = [byG && byG.goals ? ['Torschützenkönig:in', byG, `${byG.goals} Tore`] : null, byA && byA.assists ? ['Vorlagengeber:in', byA, `${byA.assists} Vorlagen`] : null, byR ? ['Spieler:in der Saison', byR, `Stärke ${rating(byR)} · ${byR.apps} Spiele`] : null, young ? ['Talent der Saison', young, `${young.age} J. · ${young.goals + young.assists} Scorerpunkte`] : null].filter(Boolean);
+  $('#awards').innerHTML = aw.map(([t, p, d]) => `<div class="award">${avatar(p, CLUB, 48)}<div><small>${icon('trophy')} ${t}</small><b>${esc(p.name)}</b><span>${esc(d)}</span></div></div>`).join('') || '<p class="hint">–</p>';
   $('#result-score').textContent = fmt(r.score);
   const b = r.breakdown;
   $('#result-breakdown').innerHTML = [['Spielpunkte (Siege, Tore, Zu-null)', b.base], ['Tabellenplatz', b.place], ['Restbudget', b.eco], ['Schwierigkeit', `× ${b.mult}`]].map(([k, v]) => `<tr><td>${esc(k)}</td><td>${typeof v === 'number' ? fmt(v) : v}</td></tr>`).join('');
@@ -413,7 +462,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - lastT) / 1000 || 0.016); lastT = now;
   if (S.screen === 'match' && M) {
     if (!M.paused && !M.over) { if (M.speed >= 10) { let n = 0; while (!M.over && !M.paused && n++ < 400) M.step(1 / 30); } else M.tick(dt); }
-    const sc = M.score; if (!M.paused) { $('#sc-min').textContent = `${Math.floor(M.min)}'`; }
+    const sc = M.score; if (!M.paused) { $('#sc-min').textContent = `${Math.floor(M.min)}'`; $('#tl-fill').style.width = Math.min(100, M.min / 90 * 100) + '%'; const pt = M.poss[0] + M.poss[1]; if (pt > 1 && (M.stepN || 0) % 20 === 0) { const l = Math.round(100 * M.poss[S.myTeam] / pt); $('#poss > i').style.width = l + '%'; $('#poss-l').textContent = l + ' %'; $('#poss-r').textContent = (100 - l) + ' %'; } }
     if (pitch) pitch.draw(M, dt);
     const excite = Math.min(1, 0.4 + Math.abs(sc[0] - sc[1]) * 0.1 + (M.ball.mode === 'shot' ? 0.4 : 0)); audio.setCrowd(excite * 0.8);
   } else if (S.screen === 'title' || S.screen === 'setup' || S.screen === 'brief' || S.screen === 'board' || S.screen === 'howto' || S.screen === 'privacy' || S.screen === 'result' || S.screen === 'report') {

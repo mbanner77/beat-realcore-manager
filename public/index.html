@@ -45,11 +45,12 @@
         <button class="menu-item" id="btn-board"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg><span><b>Bestenliste</b><small>„Beat RealCore“-Liga</small></span><span class="k">B</span></button>
         <button class="menu-item" id="btn-howto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span><b>So geht's</b><small>Kader, Taktik, Punkte</small></span><span class="k">?</span></button>
         <button class="menu-item" id="btn-settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span><b>Einstellungen</b><small>Ton, Sprache</small></span><span class="k">O</span></button>
+        <button class="menu-item" id="btn-intro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M7 5v4M17 5v4"/></svg><span><b>Intro</b><small>Die Geschichte der Legacy League</small></span><span class="k">I</span></button>
       </div>
     </div>
     <div class="title-right">
-      <div class="card board-card"><div class="card-head"><span>▸ Liga · Top heute</span><span class="tag" id="title-board-tag">Alle Stufen</span></div><div id="title-board" class="mini-board">Lade …</div></div>
-      <div class="card news-card"><div class="card-head"><span>▸ Sportschau</span><span class="tag live">LIVE</span></div><div id="title-news"><p class="news-t">Die Legacy League startet. TechHub United sucht noch eine:n Manager:in.</p><p class="news-s">— Lena Hoff · Sportdirektorin</p></div></div>
+      <div class="card board-card"><div class="card-head"><span>Liga · Top heute</span><span class="tag" id="title-board-tag">Alle Stufen</span></div><div id="title-board" class="mini-board">Lade …</div></div>
+      <div class="card news-card"><div class="card-head"><span>Sportschau</span><span class="tag live">LIVE</span></div><div id="title-news"><p class="news-t">Die Legacy League startet. TechHub United sucht noch eine:n Manager:in.</p><p class="news-s">— Lena Hoff · Sportdirektorin</p></div></div>
     </div>
   </div>
   <div class="ticker" id="ticker"><div class="ticker-in" id="ticker-in"></div></div>
@@ -57,6 +58,15 @@
 </section>
 
 <!-- ============ Aufstellung (Setup) ============ -->
+<!-- ============ Intro ============ -->
+<section id="screen-intro" class="screen">
+  <canvas id="intro-canvas"></canvas>
+  <div class="intro-vignette"></div>
+  <div class="intro-cap" id="intro-cap" hidden><b></b><p></p></div>
+  <div class="intro-title" id="intro-title" hidden><small>RealCore TechHub präsentiert</small><h1>BEAT<br><span>REALCORE</span></h1><em>LEGACY LEAGUE</em></div>
+  <button class="btn sm intro-skip" id="btn-intro-skip">Überspringen ›</button>
+</section>
+
 <section id="screen-setup" class="screen">
   <div class="panel">
     <header class="panel-head"><button class="back" data-go="title">‹ Zurück</button><h2 data-k="// SCHRITT 1 · VEREINSÜBERNAHME">Neue Saison</h2><span class="step">1 / 2</span></header>
@@ -86,8 +96,8 @@
     <div class="brief-body">
       <div class="talk" id="brief-talk"></div>
       <div class="brief-aside">
-        <div class="card"><div class="card-head"><span>▸ Saisonziel</span></div><p id="brief-goal">Meister der Legacy League werden – und den Legacy-Monolith FC am letzten Spieltag stürzen.</p></div>
-        <div class="card"><div class="card-head"><span>▸ Punkte</span></div><ul class="plain"><li>Sieg 1.000 · Remis 400 · Tor 120 · Zu-null 300</li><li>Meister +3.000 · Platz 2 +1.500 · Platz 3 +800</li><li>Restbudget zählt mit – Transfers mit Augenmaß</li></ul></div>
+        <div class="card"><div class="card-head"><span>Saisonziel</span></div><p id="brief-goal">Meister der Legacy League werden – und den Legacy-Monolith FC am letzten Spieltag stürzen.</p></div>
+        <div class="card"><div class="card-head"><span>Punkte</span></div><ul class="plain"><li>Sieg 1.000 · Remis 400 · Tor 120 · Zu-null 300</li><li>Meister +3.000 · Platz 2 +1.500 · Platz 3 +800</li><li>Restbudget zählt mit – Transfers mit Augenmaß</li></ul></div>
       </div>
     </div>
     <footer class="panel-foot"><span class="hint">Tipp: Erst Kader und Taktik prüfen, dann Training wählen.</span><button class="btn primary big" id="btn-start" disabled>In die Trainingswoche ›</button></footer>
@@ -103,16 +113,18 @@
   </header>
   <div class="week-body">
     <nav class="week-nav" id="week-nav">
-      <button class="on" data-tab="squad">Kader & Aufstellung</button>
-      <button data-tab="tactics">Taktik</button>
-      <button data-tab="training">Training <i class="dot" id="dot-training"></i></button>
-      <button data-tab="market">Transfermarkt</button>
-      <button data-tab="table">Tabelle</button>
-      <button data-tab="radio">Presse <i class="dot" id="dot-radio"></i></button>
-      <button data-tab="quit" class="dim">Saison abbrechen</button>
+      <button class="on" data-tab="home" data-ico="home">Übersicht</button>
+      <button data-tab="squad" data-ico="squad">Kader & Aufstellung</button>
+      <button data-tab="tactics" data-ico="tactics">Taktik</button>
+      <button data-tab="training" data-ico="training">Training <i class="dot" id="dot-training"></i></button>
+      <button data-tab="market" data-ico="market">Transfermarkt</button>
+      <button data-tab="table" data-ico="table">Tabelle</button>
+      <button data-tab="radio" data-ico="press">Presse <i class="dot" id="dot-radio"></i></button>
+      <button data-tab="quit" data-ico="quit" class="dim">Saison abbrechen</button>
     </nav>
     <main class="week-main">
-      <section class="wtab on" id="tab-squad">
+      <section class="wtab on" id="tab-home"><div class="home-grid" id="home-grid"></div></section>
+      <section class="wtab" id="tab-squad">
         <div class="squad-grid">
           <div class="board-col"><div class="board-head"><h3>Aufstellung <small id="lineup-form"></small></h3><button class="btn sm" id="btn-auto">Auto-Aufstellung</button></div><div class="lineup-board" id="lineup-board"></div><p class="hint" id="lineup-hint">Klicke eine Position und dann eine:n Spieler:in in der Liste.</p><ul class="problems" id="lineup-problems"></ul></div>
           <div class="list-col"><div class="board-head"><h3>Kader <small id="squad-n"></small></h3><span class="legend"><i class="st-ok"></i> fit <i class="st-tired"></i> müde <i class="st-inj"></i> verletzt <i class="st-ban"></i> gesperrt</span></div><div class="player-list" id="player-list"></div></div>
@@ -126,7 +138,7 @@
       </section>
       <section class="wtab" id="tab-training"><p class="lead">Ein Schwerpunkt pro Woche. Die Werte steigen dauerhaft – junge Spieler:innen lernen schneller.</p><div class="train-cards" id="train-cards"></div></section>
       <section class="wtab" id="tab-market"><p class="lead">Freie Spieler:innen aus der Cloud. Verkäufe bringen 60 % des Marktwerts. Kader: 14 bis 22.</p><div class="market-cards" id="market-cards"></div></section>
-      <section class="wtab" id="tab-table"><div class="table-wrap"><table class="league" id="league-table"><thead><tr><th>#</th><th>Verein</th><th>Sp</th><th>S</th><th>U</th><th>N</th><th>Tore</th><th>Pkt</th></tr></thead><tbody></tbody></table></div><h3>Bisherige Spiele</h3><ul class="results" id="results-list"></ul></section>
+      <section class="wtab" id="tab-table"><div class="table-wrap"><table class="league" id="league-table"><thead><tr><th>#</th><th>Verein</th><th>Sp</th><th>S</th><th>U</th><th>N</th><th>Tore</th><th>Pkt</th></tr></thead><tbody></tbody></table></div><div class="two-col"><div><h3>Bisherige Spiele</h3><ul class="results" id="results-list"></ul></div><div><h3>Torjäger</h3><div class="scorers" id="scorers"></div></div></div></section>
       <section class="wtab" id="tab-radio"><div class="radio" id="radio"></div></section>
     </main>
   </div>
@@ -144,13 +156,14 @@
 <!-- ============ Spieltag ============ -->
 <section id="screen-match" class="screen">
   <div class="match-top">
-    <div class="score" id="score"><span class="tm home" id="sc-home">TechHub</span><b id="sc-val">0 : 0</b><span class="tm away" id="sc-away">Datensilo</span></div>
+    <div class="score" id="score"><span class="tm home"><i id="sc-home-crest"></i><span id="sc-home">TechHub</span></span><b id="sc-val">0 : 0</b><span class="tm away"><span id="sc-away">Datensilo</span><i id="sc-away-crest"></i></span></div>
     <div class="clock"><b id="sc-min">0'</b><span id="sc-phase">1. Halbzeit</span></div>
     <div class="speed" id="speed"><button data-s="1" class="on">1×</button><button data-s="2">2×</button><button data-s="4">4×</button><button data-s="skip" title="Spiel durchlaufen lassen">⏭</button><button id="btn-tactics-live" title="Taktik / Wechsel">⏸ Taktik</button></div>
   </div>
+  <div class="timeline" id="timeline"><div class="tl-fill" id="tl-fill"></div><div class="tl-marks" id="tl-marks"></div></div>
   <div class="match-body">
     <div class="pitch-wrap"><canvas id="pitch"></canvas><div class="banner" id="match-banner" hidden></div></div>
-    <aside class="ticker-side"><div class="ts-head"><span>▸ Live-Ticker</span><span id="ts-stats"></span></div><div class="live-tactics" id="live-tactics"></div><div class="ticker-list" id="ticker-list"></div></aside>
+    <aside class="ticker-side"><div class="ts-head"><span>▸ Live-Ticker</span><span id="ts-stats"></span></div><div class="poss" id="poss"><i style="width:50%"></i><span id="poss-l">50 %</span><span id="poss-r">50 %</span></div><div class="live-tactics" id="live-tactics"></div><div class="ticker-list" id="ticker-list"></div></aside>
   </div>
   <div class="overlay" id="half" hidden>
     <div class="panel sm">
@@ -169,12 +182,12 @@
   <div class="panel">
     <header class="panel-head"><span></span><h2 data-k="// SPIELBERICHT" id="rep-title">Abpfiff</h2><span class="step" id="rep-day"></span></header>
     <div class="report-body">
-      <div class="rep-score" id="rep-score"></div>
+      <div class="rep-score" id="rep-score"></div><div class="rep-timeline" id="rep-timeline"></div><div class="mvp" id="rep-mvp"></div>
       <div class="rep-grid">
-        <div class="card"><div class="card-head"><span>▸ Torschützen & Statistik</span></div><div id="rep-stats"></div></div>
-        <div class="card"><div class="card-head"><span>▸ Noten</span></div><div class="ratings" id="rep-ratings"></div></div>
+        <div class="card"><div class="card-head"><span>Torschützen & Statistik</span></div><div id="rep-stats"></div></div>
+        <div class="card"><div class="card-head"><span>Noten</span></div><div class="ratings" id="rep-ratings"></div></div>
         <div class="card talk" id="rep-talk"></div>
-        <div class="card"><div class="card-head"><span>▸ Kasse</span></div><div id="rep-money"></div></div>
+        <div class="card"><div class="card-head"><span>Kasse</span></div><div id="rep-money"></div></div>
       </div>
     </div>
     <footer class="panel-foot"><span class="hint" id="rep-hint"></span><button class="btn primary big" id="btn-next-week">Weiter ›</button></footer>
@@ -193,9 +206,10 @@
         <form class="voucher" id="voucher-form"><h3 id="voucher-title">Gutschein-Verlosung</h3><p id="voucher-text">Tragt eure E-Mail ein: Die besten Ergebnisse gewinnen einen TechHub-Gutschein.</p><input type="email" id="in-email" placeholder="name@firma.de" required><label class="check"><input type="checkbox" id="in-consent" required><span>Ich willige ein, dass RealCore mich zur Gutschein-Vergabe und zum Gespräch über die Spielthemen per E-Mail kontaktiert. Widerruf jederzeit möglich.</span></label><button class="btn primary" type="submit">Teilnehmen</button><p class="hint" id="voucher-msg"></p></form>
       </div>
       <div class="result-right">
-        <div class="card debrief" id="debrief"><div class="card-head"><span>▸ Im Spiel gelöst – wie sieht das bei euch aus?</span><span class="tag" id="debrief-tag">Analyse</span></div><h3 id="debrief-head"></h3><p id="debrief-text"></p><ul id="debrief-q" class="questions"></ul><div class="offer" id="debrief-offer"></div><div class="cta"><p>Sprecht uns direkt am Stand an – wir zeigen euch, wie das in eurer Landschaft aussieht.</p><p class="cta-mail">Nicht auf der Messe? Schreibt uns einfach: <a href="mailto:info@realcore.de">info@realcore.de</a></p></div></div>
-        <div class="card"><div class="card-head"><span>▸ Abschlusstabelle</span></div><div class="table-wrap"><table class="league" id="final-table"><thead><tr><th>#</th><th>Verein</th><th>Sp</th><th>Tore</th><th>Pkt</th></tr></thead><tbody></tbody></table></div></div>
-        <div class="card"><div class="card-head"><span>▸ Saisonverlauf</span></div><ul class="results" id="final-results"></ul></div>
+        <div class="card debrief" id="debrief"><div class="card-head"><span>Im Spiel gelöst – wie sieht das bei euch aus?</span><span class="tag" id="debrief-tag">Analyse</span></div><h3 id="debrief-head"></h3><p id="debrief-text"></p><ul id="debrief-q" class="questions"></ul><div class="offer" id="debrief-offer"></div><div class="cta"><p>Sprecht uns direkt am Stand an – wir zeigen euch, wie das in eurer Landschaft aussieht.</p><p class="cta-mail">Nicht auf der Messe? Schreibt uns einfach: <a href="mailto:info@realcore.de">info@realcore.de</a></p></div></div>
+        <div class="card"><div class="card-head"><span>Auszeichnungen der Saison</span></div><div class="awards" id="awards"></div></div>
+        <div class="card"><div class="card-head"><span>Abschlusstabelle</span></div><div class="table-wrap"><table class="league" id="final-table"><thead><tr><th>#</th><th>Verein</th><th>Sp</th><th>Tore</th><th>Pkt</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="card"><div class="card-head"><span>Saisonverlauf</span></div><ul class="results" id="final-results"></ul></div>
       </div>
     </div>
     <footer class="panel-foot"><button class="btn ghost" id="btn-new">Neue:r Manager:in</button><span></span><button class="btn" id="btn-board2">Bestenliste</button><button class="btn primary big" id="btn-again">Nochmal spielen</button></footer>
