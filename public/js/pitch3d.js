@@ -62,7 +62,7 @@ export class Pitch3D {
     this.blobMat = this.mat('blob', '#000000', { alpha: 0.38, spec: 0 });
     this.cam = new ArcRotateCamera('cam', -Math.PI / 2, 0.98, 64, new Vector3(PW / 2, 0, PH / 2), scene);
     this.cam.fov = 0.78; this.cam.minZ = 0.5; this.cam.maxZ = 600;
-    this.buildStadium(); this.buildBall(); this.buildFx(); this.ref = null; this.camMode = 'tv'; this.trail.particleTexture = this.ptex;
+    this.buildStadium(); this.buildBall(); this.buildFx(); this.ref = null; this.camMode = 'auto'; this.trail.particleTexture = this.ptex;
     // Nachbearbeitung: Kantenglättung, leichtes Leuchten, Kontrast, Vignette – bei schwacher Hardware automatisch aus
     try {
       const pl = this.pipe = new B.DefaultRenderingPipeline('pp', false, scene, [this.cam]);
@@ -484,6 +484,8 @@ export class Pitch3D {
       if (this.mx) { if (Math.hypot(rx, rz) < 1.6 || Math.random() < 0.25) act(k, 'catch'); else act(k, side < 0 ? 'diveL' : 'diveR'); }
       else this.anim.set(k, { kind: 'dive', until: now + 900, side, t0: now });
     }
+    else if ((e.type === 'header' || e.type === 'clear') && e.p && this.mx) act(e.p, 'header');
+    else if ((e.type === 'claim') && this.mx) { const k = M.keeper(1 - e.team); if (k) act(k, 'catch'); }
     else if (e.type === 'tackle' && e.p) { if (this.mx) act(e.p, 'tackle'); else this.anim.set(e.p, { kind: 'slide', until: now + 700 }); }
     else if (e.type === 'injury' && e.p && this.mx) act(e.p, 'trip', { next: { kind: 'down', ms: 2200, then: 'standup' } });
     else if (e.type === 'goal') { this.crowdPulse = 1; const gx = M.goalOf(e.team).x; this.netHit = { side: gx > PW / 2 ? 1 : 0, t: performance.now() }; }
@@ -570,11 +572,11 @@ export class Pitch3D {
     if (!this.flight || this.flight.mode !== b.mode || this.flight.from !== b.from || this.flight.shooter !== b.shooter) {
       let end; if (b.mode === 'pass' && b.target) end = { x: b.target.x, y: b.target.y }; else if (b.mode === 'shot') end = M.goalOf(b.shooter.team); else end = { x: b.x + b.vx, y: b.y + b.vy };
       const total = Math.max(2, dist(b, end)); const r = Math.random();
-      const h = b.mode === 'shot' ? (r < 0.5 ? 0.3 + r : 1.2 + r * 1.2) : (total > 22 ? 2 + Math.min(4, total / 10) * r : r < 0.35 ? 0.6 + r : 0);
-      this.flight = { mode: b.mode, from: b.from, shooter: b.shooter, start: { x: b.x, y: b.y }, total, h }; this.lastFlightH = h;
+      const h = b.mode === 'shot' ? (b.header ? 0.4 : b.freekick ? 1.4 + r * 0.8 : r < 0.5 ? 0.3 + r : 1.2 + r * 1.2) : b.cross ? 3 + r * 2 : (total > 22 ? 2 + Math.min(4, total / 10) * r : r < 0.35 ? 0.6 + r : 0);
+      this.flight = { mode: b.mode, from: b.from, shooter: b.shooter, start: { x: b.x, y: b.y }, total, h, base: b.mode === 'shot' && b.header ? 2.3 : 0 }; this.lastFlightH = h;
     }
     const f = this.flight, pr = Math.min(1, dist(f.start, b) / f.total);
-    return f.h * 4 * pr * (1 - pr);
+    return f.base * (1 - pr) + f.h * 4 * pr * (1 - pr);
   }
   // Welche Schuss-/Passbewegung passt? (Torwart: Abwurf oder Abstoß, lange Bälle als Chip, Schüsse aus dem Stand oder Lauf)
   actionFor(k, b, M, now) {
@@ -663,12 +665,12 @@ export class Pitch3D {
       if (celebrating || happy) { const j = Math.abs(Math.sin(this.t * (happy ? 7 : 9) + p.num * 1.3)); P = { lean: -0.1, shL: -2.7 - j * 0.3, shR: -2.7 - j * 0.3, spreadL: 0.5, spreadR: 0.5, elL: -0.2, elR: -0.2, hipL: -0.3 * j, hipR: -0.3 * j, knL: 0.7 * j, knR: 0.7 * j, head: -0.3 }; f.root.position.y = j * (p === this.celeb?.p ? 0.55 : 0.35); }
       else if (sad) { P = { lean: 0.55, head: 0.45, shL: 0.05, shR: 0.05, spreadL: 0.05, spreadR: 0.05, elL: -0.1, elR: -0.1, knL: 0.15, knR: 0.15, hipL: -0.1, hipR: 0.05 }; f.root.position.y = 0; }
       if (p.injured) { P.lean = 0.45; P.knL = 0.6; P.shR = -0.6; P.elR = -1.4; }
-      if (f.rig) { this.driveRig(f, p, { v, run, sprint, owner: b.owner === p, an: an && an.until > now ? an : null, celebrating, happy, sad, ready: f.gk && run < 0.4 && Math.hypot(b.x - px, b.y - py) < 24, now }, dt); const showLbl = this.labels && (this.camMode === 'tv' || this.camMode === 'top' || b.owner === p); f.plane.setEnabled(showLbl); if (showLbl) this.label(f, p); continue; }
-      { const want = !this.noFaces && (!!this.cine || this.camMode === 'near' || this.camMode === 'goal' || !!this.celeb); if (f.face && f.faceOn !== want) { f.faceOn = want; for (const m of f.face) m.setEnabled(want); } }
+      if (f.rig) { this.driveRig(f, p, { v, run, sprint, owner: b.owner === p, an: an && an.until > now ? an : null, celebrating, happy, sad, ready: f.gk && run < 0.4 && Math.hypot(b.x - px, b.y - py) < 24, now }, dt); const showLbl = this.labels && (this.camMode === 'tv' || this.camMode === 'top' || (this.camMode === 'auto' && this.cam.radius > 33) || b.owner === p); f.plane.setEnabled(showLbl); if (showLbl) this.label(f, p); continue; }
+      { const want = !this.noFaces && (!!this.cine || this.camMode === 'near' || this.camMode === 'goal' || (this.camMode === 'auto' && this.cam.radius < 30) || !!this.celeb); if (f.face && f.faceOn !== want) { f.faceOn = want; for (const m of f.face) m.setEnabled(want); } }
       // Kopf folgt dem Ball
       { const ang = Math.atan2(b.x - px, b.y - py) - f.root.rotation.y; P.headYaw = Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(ang), Math.cos(ang)))); }
       this.blendPose(f, P, dt, an && an.until > now ? 22 : 12);
-      const showLbl = this.labels && (this.camMode === 'tv' || this.camMode === 'top' || b.owner === p); f.plane.setEnabled(showLbl); if (showLbl) this.label(f, p);
+      const showLbl = this.labels && (this.camMode === 'tv' || this.camMode === 'top' || (this.camMode === 'auto' && this.cam.radius > 33) || b.owner === p); f.plane.setEnabled(showLbl); if (showLbl) this.label(f, p);
     }
     // Ball
     const h = rp ? (b.h || 0) : this.ballHeight(M); this.ballH = rp ? h : lerp(this.ballH, h, Math.min(1, dt * 12));
@@ -704,16 +706,37 @@ export class Pitch3D {
     if (this.cine) { const c = this.cine; this.cam.alpha = c.alpha; this.cam.beta = c.beta; this.cam.radius = c.radius; this.cam.target.set(c.tx, c.ty ?? 0.5, c.tz); this.camT = null; }
     else {
       const cel = this.celeb && this.celeb.until > performance.now() && M.speed < 10 ? this.celeb : null;
-      const tx = cel ? cel.p.x : this.camMode === 'top' ? PW / 2 + (b.x - PW / 2) * 0.35 : this.camMode === 'near' || this.camMode === 'goal' ? b.x : land ? Math.max(30, Math.min(PW - 30, b.x)) : PW / 2 + (b.x - PW / 2) * 0.25, tz = cel ? cel.p.y : land ? PH / 2 + (b.y - PH / 2) * 0.2 : PH / 2 + (b.y - PH / 2) * 0.1;
-      if (!this.camT) this.camT = new Vector3(tx, 0, tz);
-      const k = Math.min(1, dt * (cel ? 4 : 1.6)); this.camT.x = lerp(this.camT.x, tx, k); this.camT.z = lerp(this.camT.z, tz, k);
-      this.cam.target.set(this.camT.x + (this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0), cel ? 1.2 : 0.5, this.camT.z + (this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0));
-      const want = land ? { alpha: -Math.PI / 2, beta: 0.9, radius: 74 + Math.max(0, 1.7 - this.w / this.h) * 26 } : { alpha: Math.PI, beta: 0.52, radius: 96 + Math.max(0, 1.9 - this.h / this.w) * 30 };
+      const auto = this.camMode === 'auto', aspect = Math.max(0, 1.7 - this.w / this.h);
+      let tx = cel ? cel.p.x : this.camMode === 'top' ? PW / 2 + (b.x - PW / 2) * 0.35 : this.camMode === 'near' || this.camMode === 'goal' ? b.x : land ? Math.max(30, Math.min(PW - 30, b.x)) : PW / 2 + (b.x - PW / 2) * 0.25, tz = cel ? cel.p.y : land ? PH / 2 + (b.y - PH / 2) * 0.2 : PH / 2 + (b.y - PH / 2) * 0.1, ty = cel ? 1.2 : 0.5, follow = cel ? 4 : 1.6;
+      const want = land ? { alpha: -Math.PI / 2, beta: 0.95, radius: 56 + aspect * 24 } : { alpha: Math.PI, beta: 0.6, radius: 80 + Math.max(0, 1.9 - this.h / this.w) * 30 };
       if (this.camMode === 'near') { want.radius = land ? 26 : 34; want.beta = land ? 1.08 : 0.85; }
       else if (this.camMode === 'top') { want.radius = land ? 92 : 110; want.beta = 0.18; }
       else if (this.camMode === 'goal') { if (b.owner) this.lastAtt = b.owner.team; const att = this.lastAtt ?? 0, gx = M.goalOf(att).x; want.alpha = gx > PW / 2 ? Math.PI : 0; want.beta = 1.05; want.radius = 36; }
       if (cel) { want.radius = 26; want.beta = 1.1; }
-      else if (land && this.camMode === 'tv') { const edge = Math.max(0, Math.abs(b.x - PW / 2) - 25) / 27.5; want.radius -= edge * 16; want.beta += edge * 0.08; } // TV-Zoom im Angriffsdrittel
+      else if (auto) {
+        // Regie: Einstellung je nach Spielsituation (mit Mindestdauer, damit nicht hektisch geschnitten wird)
+        if (b.owner) this.lastAtt = b.owner.team; else if (b.mode === 'shot' && b.shooter) this.lastAtt = b.shooter.team; else if (b.mode === 'pass' && b.from) this.lastAtt = b.from.team;
+        const att = this.lastAtt ?? 0, G = M.goalOf(att), toGoal = Math.abs(b.x - G.x), nowMs = performance.now();
+        let shot = M.pen ? 'pen' : M.sp ? M.sp.kind : (b.mode === 'shot' || toGoal < 30) ? 'attack' : 'mid';
+        const D = this.dir || (this.dir = { shot: 'mid', since: 0 });
+        if (shot !== D.shot) { const urgent = shot === 'pen' || shot === 'corner' || shot === 'fk' || D.shot === 'pen' || D.shot === 'corner' || D.shot === 'fk' || b.mode === 'shot'; if (urgent || nowMs - D.since > 1800) { D.shot = shot; D.since = nowMs; } else shot = D.shot; }
+        const side = G.x > PW / 2 ? 1 : -1;
+        if (shot === 'pen' || shot === 'fk') { // hinter dem Schützen auf das Tor
+          const ux = G.x - b.x, uy = G.y - b.y, ul = Math.hypot(ux, uy) || 1; want.alpha = Math.atan2(-uy / ul, -ux / ul); want.beta = shot === 'pen' ? 1.22 : 1.12; want.radius = shot === 'pen' ? 15 : 20 + Math.min(10, ul * 0.2);
+          tx = b.x + ux * (shot === 'pen' ? 0.55 : 0.45); tz = b.y + uy * (shot === 'pen' ? 0.55 : 0.45); ty = 1; follow = 3.5;
+        } else if (shot === 'corner') { // erhöht aus dem Feld in den Strafraum
+          want.alpha = side > 0 ? Math.PI - (b.y < PH / 2 ? -0.55 : 0.55) : (b.y < PH / 2 ? -0.55 : 0.55); want.beta = 0.98; want.radius = 30; tx = G.x - side * 10; tz = PH / 2 + (b.y - PH / 2) * 0.15; ty = 1; follow = 3;
+        } else if (shot === 'attack') { // nah von der Seite, leicht zum Tor gedreht
+          want.alpha = -Math.PI / 2 - side * 0.32; want.beta = 1.06; want.radius = 27 + aspect * 8; tx = b.x - side * 3; tz = PH / 2 + (b.y - PH / 2) * 0.55; follow = 2.4;
+        } else { // Spielaufbau: klassische Seitenkamera, nah am Ball
+          want.alpha = -Math.PI / 2; want.beta = 1.02; want.radius = 36 + aspect * 10; tx = Math.max(12, Math.min(PW - 12, b.x)); tz = PH / 2 + (b.y - PH / 2) * 0.45; follow = 2;
+        }
+        if (!land && shot !== 'pen' && shot !== 'fk') { want.alpha += Math.PI * 1.5; want.radius *= 1.3; } else if (!land) want.radius *= 1.15;
+      }
+      else if (land && this.camMode === 'tv') { const edge = Math.max(0, Math.abs(b.x - PW / 2) - 25) / 27.5; want.radius -= edge * 12; want.beta += edge * 0.06; } // TV-Zoom im Angriffsdrittel
+      if (!this.camT) this.camT = new Vector3(tx, 0, tz);
+      const k = Math.min(1, dt * follow); this.camT.x = lerp(this.camT.x, tx, k); this.camT.z = lerp(this.camT.z, tz, k); this.camTy = lerp(this.camTy ?? 0.5, ty, k);
+      this.cam.target.set(this.camT.x + (this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0), this.camTy, this.camT.z + (this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0));
       const kc = Math.min(1, dt * 3); { let da = want.alpha - this.cam.alpha; da = Math.atan2(Math.sin(da), Math.cos(da)); this.cam.alpha += da * Math.min(1, dt * 2.5); } this.cam.beta = lerp(this.cam.beta, want.beta, kc); this.cam.radius = lerp(this.cam.radius, want.radius, kc);
     }
     if (this.shake > 0) this.shake -= dt;

@@ -514,6 +514,7 @@ async function ensurePitch() {
   // kurz auf die Spielerfiguren warten, damit das Spiel nicht mit Platzhaltern beginnt und dann hakt
   if (pitch && pitch.ready) { const b = $('#btn-match'), t0 = b.textContent; b.textContent = tr('Stadion wird vorbereitet …'); await Promise.race([pitch.ready, new Promise(r => setTimeout(r, 6000))]); b.textContent = t0; }
   if (!pitch) pitch = new Pitch($('#pitch'));
+  if (params.has('debug')) window.__P = pitch;
   S.pitch3d = pitch instanceof Pitch3D; $('.pitch-wrap').classList.toggle('three', S.pitch3d);
 }
 window.addEventListener('resize', () => { sizeBg(); if (bg3) bg3.resize(innerWidth, innerHeight); if (S.screen === 'match') sizePitch(); });
@@ -559,9 +560,9 @@ function renderLiveTactics() {
 function setSpeed(s) { if (!M) return; M.speed = s === 'skip' ? 40 : s; if (M.speed > 1) { clearTimeout(liTimer); $('#lineup-intro').hidden = true; } $$('#speed button[data-s]').forEach(b => b.classList.toggle('on', String(b.dataset.s) === String(s))); }
 $$('#speed button[data-s]').forEach(b => b.addEventListener('click', () => { audio.play('click'); setSpeed(b.dataset.s === 'skip' ? 'skip' : +b.dataset.s); }));
 $('#live-energy').addEventListener('click', () => { if (M && !M.over) { audio.play('click'); openHalf('Taktik'); } });
-const CAMS = [['tv', 'TV'], ['near', 'Nah'], ['goal', 'Hinter dem Angriff'], ['top', 'Taktik']];
-function applyCam() { let m = 'tv'; try { m = localStorage.getItem('brcm-cam') || 'tv'; } catch { /* ignore */ } if (pitch && 'camMode' in pitch) pitch.camMode = m; $('#cam-name').textContent = (CAMS.find(c => c[0] === m) || CAMS[0])[1]; $('#btn-cam').hidden = !S.pitch3d; }
-$('#btn-cam').addEventListener('click', () => { let m = 'tv'; try { m = localStorage.getItem('brcm-cam') || 'tv'; } catch { /* ignore */ } const i = (CAMS.findIndex(c => c[0] === m) + 1) % CAMS.length; try { localStorage.setItem('brcm-cam', CAMS[i][0]); } catch { /* ignore */ } audio.play('click'); applyCam(); toast(`Kamera: ${CAMS[i][1]}`); });
+const CAMS = [['auto', 'Regie'], ['tv', 'TV'], ['near', 'Nah'], ['goal', 'Hinter dem Angriff'], ['top', 'Taktik']];
+function applyCam() { let m = 'auto'; try { m = localStorage.getItem('brcm-cam2') || 'auto'; } catch { /* ignore */ } if (pitch && 'camMode' in pitch) pitch.camMode = m; $('#cam-name').textContent = (CAMS.find(c => c[0] === m) || CAMS[0])[1]; $('#btn-cam').hidden = !S.pitch3d; }
+$('#btn-cam').addEventListener('click', () => { let m = 'auto'; try { m = localStorage.getItem('brcm-cam2') || 'auto'; } catch { /* ignore */ } const i = (CAMS.findIndex(c => c[0] === m) + 1) % CAMS.length; try { localStorage.setItem('brcm-cam2', CAMS[i][0]); } catch { /* ignore */ } audio.play('click'); applyCam(); toast(`Kamera: ${CAMS[i][1]}`); });
 $('#btn-voice').addEventListener('click', () => { voice.setOn(!voice.on); $('#btn-voice').classList.toggle('off', !voice.on); audio.play('click'); });
 $('#btn-tactics-live').addEventListener('click', () => { if (M && !M.over) { audio.play('click'); openHalf('Taktik'); } });
 let bannerT = null;
@@ -580,11 +581,11 @@ function speakFiller() {
 function onMatchEvent(e) {
   const mine = e.team === S.myTeam;
   if (pitch && pitch.onEvent) pitch.onEvent(e, M);
-  if (['intercept', 'corner', 'press', 'tackle'].includes(e.type)) return;
+  if (['intercept', 'press', 'tackle', 'cross'].includes(e.type)) return;
   const li = document.createElement('div'); const key = e.type === 'goal' ? (mine ? 'goal' : 'goal_opp') : e.type; li.className = 'te ' + key; li.innerHTML = `<b>${e.min}'</b><span>${esc(e.text)}</span>`;
   const list = $('#ticker-list'); list.prepend(li); while (list.children.length > 60) list.lastChild.remove();
   // Sprecher: wichtige Ereignisse immer, Kleinigkeiten nur bei normalem Tempo
-  const PRIO = { goal: 2, red: 2, penalty: 2, pen_save: 2, pen_miss: 2, full: 2, half: 2, kickoff: 1, yellow: 1, save: 1, post: 1, wide: 1, chance: 1, injury: 1, sub: 1, block: 0, koloss: 1 };
+  const PRIO = { goal: 2, red: 2, penalty: 2, pen_save: 2, pen_miss: 2, full: 2, half: 2, kickoff: 1, yellow: 1, save: 1, post: 1, wide: 1, chance: 1, injury: 1, sub: 1, block: 0, koloss: 1, deflect: 1, corner: 1, freekick: 1, header: 1, parry: 1, fk_wall: 1, claim: 0, clear: 0 };
   const pr = PRIO[e.type]; if (pr !== undefined && M.speed < 10 && (M.speed <= 1 || pr >= 2)) speakEvent(e, { prio: pr, interrupt: e.type === 'goal' || e.type === 'full', rate: e.type === 'goal' ? 1.08 : 1.04, pitch: e.type === 'goal' ? 1.1 : 1 });
   if (e.type === 'kickoff' && M.speed < 10) { const w = M.weather || 'sun'; speakTpl(WEATHER_LINE.de[w], WEATHER_LINE.en[w], matchVals(), { prio: 1 }); }
   if (['goal', 'yellow', 'red', 'injury', 'sub', 'penalty'].includes(e.type)) { const mk = document.createElement('i'); mk.className = 'tm ' + e.type + (mine ? ' me' : ' opp'); mk.style.left = Math.min(100, e.min / 90 * 100) + '%'; mk.title = `${e.min}' ${e.p ? e.p.name : ''}`; mk.innerHTML = icon(e.type === 'goal' ? 'ball' : e.type === 'yellow' || e.type === 'red' ? 'card' : e.type === 'penalty' ? 'pen' : e.type); $('#tl-marks').appendChild(mk); }
@@ -592,6 +593,8 @@ function onMatchEvent(e) {
     else if (pitch && pitch.celebrate && M.speed < 10) pitch.celebrate(e.p); $('#sc-val').classList.remove('flash'); void $('#sc-val').offsetWidth; $('#sc-val').classList.add('flash'); audio.play(mine ? 'goal' : 'goal_opp'); banner(mine ? 'TOOOR!' : 'Gegentor', `${e.p ? e.p.name : ''} · ${e.min}'`, !mine, 2600, e.p); if (M.speed < 10) pitch.burst(M.ball.x, M.ball.y, mine ? '#3ddc84' : '#ff6a3d'); }
   else if (e.type === 'save' || e.type === 'post' || e.type === 'wide') audio.play('ooh', mine ? 0.8 : 0.5);
   else if (e.type === 'chance' && mine) audio.play('chance');
+  else if (e.type === 'freekick') audio.play('whistle');
+  else if (e.type === 'header' || e.type === 'parry' || e.type === 'fk_wall' || e.type === 'deflect') audio.play('ooh', mine ? 0.6 : 0.4);
   else if (e.type === 'yellow' || e.type === 'red') { audio.play('card'); if (e.type === 'red') banner('ROT', e.p.name, !mine); }
   else if (e.type === 'penalty') { audio.play('whistle'); audio.play('chance'); banner('ELFMETER', `${e.p ? e.p.name : ''} tritt an`, !mine); }
   else if (e.type === 'pen_save' || e.type === 'pen_miss') audio.play('ooh', mine ? 1 : 0.6);
@@ -599,7 +602,7 @@ function onMatchEvent(e) {
   else if (e.type === 'half') { audio.play('whistle'); $('#sc-phase').textContent = 'Halbzeit'; const mi = S.myTeam, lead = M.score[mi] - M.score[1 - mi]; const pt = M.poss[0] + M.poss[1], pc = Math.round(100 * M.poss[mi] / Math.max(1, pt)); { const k = lead > 0 ? 'lead' : lead < 0 ? 'behind' : 'level'; speakTpl(HALF.de[k], HALF.en[k], matchVals(), { prio: 1 }); } }
   else if (e.type === 'full') audio.play('whistle3');
   else if (e.type === 'kickoff') audio.play('whistle');
-  $('#ts-stats').textContent = `Schüsse ${M.shots[0][0]} : ${M.shots[1][0]}`;
+  $('#ts-stats').textContent = `Schüsse ${M.shots[0][0]} : ${M.shots[1][0]} · Ecken ${M.corners[0]} : ${M.corners[1]}`;
 }
 // Halbzeit / Taktik-Pause
 function openHalf(title) {
@@ -665,7 +668,7 @@ function showReport(res, r, o) {
   const goals = res.events.filter(e => e.type === 'goal');
   const mi = S.myTeam, poss = Math.round(100 * res.poss[mi] / Math.max(1, res.poss[0] + res.poss[1]));
   $('#rep-stats').innerHTML = `<ul class="scorers">${goals.length ? goals.map(e => `<li>${e.min}' ${esc(e.p.name)} (${esc(M.teams[e.team].short)})${e.p2 ? ` <small>Vorlage ${esc(e.p2.name)}</small>` : ''}</li>`).join('') : '<li>Keine Tore.</li>'}</ul>
-    <div class="statline"><span>${res.shots[mi][0]}</span><span>SCHÜSSE</span><span>${res.shots[1 - mi][0]}</span></div><div class="statline"><span>${res.shots[mi][1]}</span><span>AUFS TOR</span><span>${res.shots[1 - mi][1]}</span></div><div class="statline"><span>${poss} %</span><span>BALLBESITZ</span><span>${100 - poss} %</span></div><div class="statline"><span>${res.yellows.length}</span><span>KARTEN</span><span>${res.players.filter(p => p.team !== mi && p.yellow).length}</span></div>`;
+    <div class="statline"><span>${res.shots[mi][0]}</span><span>SCHÜSSE</span><span>${res.shots[1 - mi][0]}</span></div><div class="statline"><span>${res.shots[mi][1]}</span><span>AUFS TOR</span><span>${res.shots[1 - mi][1]}</span></div><div class="statline"><span>${poss} %</span><span>BALLBESITZ</span><span>${100 - poss} %</span></div>${res.corners ? `<div class="statline"><span>${res.xg[mi].toFixed(1)}</span><span>XG</span><span>${res.xg[1 - mi].toFixed(1)}</span></div><div class="statline"><span>${res.corners[mi]}</span><span>ECKEN</span><span>${res.corners[1 - mi]}</span></div><div class="statline"><span>${res.fouls[mi]}</span><span>FOULS</span><span>${res.fouls[1 - mi]}</span></div>` : ''}<div class="statline"><span>${res.yellows.length}</span><span>KARTEN</span><span>${res.players.filter(p => p.team !== mi && p.yellow).length}</span></div>`;
   const mine = res.players.filter(p => p.team === mi).sort((a, b) => b.rating - a.rating);
   const mvp = mine[0]; if (mvp) $('#rep-mvp').innerHTML = `${avatar(mvp, CLUB, 64)}<div><small>${icon('star')} Spieler:in des Spiels</small><b>${esc(mvp.name)}</b><span>${esc(POS[mvp.pos])} · Note ${Math.max(1, Math.min(10, mvp.rating)).toFixed(1)}${mvp.goals ? ' · ' + mvp.goals + ' Tor' + (mvp.goals > 1 ? 'e' : '') : ''}${mvp.assists ? ' · ' + mvp.assists + ' Vorlage' + (mvp.assists > 1 ? 'n' : '') : ''}</span></div>`;
   $('#rep-ratings').innerHTML = mine.map(p => { const v = Math.max(1, Math.min(10, p.rating)); return `<div class="${v >= 7.5 ? 'hi' : v < 5.5 ? 'lo' : ''}">${avatar(p, CLUB, 30)}<span>${esc(p.name)} <small style="color:var(--muted)">${esc(p.pos)}${p.goals ? ' · ⚽' + p.goals : ''}${p.injured ? ' · 🚑' : ''}</small></span><i class="rbar"><b style="width:${v * 10}%"></b></i><b>${v.toFixed(1)}</b></div>`; }).join('');
