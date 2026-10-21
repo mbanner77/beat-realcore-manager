@@ -268,8 +268,12 @@ export class Pitch3D {
     const standH = 16, tilt = 0.62;
     const mk = (len, cx, cz, roty, off) => {
       const s = MeshBuilder.CreatePlane('stand', { width: len, height: standH }, scene); s.material = cm; (this.stands ||= []).push({ s, len, roty, h: standH });
-      s.position = new Vector3(cx, standH * Math.cos(tilt) / 2 + 0.3, cz); s.rotation.y = roty; s.rotation.x = -tilt;
+      s.position = new Vector3(cx, standH * Math.cos(tilt) / 2 + 0.3, cz); s.rotation.y = roty; s.rotation.x = tilt; // steigt vom Spielfeld weg an
       s.position.x += Math.sin(roty) * off; s.position.z += Math.cos(roty) * off;
+      // Kameragrenze: Ebene der Tribüne mit Normale zum Spielfeld (die Kamera bleibt immer davor)
+      { s.computeWorldMatrix(true); const W = s.getWorldMatrix(), c0 = Vector3.TransformCoordinates(Vector3.Zero(), W); let n = Vector3.TransformNormal(new Vector3(0, 0, -1), W).normalize(); if (Vector3.Dot(n, new Vector3(PW / 2 - c0.x, 0, PH / 2 - c0.z)) < 0) n = n.scale(-1); (this.camPlanes ||= []).push({ c: c0, n });
+        // Rückwand und Seitenteile, damit die Tribüne von hinten massiv wirkt
+        const back = Vector3.TransformCoordinates(new Vector3(0, standH / 2, 0), W), wall = MeshBuilder.CreateBox('sw', { width: len + 2, height: back.y + 2.6, depth: 0.6 }, scene); wall.material = this.mat('swm', '#232c2f'); wall.position.set(back.x - n.x * 0.5, (back.y + 2.6) / 2, back.z - n.z * 0.5); wall.rotation.y = roty; wall.isPickable = false; }
       const base = MeshBuilder.CreateBox('sb', { width: len + 4, height: 1.2, depth: 3 }, scene); base.material = this.mat('sbm', '#1c2426'); base.position = new Vector3(s.position.x, 0.6, s.position.z); base.rotation.y = roty; base.position.x -= Math.sin(roty) * 1.2; base.position.z -= Math.cos(roty) * 1.2;
       // Dachkante
       const roof = MeshBuilder.CreateBox('roof', { width: len + 6, height: 0.5, depth: 4 }, scene); roof.material = this.mat('rm', '#2d3a3d'); roof.position = new Vector3(s.position.x, standH * Math.cos(tilt) + 2.2, s.position.z); roof.rotation.y = roty; roof.position.x += Math.sin(roty) * (standH * Math.sin(tilt) / 2 + 1); roof.position.z += Math.cos(roty) * (standH * Math.sin(tilt) / 2 + 1);
@@ -509,6 +513,16 @@ export class Pitch3D {
   }
   setLamps(level) { const { Color3 } = B; this.lampLevel = level; for (const l of this.lamps) l.material.emissiveColor = new Color3(1, 0.96, 0.85).scale(level); if (!this.day) { this.hemi.intensity = 0.25 + 0.5 * level; this.sun.intensity = 0.2 + 0.75 * level; } }
   // Kamerafahrt (Intro): { alpha, beta, radius, tx, tz } oder null
+  // Kamera nie hinter oder in die Tribünen: Abstand entlang der Blickrichtung so weit verkürzen, dass sie vor jeder Tribünenebene bleibt
+  keepCamInside() {
+    const P = this.camPlanes; if (!P) return; const c = this.cam, t = c.target, m = 3.2;
+    const rmax = (beta) => { const sb = Math.sin(beta), dx = Math.cos(c.alpha) * sb, dy = Math.cos(beta), dz = Math.sin(c.alpha) * sb; let r = Infinity;
+      for (const { c: p, n } of P) { const dn = dx * n.x + dy * n.y + dz * n.z, t0 = (t.x - p.x) * n.x + (t.y - p.y) * n.y + (t.z - p.z) * n.z; if (dn < -1e-4) r = Math.min(r, (t0 - m) / -dn); } return r; };
+    if (rmax(c.beta) >= c.radius) return;
+    // zuerst etwas höher gehen (Blick von oben über die Bande), erst dann näher heran
+    if (!this.cine) for (let bb = c.beta - 0.04; bb >= 0.45; bb -= 0.04) if (rmax(bb) >= c.radius * 0.8) { c.beta = bb; c.radius = Math.min(c.radius, rmax(bb)); return; }
+    c.radius = Math.max(6, rmax(c.beta));
+  }
   setCine(c) { this.cine = c; }
   // Wetter: Regen/Schnee als Partikel, Himmel und Licht passend
   setWeather(w) {
@@ -686,7 +700,7 @@ export class Pitch3D {
     if (this.crowdPulse > 0) { this.crowdPulse -= dt * 0.5; const k = Math.max(0, this.crowdPulse); if (this.crowdMat) { this.crowdMat.diffuseTexture.vOffset = Math.sin(now / 70) * 0.006 * k; } if (this.crowdMat) this.crowdMat.emissiveColor.set(0.35 + k * 0.5 * Math.abs(Math.sin(now / 90)), 0.35 + k * 0.5 * Math.abs(Math.sin(now / 90)), 0.35 + k * 0.4); }
     // Kamera: Kamerafahrt (Intro), Wiederholung, Torjubel oder TV-Kamera, die dem Ball folgt
     const land = !this.rot;
-    if (rp) { const R = this.replay, behind = R.g.x > PW / 2; this.cam.alpha = behind ? 0.15 : Math.PI - 0.15; this.cam.beta = 1.05; this.cam.radius = 44; this.cam.target.set(R.g.x + (behind ? -16 : 16), 1, PH / 2 + (b.y - PH / 2) * 0.3); this.scene.render(); return; }
+    if (rp) { const R = this.replay, behind = R.g.x > PW / 2; this.cam.alpha = behind ? 0.15 : Math.PI - 0.15; this.cam.beta = 1.05; this.cam.radius = 44; this.cam.target.set(R.g.x + (behind ? -16 : 16), 1, PH / 2 + (b.y - PH / 2) * 0.3); this.keepCamInside(); this.scene.render(); return; }
     if (this.cine) { const c = this.cine; this.cam.alpha = c.alpha; this.cam.beta = c.beta; this.cam.radius = c.radius; this.cam.target.set(c.tx, c.ty ?? 0.5, c.tz); this.camT = null; }
     else {
       const cel = this.celeb && this.celeb.until > performance.now() && M.speed < 10 ? this.celeb : null;
@@ -715,6 +729,7 @@ export class Pitch3D {
       if (this.qT > 2500) { const fps = 1000 * this.qN / this.qT; this.qT = 0; this.qN = 0;
         if (fps < 42) { this.qGood = 0; if (this.shadow) this.disableShadows(); else if (this.pipe) { this.pipe.dispose(); this.pipe = null; } else if (this.quality > 0) { this.quality = 0; this.engine.setHardwareScalingLevel(Math.min(1.6, this.engine.getHardwareScalingLevel() * 1.3)); if (this.crowd && fps < 30) { this.crowd.arms.setEnabled(false); } } }
         else if (fps > (this.gfx === 'high' ? 45 : 56) && !this.cine && this.rig && !this.shadow && this.quality > 0 && this.gfx !== 'mid' && ++this.qGood >= 2 && !this.shadowTried) { this.shadowTried = true; this.enableShadows(); } } }
+    this.keepCamInside();
     this.scene.render();
   }
   dispose() { this.disposed = true; if (this.kitCache) for (const t of this.kitCache.values()) t.dispose(); try { this.engine.dispose(); } catch { /* ignore */ } }

@@ -9,7 +9,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 
 // Einstellungen: Dauer, Kamera von → nach, Text, Flutlicht
 const SHOTS = [
-  { dur: 6.0, lights: 'flicker', from: { alpha: Math.PI * 1.08, beta: 1.35, radius: 40, tx: 6, tz: PH / 2 }, to: { alpha: Math.PI * 1.02, beta: 1.3, radius: 30, tx: 10, tz: PH / 2 },
+  { dur: 6.0, lights: 'flicker', from: { alpha: Math.PI * 1.08, beta: 1.24, radius: 27, tx: 12, tz: PH / 2 }, to: { alpha: Math.PI * 1.02, beta: 1.22, radius: 22, tx: 15, tz: PH / 2 },
     who: 'Sportschau', text: '1998. Ein System geht in Betrieb. Es wurde nie dokumentiert – und nie wieder abgeschaltet.' },
   { dur: 6.5, lights: 1, from: { alpha: -Math.PI / 2 - 0.5, beta: 0.55, radius: 150, tx: PW / 2, tz: PH / 2 }, to: { alpha: -Math.PI / 2 + 0.25, beta: 0.7, radius: 110, tx: PW / 2, tz: PH / 2 },
     who: 'Legacy-KI', text: 'Seit 1998 ungeschlagen. Ohne Tests, ohne Doku, ohne Gnade: der Legacy-Monolith FC.', legacy: true },
