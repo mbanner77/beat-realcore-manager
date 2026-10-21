@@ -140,7 +140,7 @@ function benchFor(mission, difficulty) {
 function maxScore(difficulty) {
   const mult = { messe: 0.8, profi: 1, gf: 1.5 }[difficulty] || 1;
   // Siege, Tore, Zu-null, Platz, Wochenziele (max. 400 je Spieltag), Restbudget (15 % von realistisch max. 6.000 T€)
-  return Math.round((7 * 1000 + 45 * 120 + 7 * 300 + 3000 + 7 * 400 + 900) * mult);
+  return Math.round((7 * 1000 + 45 * 120 + 7 * 300 + 3000 + 7 * 400 + 2500) * mult); // Wirtschaft: Budget, Vermögen, Fans (auf 7 Spieltage normiert)
 }
 
 // ---------------- HTTP ----------------

@@ -1,6 +1,6 @@
 // Beat RealCore – Legacy League: Oberfläche und Spielablauf
 import { initI18n, tr, isEN, LANG, setLang } from './i18n.js';
-import { WEATHER, TALKS, OBJECTIVES, DIFFICULTY, FORMATIONS, STYLES, TEMPO, TRAINING, OPPONENTS, POS, POS_GROUP, EVENTS, CLUB, SEASON_SCORE } from './data.js';
+import { SEASON_LEN, STADIUM, FACILITIES, ECON, WEATHER, TALKS, OBJECTIVES, DIFFICULTY, FORMATIONS, STYLES, TEMPO, TRAINING, OPPONENTS, POS, POS_GROUP, EVENTS, CLUB, SEASON_SCORE } from './data.js';
 import { Season, rating, posFit, ATTRS } from './manager.js';
 import { Match, MATCH_REAL } from './match.js';
 import { Pitch } from './pitch.js';
@@ -116,10 +116,15 @@ window.addEventListener('keydown', (e) => {
 function threat(i) { return `<span class="thr">${[1, 2, 3].map(j => `<i class="${j <= i + 1 ? 'on' : ''}"></i>`).join('')}</span>`; }
 function showSetup() {
   $('#in-name').value = S.player.name; $('#in-company').value = S.player.company; $('#in-team').value = S.player.team || '';
+  renderSetupCards(); show('setup');
+}
+function renderSetupCards() {
   $('#diff-cards').innerHTML = Object.entries(DIFFICULTY).map(([k, d], i) => `<button class="dcard ${k === S.diff ? 'on' : ''}" data-d="${k}"><b>${esc(d.name)}</b><small>${esc(d.desc)} Budget ${money(d.budget)}, Punkte × ${d.mult}.</small>${threat(i)}</button>`).join('');
-  $$('#diff-cards .dcard').forEach(b => b.addEventListener('click', () => { S.diff = b.dataset.d; audio.play('click'); showSetup(); }));
-  $('#season-list').innerHTML = OPPONENTS.map((o, i) => `<li><b>${esc(o.club)}</b> · ${i % 2 === 0 ? 'Heim' : 'Auswärts'}</li>`).join('');
-  show('setup');
+  $$('#diff-cards .dcard').forEach(b => b.addEventListener('click', () => { S.diff = b.dataset.d; audio.play('click'); renderSetupCards(); }));
+  S.len = S.len || 'short';
+  $('#len-cards').innerHTML = Object.entries(SEASON_LEN).map(([k, d]) => `<button class="dcard ${k === S.len ? 'on' : ''}" data-l="${k}"><b>${esc(d.name)}</b><small>${esc(d.desc)}</small></button>`).join('');
+  $$('#len-cards .dcard').forEach(b => b.addEventListener('click', () => { S.len = b.dataset.l; audio.play('click'); renderSetupCards(); }));
+  $('#season-list').innerHTML = OPPONENTS.map((o, i) => `<li><b>${esc(o.club)}</b> · ${i % 2 === 0 ? 'Heim' : 'Auswärts'}${S.len === 'long' ? ` / ${i % 2 === 0 ? 'Auswärts' : 'Heim'}` : ''}</li>`).join('');
 }
 $('#btn-brief').addEventListener('click', async () => {
   const name = $('#in-name').value.trim();
@@ -137,7 +142,7 @@ function talkLine(who, text) { const P = SPK[who]; return `<div class="tl ${who}
 async function startBriefing() {
   show('brief'); $('#btn-start').disabled = true;
   const co = S.player.company ? ` bei ${S.player.company}` : '';
-  const lines = [['narr', `Pressekonferenz in der Clean-Core-Arena: ${S.player.name} übernimmt TechHub United${co}. Sieben Spieltage, sieben Legacy-Clubs, ein Ziel: die Legacy League.`],
+  const lines = [['narr', `Pressekonferenz in der Clean-Core-Arena: ${S.player.name} übernimmt TechHub United${co}. ${S.len === 'long' ? 'Vierzehn Spieltage in Hin- und Rückrunde, sieben Legacy-Clubs, ein Ziel: die Legacy League.' : 'Sieben Spieltage, sieben Legacy-Clubs, ein Ziel: die Legacy League.'}`],
     ['hub', `Willkommen im Verein, ${S.player.name}! Ich bin Lena Hoff, deine Sportdirektorin. Der Kader steht, das Budget auch – ${money(DIFFICULTY[S.diff].budget)}. Erster Gegner: der FC Datensilo.`],
     ['legacy', 'Ich laufe seit 1998. Ohne Doku, ohne Tests, ohne Niederlage. Ihr wollt Meister werden? Versucht es.']];
   S.brief = null;
@@ -153,7 +158,7 @@ async function newSeason() {
   S.gameId = null;
   try { const r = await api('/api/game/start', { mission: 'league', difficulty: S.diff }, 4000); S.gameId = r.gameId; } catch { S.gameId = null; }
   S.radioUnread = 0;
-  S.season = new Season({ difficulty: S.diff, hooks: {
+  S.season = new Season({ difficulty: S.diff, length: S.len || 'short', hooks: {
     onMessage: (m) => { S.radioUnread++; if (S.season) { renderRadio(); updateDots(); } },
     onEvent: (ev) => { if (ev.type === 'director') { audio.play('legacy'); toast(`${EVENTS[ev.event].name}: ${ev.detail}`); const last = [...S.season.log].reverse().find(m => m.who === 'legacy'); if (last) voice.say(tr(last.text), { lang: LANG, prio: 2, pitch: 0.75 }); renderWeek(); } },
     onEnd: (r) => endSeason(r),
@@ -169,7 +174,7 @@ function teamStrength() { const T = SE().teamForMatch(); return Math.round(T.pla
 function updateDots() { $('#dot-training').classList.toggle('on', !SE().trained); $('#dot-radio').classList.toggle('on', S.radioUnread > 0 && S.tab !== 'radio'); }
 function renderWeek() {
   const se = SE(); if (!se || se.over) return; const o = se.opponent;
-  $('#wh-day').textContent = `Spieltag ${se.day + 1} / ${OPPONENTS.length}`; $('#wh-opp').textContent = `vs. ${o.club}`;
+  $('#wh-day').textContent = `Spieltag ${se.day + 1} / ${se.len}`; $('#wh-opp').textContent = `vs. ${o.club}`;
   $('#wh-where').textContent = se.home ? `Heimspiel · ${CLUB.stadium}` : `Auswärtsspiel · ${o.club}`;
   $('#wh-budget').textContent = money(se.budget); $('#wh-rank').textContent = se.day ? `${se.rank()}. (${se.table[0].pts} Pkt)` : '–';
   $('#wh-str').textContent = teamStrength(); const mor = Math.round(se.players.reduce((s, p) => s + p.morale, 0) / se.players.length); $('#wh-morale').textContent = mor >= 75 ? '😄 ' + mor : mor >= 55 ? '🙂 ' + mor : '😟 ' + mor;
@@ -178,7 +183,7 @@ function renderWeek() {
   const dec = se.decision && !se.decision.chosen; $('#btn-decision').hidden = !dec;
   if (dec && S.decisionDay !== se.day) { S.decisionDay = se.day; openDecision(); }
   $$('#week-nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === S.tab)); $$('.wtab').forEach(t => t.classList.toggle('on', t.id === 'tab-' + S.tab));
-  renderHome(); renderSquad(); renderTactics(); renderTraining(); renderMarket(); renderTable(); renderRadio(); updateDots();
+  renderHome(); renderSquad(); renderTactics(); renderTraining(); renderMarket(); renderFinance(); renderTable(); renderRadio(); updateDots();
   const prob = se.lineupProblems(); $('#btn-match').disabled = prob.some(p => /unbesetzt|verletzt|gesperrt/.test(p));
 }
 $$('#week-nav button[data-ico]').forEach(b => b.insertAdjacentHTML('afterbegin', icon(b.dataset.ico)));
@@ -194,7 +199,7 @@ function renderHome() {
   const bar = (v, max) => `<i class="bar"><b style="width:${Math.round(v / max * 100)}%"></b></i>`;
   $('#home-grid').innerHTML = `
     <div class="hcard hero">
-      <div class="hero-top"><span class="tag">${icon('whistle')} Spieltag ${se.day + 1} / ${OPPONENTS.length}</span><span class="tag ${se.home ? 'home' : 'away'}">${se.home ? 'Heimspiel' : 'Auswärtsspiel'} · ${se.home ? 'Tag' : 'Flutlicht'} · ${WEATHER[se.weather].icon} ${esc(WEATHER[se.weather].name)}</span></div>
+      <div class="hero-top"><span class="tag">${icon('whistle')} Spieltag ${se.day + 1} / ${se.len}</span><span class="tag ${se.home ? 'home' : 'away'}">${se.home ? 'Heimspiel' : 'Auswärtsspiel'} · ${se.home ? 'Tag' : 'Flutlicht'} · ${WEATHER[se.weather].icon} ${esc(WEATHER[se.weather].name)}</span></div>
       <div class="hero-vs">
         <div class="club">${crest(me, 72)}<b>${esc(CLUB.name)}</b><small>${se.day ? se.rank() + '. Platz · ' + se.table[0].pts + ' Pkt' : 'Saisonstart'}</small><div class="str"><span>Stärke ${str}</span>${bar(str, 99)}</div></div>
         <div class="vs">VS</div>
@@ -209,7 +214,7 @@ function renderHome() {
     <div class="hcard dec ${d && !d.chosen ? 'open' : ''}"><div class="hc-head">${icon('board')} Vorstand</div>${d ? `<b>${esc(d.title)}</b><p>${esc(d.text)}</p>${d.chosen ? `<span class="done">✓ ${esc(d.options.find(x => x.key === d.chosen)?.label || '')}</span>` : `<div class="dec-mini">${d.options.map(x => `<button class="btn sm" data-dec="${x.key}" title="${esc(x.effect)}">${esc(x.label)}</button>`).join('')}</div>`}` : '<p>Der Vorstand meldet sich ab dem zweiten Spieltag.</p>'}</div>
     <div class="hcard ev ${ev ? 'on' : ''}"><div class="hc-head">${icon('bolt')} Legacy-KI</div>${ev ? `<b>${esc(ev.name)}</b><p>${esc(ev.desc)}</p>` : '<p>Diese Woche keine Störung gemeldet – noch nicht.</p>'}</div>
     <div class="hcard form"><div class="hc-head">${icon('up')} Form</div><div class="chips">${formChips(se.results)}</div><div class="top3">${form.map(p => `<div class="tp">${avatar(p, CLUB, 40)}<span><b>${esc(p.name.split(' ')[0])}</b><small>${esc(POS[p.pos])} · Form ${p.form > 0 ? '+' + p.form : p.form}</small></span><em>${rating(p)}</em></div>`).join('')}</div>${inj.length ? `<p class="inj">${icon('injury')} ${inj.map(p => esc(p.name) + (p.injured > 0 ? ' (verletzt)' : ' (gesperrt)')).join(', ')}</p>` : ''}</div>
-    <div class="hcard kpis"><div class="hc-head">${icon('money')} Verein</div><div class="kgrid"><div><small>Budget</small><b>${money(se.budget)}</b></div><div><small>Training</small><b>${se.trained ? esc(TRAINING[se.trained].name) : '<span class="warn">offen</span>'}</b></div><div><small>Kader</small><b>${se.players.length} · Ø ${Math.round(se.players.reduce((a, p) => a + p.age, 0) / se.players.length)} J.</b></div><div><small>Stimmung</small><b>${Math.round(se.players.reduce((a, p) => a + p.morale, 0) / se.players.length)}</b></div></div></div>
+    <div class="hcard kpis"><div class="hc-head">${icon('money')} Verein</div><div class="kgrid"><div><small>Budget</small><b>${money(se.budget)}</b></div><div><small>Training</small><b>${se.trained ? esc(TRAINING[se.trained].name) : '<span class="warn">offen</span>'}</b></div><div><small>Kader</small><b>${se.players.length} · Ø ${Math.round(se.players.reduce((a, p) => a + p.age, 0) / se.players.length)} J.</b></div><div><small>Stimmung</small><b>${Math.round(se.players.reduce((a, p) => a + p.morale, 0) / se.players.length)}</b></div><div><small>Fans</small><b>${Math.round(se.econ.fans)}</b></div><div><small>${se.home ? 'Erwartete Zuschauer' : 'Stadion'}</small><b>${se.home ? se.forecast().att.toLocaleString('de-DE') : se.capacity.toLocaleString('de-DE') + ' Plätze'}</b></div></div></div>
     <div class="hcard press"><div class="hc-head">${icon('press')} Presse</div>${last.map(m => `<div class="pm ${m.who}"><b>${esc((SPK[m.who] || SPK.hub).n)}</b><p>${esc(m.text)}</p></div>`).join('') || '<p>–</p>'}</div>`;
   $$('#home-grid [data-go]').forEach(b => b.addEventListener('click', () => { S.tab = b.dataset.go; audio.play('click'); renderWeek(); }));
   $$('#home-grid [data-dec]').forEach(b => b.addEventListener('click', () => { if (se.decide(b.dataset.dec)) { audio.play('confirm'); toast($('#dec-note').textContent || ''); } renderWeek(); }));
@@ -287,6 +292,30 @@ function renderMarket() {
   const inL = new Set(se.slots), full = se.players.length <= 14;
   $('#sell-list').innerHTML = [...se.players].sort((a, b) => b.value - a.value).map(p => `<div class="sell-row ${inL.has(p.id) ? 'in' : ''}">${avatar(p, CLUB, 34)}<span class="pos ${p.pos === 'TW' ? 'tw' : ''}">${esc(p.pos)}</span><span class="nm"><b>${esc(p.name)}</b><small>${p.age} J. · Stärke ${rating(p)} · Form ${p.form > 0 ? '+' + p.form : p.form}${inL.has(p.id) ? ' · Startelf' : ''}${p.injured > 0 ? ' · verletzt' : ''}</small></span><span class="val"><small>Marktwert</small>${money(p.value)}</span><span class="price"><small>Erlös</small>${money(se.salePrice(p))}</span><button class="btn sm" data-sell2="${p.id}" ${full ? 'disabled' : ''}>Verkaufen</button></div>`).join('');
   $$('[data-sell2]').forEach(b => b.addEventListener('click', () => { const p = se.players.find(x => x.id === b.dataset.sell2); if (!p) return; if (confirm(tr(`${p.name} für ${money(se.salePrice(p))} verkaufen?`))) { const r = se.sell(p.id); if (r.ok) { audio.play('cash'); toast(tr(`${p.name} verkauft: +${money(r.gain)}`)); } else { toast(r.reason); audio.play('deny'); } renderWeek(); } }));
+}
+// Finanzen & Stadion
+function renderFinance() {
+  const se = SE(), e = se.econ, f = se.forecast(), next = STADIUM[e.stadium + 1], L = e.last;
+  const pct = Math.round(f.att / se.capacity * 100), fansLbl = e.fans >= 80 ? 'Euphorisch' : e.fans >= 60 ? 'Begeistert' : e.fans >= 40 ? 'Zufrieden' : e.fans >= 25 ? 'Skeptisch' : 'Verärgert';
+  const row = (k, v, neg) => `<div class="fr"><span>${esc(k)}</span><b class="${neg ? 'neg' : v > 0 ? 'pos' : ''}">${neg ? '−' : v > 0 ? '+' : ''}${money(Math.abs(v))}</b></div>`;
+  const hist = e.history.slice(-14), maxV = Math.max(1, ...hist.map(h => Math.max(h.income, h.costs)));
+  $('#fin-grid').innerHTML = `
+    <div class="hcard fin-kpis"><div class="hc-head">${icon('money')} Kasse & Fans</div><div class="kgrid">
+      <div><small>Budget</small><b class="${se.budget < 0 ? 'neg' : ''}">${money(se.budget)}</b></div><div><small>Gehälter / Woche</small><b>${money(se.wages())}</b></div>
+      <div><small>Unterhalt / Woche</small><b>${money(se.upkeep())}</b></div><div><small>Fan-Stimmung</small><b>${Math.round(e.fans)} · ${esc(fansLbl)}</b><i class="bar"><b style="width:${e.fans}%"></b></i></div></div></div>
+    <div class="hcard fin-ticket"><div class="hc-head">${icon('target')} Eintrittspreis</div>
+      <div class="price-row"><input type="range" id="price" min="${ECON.priceMin}" max="${ECON.priceMax}" step="1" value="${e.price}"><b id="price-v">${e.price} €</b></div>
+      <div class="fc-box">${se.home ? `<span>Nächstes Heimspiel gegen <b>${esc(se.opponent.club)}</b>:</span><span>erwartet <b id="fc-att">${f.att.toLocaleString('de-DE')}</b> Zuschauer (<b id="fc-pct">${pct}</b> %) · Tickets <b id="fc-tix">${money(f.tickets)}</b></span>` : `<span>Nächstes Spiel ist auswärts – keine Ticketeinnahmen. Der Preis gilt ab dem nächsten Heimspiel.</span>`}</div>
+      <p class="hint">Teure Tickets bringen mehr pro Kopf, aber weniger Zuschauer – und über 35 € sinkt die Fan-Stimmung. Siege, Tore und volle Ränge machen die Fans glücklich.</p></div>
+    <div class="hcard fin-stadium"><div class="hc-head">${icon('home')} Stadion</div>
+      <b>${esc(STADIUM[e.stadium].name)}</b><p>${se.capacity.toLocaleString('de-DE')} Plätze${e.pending !== null ? ` · <span class="warn">Ausbau auf ${STADIUM[e.pending].cap.toLocaleString('de-DE')} läuft – fertig zum nächsten Spieltag</span>` : ''}</p>
+      ${next && e.pending === null ? `<div class="build"><span>Nächste Stufe: <b>${next.cap.toLocaleString('de-DE')} Plätze</b></span><button class="btn sm ${next.cost <= se.budget ? 'primary' : ''}" id="btn-build" ${next.cost > se.budget ? 'disabled' : ''}>Ausbauen · ${money(next.cost)}</button></div>` : !next ? '<p class="done">✓ Voll ausgebaut</p>' : ''}</div>
+    <div class="hcard fin-fac"><div class="hc-head">${icon('board')} Einrichtungen</div><div class="fac-list">${Object.entries(FACILITIES).map(([k, F]) => { const lv = e.fac[k], c = F.cost[lv]; return `<div class="fac"><span class="ic">${F.icon}</span><span class="nm"><b>${esc(F.name)} <small>Stufe ${lv}/${F.max}</small></b><small>${esc(F.desc)}</small></span>${lv < F.max ? `<button class="btn sm" data-fac="${k}" ${c > se.budget ? 'disabled' : ''}>${money(c)}</button>` : '<span class="done">✓</span>'}</div>`; }).join('')}</div></div>
+    <div class="hcard fin-last"><div class="hc-head">${icon('table')} Letzter Spieltag</div>${L ? `${L.home ? `<p>${L.att.toLocaleString('de-DE')} Zuschauer bei ${L.price} € · Auslastung ${Math.round(L.att / L.cap * 100)} %</p>` : '<p>Auswärtsspiel</p>'}${row('Tickets', L.tickets)}${row('TV & Prämien', L.tv)}${row('Fanshop', L.merch)}${row('VIP-Logen', L.vip)}${row('Sponsor', L.sponsor)}${row('Gehälter', L.wages, true)}${row('Unterhalt', L.upkeep, true)}<div class="fr sum"><span>Bilanz</span><b class="${L.net >= 0 ? 'pos' : 'neg'}">${L.net >= 0 ? '+' : '−'}${money(Math.abs(L.net))}</b></div>` : '<p>Noch kein Spiel abgerechnet.</p>'}</div>
+    <div class="hcard fin-hist"><div class="hc-head">${icon('up')} Saisonverlauf</div>${hist.length ? `<div class="bars">${hist.map(h => `<div class="bar2" title="Spieltag ${h.day + 1}: +${h.income} / −${h.costs} T€"><i class="in" style="height:${h.income / maxV * 100}%"></i><i class="out" style="height:${h.costs / maxV * 100}%"></i><small>${h.day + 1}</small></div>`).join('')}</div><p class="legend2"><i class="in"></i> Einnahmen <i class="out"></i> Ausgaben</p>` : '<p>Der Verlauf erscheint nach dem ersten Spieltag.</p>'}</div>`;
+  const pr = $('#price'); if (pr) pr.addEventListener('input', () => { se.setPrice(+pr.value); $('#price-v').textContent = se.econ.price + ' €'; const g = se.forecast(); if ($('#fc-att')) { $('#fc-att').textContent = g.att.toLocaleString('de-DE'); $('#fc-pct').textContent = Math.round(g.att / se.capacity * 100); $('#fc-tix').textContent = money(g.tickets); } });
+  const bb = $('#btn-build'); if (bb) bb.addEventListener('click', () => { const r = se.buildStadium(); if (r.ok) { audio.play('cash'); toast('Bauauftrag erteilt.'); } else { audio.play('deny'); toast(r.reason); } renderWeek(); });
+  $$('[data-fac]').forEach(b => b.addEventListener('click', () => { const r = se.buildFacility(b.dataset.fac); if (r.ok) { audio.play('cash'); toast(`${FACILITIES[b.dataset.fac].name} ausgebaut.`); } else { audio.play('deny'); toast(r.reason); } renderWeek(); }));
 }
 // Tabelle & Ergebnisse
 function tableRows(tb, full) { tb.innerHTML = SE().standings().map((t, i) => { const o = t.me ? { ...CLUB, me: true } : OPPONENTS.find(x => x.id === t.id); return `<tr class="${t.me ? 'me' : ''}"><td>${i + 1}</td><td class="cl">${crest(o, 22)} ${esc(t.club)}</td><td class="r">${t.w + t.d + t.l}</td>${full ? `<td class="r">${t.w}</td><td class="r">${t.d}</td><td class="r">${t.l}</td>` : ''}<td class="r">${t.gf}:${t.ga}</td><td class="r"><b>${t.pts}</b></td></tr>`; }).join(''); }
@@ -440,7 +469,7 @@ function showFullTime(res, r, o) {
 }
 function showReport(res, r, o) {
   const se = SE(), home = res.mine === 'home';
-  $('#rep-day').textContent = `Spieltag ${se.results.length} / ${OPPONENTS.length}`;
+  $('#rep-day').textContent = `Spieltag ${se.results.length} / ${se.len}`;
   $('#rep-title').textContent = r.won ? 'Sieg!' : r.draw ? 'Unentschieden' : 'Niederlage';
   const hn = home ? CLUB.name : o.club, an = home ? o.club : CLUB.name;
   $('#rep-score').className = 'rep-score ' + (r.won ? 'w' : r.draw ? 'd' : 'l');
@@ -459,7 +488,7 @@ function showReport(res, r, o) {
   const lastMsgs = se.log.slice(-3);
   $('#rep-talk').innerHTML = `<div class="card-head"><span>▸ Nach dem Spiel</span></div>` + lastMsgs.map(m => talkLine(m.who, m.text)).join('');
   const ob = r.objective ? `<div class="${r.objective.ok ? 'ok' : 'miss'}"><span>🎯 Wochenziel: ${esc(r.objective.name)}</span><b>${r.objective.ok ? '+' + fmt(r.objective.bonus) : '✕'}</b></div>` : '';
-  $('#rep-money').innerHTML = `<div class="money">${ob}<div><span>Einnahmen (Zuschauer, Prämie, Sponsor)</span><b>+${money(r.income)}</b></div><div><span>Punkte für die Liga</span><b>+${fmt(r.pts)}</b></div><div><span>Budget jetzt</span><b>${money(se.budget)}</b></div></div>`;
+  $('#rep-money').innerHTML = `<div class="money">${ob}${r.fin && r.fin.home ? `<div><span>Zuschauer</span><b>${r.fin.att.toLocaleString('de-DE')} (${Math.round(r.fin.att / r.fin.cap * 100)} %)</b></div>` : ''}<div><span>Einnahmen (Tickets, TV, Fanshop, Logen, Sponsor)</span><b>+${money(r.fin ? r.fin.income : r.income)}</b></div>${r.fin ? `<div><span>Gehälter & Unterhalt</span><b class="neg">−${money(r.fin.costs)}</b></div><div><span>Bilanz des Spieltags</span><b class="${r.fin.net >= 0 ? '' : 'neg'}">${r.fin.net >= 0 ? '+' : '−'}${money(Math.abs(r.fin.net))}</b></div><div><span>Fan-Stimmung</span><b>${r.fin.fans}</b></div>` : ''}<div><span>Punkte für die Liga</span><b>+${fmt(r.pts)}</b></div><div><span>Budget jetzt</span><b>${money(se.budget)}</b></div></div>`;
   $('#rep-hint').textContent = se.over ? 'Die Saison ist vorbei – weiter zur Auswertung.' : `Nächster Gegner: ${se.opponent.club}`;
   audio.play(r.won ? 'win' : r.draw ? 'confirm' : 'lose');
   show('report');
@@ -489,7 +518,7 @@ async function showResult(r) {
   $('#awards').innerHTML = aw.map(([t, p, d]) => `<div class="award">${avatar(p, CLUB, 48)}<div><small>${icon('trophy')} ${t}</small><b>${esc(p.name)}</b><span>${esc(d)}</span></div></div>`).join('') || '<p class="hint">–</p>';
   { const el = $('#result-score'); const t0 = performance.now(); const tick = () => { const k = Math.min(1, (performance.now() - t0) / 1600), e = 1 - Math.pow(1 - k, 3); el.textContent = fmt(Math.round(r.score * e)); if (k < 1) requestAnimationFrame(tick); }; tick(); }
   const b = r.breakdown;
-  $('#result-breakdown').innerHTML = [['Spielpunkte (Siege, Tore, Zu-null)', b.base], ['Tabellenplatz', b.place], ['Restbudget', b.eco], ['Schwierigkeit', `× ${b.mult}`]].map(([k, v]) => `<tr><td>${esc(k)}</td><td>${typeof v === 'number' ? fmt(v) : v}</td></tr>`).join('');
+  $('#result-breakdown').innerHTML = [['Spielpunkte (Siege, Tore, Zu-null)', b.base], ['Tabellenplatz', b.place], ['Wirtschaft (Budget, Vermögen, Fans)', b.eco], ['Schwierigkeit', `× ${b.mult}`]].map(([k, v]) => `<tr><td>${esc(k)}</td><td>${typeof v === 'number' ? fmt(v) : v}</td></tr>`).join('');
   tableRows($('#final-table tbody'), false); resultRows($('#final-results'));
   $('#result-beat').className = 'beat'; $('#result-rank').textContent = 'Wird gewertet …';
   $('#voucher-form').hidden = false; $('#voucher-msg').textContent = ''; $('#in-email').value = ''; $('#in-consent').checked = false; $('#voucher-form').querySelector('button').disabled = false;

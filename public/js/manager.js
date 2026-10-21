@@ -1,5 +1,5 @@
 // Saison- und Vereinslogik: Kader, Training, Transfers, Taktik, Tabelle, Störungen der Legacy-KI, Punktewertung
-import { DIFFICULTY, FORMATIONS, STYLES, TEMPO, SQUAD, MARKET_POOL, MARKET_SELL_FACTOR, TRAINING, OPPONENTS, SEASON_SCORE, EVENTS, TAUNTS, POS_GROUP, CLUB, OBJECTIVES, DECISIONS } from './data.js';
+import { DIFFICULTY, FORMATIONS, STYLES, TEMPO, SQUAD, MARKET_POOL, MARKET_SELL_FACTOR, TRAINING, OPPONENTS, SEASON_SCORE, EVENTS, TAUNTS, POS_GROUP, CLUB, OBJECTIVES, DECISIONS, SEASON_LEN, STADIUM, FACILITIES, ECON } from './data.js';
 
 // Deterministischer Zufall (für Tages-Challenge und Tests)
 export function rng(seed) { let s = (seed >>> 0) || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return (s >>> 0) / 4294967296; }; }
@@ -28,6 +28,9 @@ export class Season {
     this.diffKey = o.difficulty; this.diff = DIFFICULTY[o.difficulty];
     this.hooks = o.hooks || {}; this.r = rng(o.seed || (Date.now() & 0xffffffff));
     this.day = 0; this.budget = this.diff.budget; this.over = false;
+    this.lenKey = SEASON_LEN[o.length] ? o.length : 'short'; this.len = SEASON_LEN[this.lenKey].days;
+    // Wirtschaft
+    this.econ = { price: ECON.priceDefault, stadium: 0, pending: null, fac: { shop: 0, vip: 0, train: 0, medic: 0 }, fans: 50, invested: 0, history: [], last: null };
     this.players = SQUAD.map(p => ({ ...p, fitness: 100, morale: 70, form: 0, injured: 0, suspended: 0, yellows: 0, goals: 0, assists: 0, apps: 0, own: true, pot: potentialOf(p, this.r) }));
     this.formation = '4-4-2'; this.style = 'clean'; this.tempo = 'normal';
     this.slots = []; this.autoLineup();
@@ -39,7 +42,7 @@ export class Season {
     this.pendingEvent = null; this.weekMsgs = [];
     this.prepareWeek(true);
   }
-  get opponent() { return OPPONENTS[this.day]; }
+  get opponent() { return OPPONENTS[this.day % OPPONENTS.length]; }
   get home() { return this.day % 2 === 0; }
   msg(who, text) { const m = { who, text, day: this.day }; this.log.push(m); this.hooks.onMessage?.(m); }
 
@@ -48,7 +51,7 @@ export class Season {
     this.trained = null; this.weekMsgs = []; this.extraTraining = false; this.oppMod = 0;
     this.pickObjective(); this.pickDecision(first); this.pickWeather();
     for (const p of this.players) {
-      if (!first) { p.fitness = clamp(p.fitness + 22, 0, 100); if (p.injured > 0) p.injured--; if (p.suspended > 0) p.suspended--; p.morale = clamp(p.morale + (p.morale < 60 ? 3 : -1), 20, 100); }
+      if (!first) { p.fitness = clamp(p.fitness + 22 + (this.econ?.fac.medic ? 8 : 0), 0, 100); if (p.injured > 0) p.injured -= this.econ?.fac.medic && p.injured > 1 ? 2 : 1; if (p.suspended > 0) p.suspended--; p.morale = clamp(p.morale + (p.morale < 60 ? 3 : -1), 20, 100); }
     }
     this.genMarket();
     this.pendingEvent = null;
@@ -78,7 +81,7 @@ export class Season {
     if ((this.trained && !this.extraTraining) || !TRAINING[k]) return false;
     const T = TRAINING[k]; if (this.trained) this.extraTraining = false; this.trained = k; this.stats.trainings++;
     for (const p of this.players) {
-      if (T.group.includes(POS_GROUP[p.pos])) for (const a in T.gain) p[a] = clamp(p[a] + T.gain[a] * (0.5 + (p.pot || 3) * 0.2), 1, 99);
+      if (T.group.includes(POS_GROUP[p.pos])) for (const a in T.gain) p[a] = clamp(p[a] + T.gain[a] * (0.5 + (p.pot || 3) * 0.2) * (1 + 0.2 * (this.econ?.fac.train || 0)), 1, 99);
       if (T.fit) p.fitness = 100;
       if (T.morale) p.morale = clamp(p.morale + T.morale, 0, 100);
       if (!T.fit && !T.morale) p.fitness = clamp(p.fitness - 6, 0, 100);
@@ -109,6 +112,46 @@ export class Season {
     this.msg('hub', `${p.name} wechselt für ${gain} T€. Das Budget freut sich, die Kabine weniger.`);
     return { ok: true, gain };
   }
+  // ---------- Wirtschaft ----------
+  get capacity() { return STADIUM[this.econ.stadium].cap; }
+  wages() { return Math.round(this.players.reduce((a, p) => a + p.value, 0) * ECON.wageRate); }
+  upkeep() { return ECON.upkeep * (1 + this.econ.stadium) + 10 * Object.values(this.econ.fac).reduce((a, b) => a + b, 0); }
+  // erwartete Zuschauer bei einem Heimspiel (Preis in €)
+  demand(price = this.econ.price, opp = this.opponent) {
+    const form = this.results.slice(-3).reduce((a, r) => a + (r.won ? 0.04 : r.draw ? 0.01 : -0.03), 0);
+    const attr = (opp.strength - 58) / 24 * 0.14 + (opp.style === 'boss' ? 0.08 : 0);
+    const weather = this.weather === 'rain' ? -0.06 : this.weather === 'snow' ? -0.1 : this.weather === 'wind' ? -0.03 : 0.02;
+    const priceEff = (price - 25) / 35 * 0.42;
+    return clamp(0.2 + this.econ.fans / 100 * 0.62 + attr + form + weather - priceEff, 0.06, 1);
+  }
+  forecast(price = this.econ.price) { const att = Math.round(this.capacity * this.demand(price) / 10) * 10; return { att, tickets: Math.round(att * price / 1000) }; }
+  setPrice(p) { this.econ.price = clamp(Math.round(p), ECON.priceMin, ECON.priceMax); }
+  // Ausbau: Stadion ist zum nächsten Spieltag fertig, Einrichtungen sofort
+  buildStadium() { const n = this.econ.stadium + 1; if (n >= STADIUM.length || this.econ.pending) return { ok: false, reason: 'Ausbau nicht möglich.' }; const c = STADIUM[n].cost; if (c > this.budget) return { ok: false, reason: 'Nicht genug Budget.' }; this.budget -= c; this.econ.invested += c; this.econ.pending = n; this.msg('hub', `Bauauftrag erteilt: ${STADIUM[n].name} (${STADIUM[n].cap.toLocaleString('de-DE')} Plätze) – fertig zum nächsten Spieltag.`); return { ok: true }; }
+  buildFacility(k) { const F = FACILITIES[k], lv = this.econ.fac[k]; if (!F || lv >= F.max) return { ok: false, reason: 'Bereits voll ausgebaut.' }; const c = F.cost[lv]; if (c > this.budget) return { ok: false, reason: 'Nicht genug Budget.' }; this.budget -= c; this.econ.invested += c; this.econ.fac[k] = lv + 1; this.msg('hub', `${F.name} ausgebaut (Stufe ${lv + 1}).`); return { ok: true }; }
+  // Abrechnung nach dem Spiel
+  settle(won, draw, gf) {
+    const e = this.econ, home = this.home, mor = this.players.reduce((a, p) => a + p.morale, 0) / Math.max(1, this.players.length);
+    const f = home ? this.forecast() : { att: 0, tickets: 0 };
+    const att = home ? Math.round(f.att * (0.95 + this.r() * 0.1) / 10) * 10 : 0, tickets = Math.round(att * e.price / 1000);
+    const tv = ECON.tv + (won ? ECON.tvWin : draw ? ECON.tvDraw : 0) + gf * 15;
+    const merch = Math.round(e.fac.shop * (25 + e.fans * 0.9) * (0.9 + mor / 500));
+    const vip = home ? e.fac.vip * 70 : 0, sponsor = 60 + (won && this.sponsorPerWin ? 150 : 0);
+    const wages = this.wages(), upkeep = this.upkeep();
+    const income = tickets + tv + merch + vip + sponsor, costs = wages + upkeep, net = income - costs;
+    this.budget += net;
+    // Fans: Ergebnisse, Tore, Ticketpreis, volle Ränge
+    let df = (won ? 4 : draw ? 1 : -3) + gf * 0.6;
+    if (home && e.price > 35) df -= (e.price - 35) / 6; if (home && e.price < 18) df += 1;
+    if (home && att >= this.capacity * 0.97) df += 1;
+    e.fans = clamp(e.fans + df, 5, 100);
+    const rec = { day: this.day, home, att, cap: home ? this.capacity : 0, price: home ? e.price : 0, tickets, tv, merch, vip, sponsor, wages, upkeep, income, costs, net, fans: Math.round(e.fans) };
+    e.last = rec; e.history.push(rec);
+    if (e.pending !== null) { e.stadium = e.pending; e.pending = null; this.msg('hub', `Ausbau fertig: ${STADIUM[e.stadium].name} mit ${this.capacity.toLocaleString('de-DE')} Plätzen.`); }
+    if (home) this.msg('hub', `${att.toLocaleString('de-DE')} Zuschauer (${Math.round(att / this.capacity * 100)} %) – Tickets ${tickets} T€, Bilanz ${net >= 0 ? '+' : ''}${net} T€.`);
+    if (this.budget < 0) this.msg('hub', 'Achtung: Das Konto ist im Minus. Verkaufe Spieler oder senke die Kosten.');
+    return rec;
+  }
   // ---------- Wetter ----------
   pickWeather() { const x = this.r(); this.weather = x < 0.52 ? 'sun' : x < 0.77 ? 'rain' : x < 0.9 || this.day < 4 ? 'wind' : 'snow'; }
   // ---------- Kapitän, Elfmeterschütze ----------
@@ -135,7 +178,8 @@ export class Season {
   // ---------- Vorstandsentscheidung ----------
   pickDecision(first) {
     this.decision = null; if (first) return;
-    const keys = Object.keys(DECISIONS).filter(k => !this.decided.includes(k) && (k !== 'offer' || this.offerCandidate()));
+    let keys = Object.keys(DECISIONS).filter(k => !this.decided.includes(k) && (k !== 'offer' || this.offerCandidate()));
+    if (!keys.length) keys = ['fanday', 'overtime', 'press', 'scout', 'hypercare'].filter(k => k !== this.decided.at(-1));
     if (!keys.length) return;
     const key = keys[Math.floor(this.r() * keys.length)]; const d = { key, ...DECISIONS[key], chosen: null };
     if (key === 'offer') { const p = this.offerCandidate(); d.pid = p.id; d.price = Math.round(p.value * 1.5 / 10) * 10; d.text = d.text.replace('{p}', p.name); d.options = d.options.map(o => ({ ...o, effect: o.effect.replace('{v}', d.price) })); }
@@ -267,11 +311,9 @@ export class Season {
       if (res.injuries?.includes(p.id)) { p.injured = 1 + Math.floor(this.r() * 2 * this.diff.inj); this.msg('hub', `${p.name} ist verletzt – ${p.injured === 1 ? 'ein Spiel' : p.injured + ' Spiele'} Pause.`); }
       p.goals += (res.scorers || []).filter(id => id === p.id).length; p.assists += (res.assists || []).filter(id => id === p.id).length;
     }
-    // Einnahmen: Zuschauer, Prämie, Sponsor „Data Lake“
-    const mor = this.players.reduce((a, p) => a + p.morale, 0) / Math.max(1, this.players.length);
-    let income = Math.round(((this.home ? 260 : 140) + (won ? 220 : draw ? 90 : 30) + gf * 25 + this.day * 20) * (0.85 + mor / 100 * 0.3));
-    if (won && this.sponsorPerWin) { income += 150; this.msg('hub', 'Data Lake GmbH zahlt den Siegbonus: +150 T€.'); }
-    this.budget += income;
+    // Wirtschaft: Zuschauer, TV, Fanshop, Logen, Sponsor – minus Gehälter und Unterhalt
+    const fin = this.settle(won, draw, gf), income = fin.net;
+    if (won && this.sponsorPerWin) this.msg('hub', 'Data Lake GmbH zahlt den Siegbonus: +150 T€.');
     const obj = this.checkObjective(res, gf, ga);
     if (obj) { this.stats.bonus += obj.bonus; if (obj.ok) this.stats.objectives++; this.msg('hub', obj.ok ? `Wochenziel erreicht: ${obj.name} (+${obj.bonus} Punkte).` : `Wochenziel verfehlt: ${obj.name}.`); }
     const pts = (won ? SEASON_SCORE.win : draw ? SEASON_SCORE.draw : 0) + gf * SEASON_SCORE.goal + (ga === 0 ? SEASON_SCORE.cleanSheet : 0) + (obj ? obj.bonus : 0);
@@ -279,14 +321,14 @@ export class Season {
     const dev = [];
     for (const p of this.players) { const rt = res.ratings?.[p.id]; if (rt !== undefined && rt >= 7 && p.age < 27 && this.r() < 0.25 + (p.pot || 3) * 0.12) { const a = ATTRS[Math.floor(this.r() * ATTRS.length)]; p[a] = clamp(p[a] + 1 + (p.pot >= 5 ? 1 : 0), 1, 99); p.value = Math.round(p.value * 1.04 / 10) * 10; dev.push(p.name); this.stats.developed++; } }
     if (dev.length) this.msg('hub', `Entwicklung: ${dev.join(', ')} ${dev.length > 1 ? 'haben' : 'hat'} im Spiel dazugelernt.`);
-    this.results.push({ day: this.day, opp: o.id, club: o.club, home: this.home, gf, ga, won, draw, pts, income, event: this.pendingEvent?.event || null, objective: obj });
+    this.results.push({ day: this.day, opp: o.id, club: o.club, home: this.home, gf, ga, won, draw, pts, income, att: fin.att, event: this.pendingEvent?.event || null, objective: obj });
     this.simulateOthers();
     this.msg(won ? 'hub' : 'legacy', won ? `${gf}:${ga} gegen ${o.club} – ${o.real}` : pick(this.r, TAUNTS.win));
     if (won) this.msg('legacy', pick(this.r, TAUNTS.lose));
     this.hooks.onEvent?.({ type: 'result', won, draw, gf, ga, income, pts });
     this.day++;
-    const ret = { won, draw, gf, ga, income, pts, objective: obj };
-    if (this.day >= OPPONENTS.length) { this.over = true; this.finish(); } else this.prepareWeek();
+    const ret = { won, draw, gf, ga, income, pts, objective: obj, fin };
+    if (this.day >= this.len) { this.over = true; this.finish(); } else this.prepareWeek();
     return ret;
   }
   simulateOthers() {
@@ -304,15 +346,16 @@ export class Season {
   standings() { return [...this.table].sort((a, b) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf); }
   rank() { return this.standings().findIndex(t => t.me) + 1; }
   computeScore() {
-    const base = this.results.reduce((s, r) => s + r.pts, 0);
+    const base = Math.round(this.results.reduce((s, r) => s + r.pts, 0) * 7 / this.len); // auf 7 Spieltage normiert
     const rk = this.rank(), place = rk === 1 ? SEASON_SCORE.title : rk === 2 ? SEASON_SCORE.second : rk === 3 ? SEASON_SCORE.third : 0;
-    const eco = Math.round(Math.max(0, this.budget) * SEASON_SCORE.budget);
+    const assets = Math.round(this.econ.invested * 0.5); // Stadion und Einrichtungen zählen zur Hälfte als Vereinsvermögen
+    const eco = Math.round(Math.max(0, (this.budget + assets) * 7 / this.len) * SEASON_SCORE.budget + this.econ.fans * 8);
     const mult = this.diff.mult;
-    return { score: Math.round((base + place + eco) * mult), breakdown: { base, place, eco, mult, rank: rk } };
+    return { score: Math.round((base + place + eco) * mult), breakdown: { base, place, eco, mult, rank: rk, fans: Math.round(this.econ.fans), len: this.len } };
   }
   finish() {
     const sc = this.computeScore(); const rk = sc.breakdown.rank;
-    this.result = { won: rk === 1, rank: rk, ...sc, duration: this.results.length, reason: rk === 1 ? 'Meister der Legacy League – der Monolith ist gestürzt!' : rk <= 3 ? `Platz ${rk} – stark, aber die Legacy-IT bleibt vorn.` : `Platz ${rk} – die Legacy-IT hat diese Saison gewonnen.` };
+    this.result = { won: rk === 1, rank: rk, ...sc, duration: this.results.length, len: this.len, reason: rk === 1 ? 'Meister der Legacy League – der Monolith ist gestürzt!' : rk <= 3 ? `Platz ${rk} – stark, aber die Legacy-IT bleibt vorn.` : `Platz ${rk} – die Legacy-IT hat diese Saison gewonnen.` };
     this.hooks.onEnd?.(this.result);
   }
 }

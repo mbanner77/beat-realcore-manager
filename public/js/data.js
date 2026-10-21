@@ -201,3 +201,19 @@ export const TALKS = {
   calm:   { name: 'Ruhe bewahren', desc: 'Technik und Abwehr +4 % – weniger Fehler.' },
   praise: { name: 'Loben', desc: 'Alle Werte +2 %, Kondition +5 %.' },
 };
+
+// Wirtschaft: Stadion, Ausbauten, Eintritt, Fans
+export const SEASON_LEN = { short: { name: 'Kurze Saison', days: 7, desc: 'Sieben Spieltage, jeder Gegner einmal – ideal am Messestand (ca. 20 Minuten).' }, long: { name: 'Volle Saison', days: 14, desc: 'Hin- und Rückrunde, 14 Spieltage – Stadionausbau und Wirtschaft lohnen sich richtig.' } };
+export const STADIUM = [
+  { cap: 12000, name: 'Clean-Core-Arena', cost: 0 },
+  { cap: 20000, name: 'Clean-Core-Arena · Ausbau Nordtribüne', cost: 700 },
+  { cap: 30000, name: 'Clean-Core-Arena · Ausbau Ränge', cost: 1200 },
+  { cap: 42000, name: 'Clean-Core-Arena · Großer Ausbau', cost: 1800 },
+];
+export const FACILITIES = {
+  shop:  { name: 'Fanshop', icon: '🛍️', max: 2, cost: [300, 600], desc: 'Trikots und Schals: Einnahmen bei jedem Spiel, steigen mit der Fan-Stimmung.' },
+  vip:   { name: 'VIP-Logen', icon: '🥂', max: 2, cost: [500, 900], desc: 'Logen für Sponsoren: feste Einnahmen bei jedem Heimspiel.' },
+  train: { name: 'Trainingszentrum', icon: '🏋️', max: 2, cost: [400, 800], desc: 'Bessere Trainingsbedingungen: +20 % Trainingsgewinn je Stufe.' },
+  medic: { name: 'Reha-Zentrum', icon: '🩺', max: 1, cost: [450], desc: 'Verletzte kommen schneller zurück, Fitness erholt sich besser.' },
+};
+export const ECON = { priceMin: 10, priceMax: 60, priceDefault: 25, tv: 120, tvWin: 120, tvDraw: 50, wageRate: 0.012, upkeep: 15 };

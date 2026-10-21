@@ -82,6 +82,8 @@
       <div class="setup-col">
         <h3>Schwierigkeit</h3>
         <div class="diff-cards" id="diff-cards"></div>
+        <h3>Saisonlänge</h3>
+        <div class="diff-cards len-cards" id="len-cards"></div>
         <h3>Die Saison</h3>
         <ol class="season-list" id="season-list"></ol>
         <p class="hint">Sieben Spieltage, zwischen den Spielen eine Trainingswoche: Kader, Taktik, Training, Transfers. Die Legacy-KI stört, wo sie kann.</p>
@@ -120,6 +122,7 @@
       <button data-tab="tactics" data-ico="tactics">Taktik</button>
       <button data-tab="training" data-ico="training">Training <i class="dot" id="dot-training"></i></button>
       <button data-tab="market" data-ico="market">Transfermarkt</button>
+      <button data-tab="finance" data-ico="money">Finanzen & Stadion</button>
       <button data-tab="table" data-ico="table">Tabelle</button>
       <button data-tab="radio" data-ico="press">Presse <i class="dot" id="dot-radio"></i></button>
       <button data-tab="quit" data-ico="quit" class="dim">Saison abbrechen</button>
@@ -140,6 +143,7 @@
       </section>
       <section class="wtab" id="tab-training"><p class="lead">Ein Schwerpunkt pro Woche. Die Werte steigen dauerhaft – junge Spieler:innen lernen schneller.</p><div class="train-cards" id="train-cards"></div></section>
       <section class="wtab" id="tab-market"><p class="lead">Freie Spieler:innen aus der Cloud. Kader: 14 bis 22.</p><div class="market-cards" id="market-cards"></div><h3>Spieler verkaufen</h3><p class="hint">Verkaufspreis: rund 60 % des Marktwerts – gute Form und junges Alter bringen mehr, Verletzte weniger. Wer in der Startelf steht, wird automatisch ersetzt.</p><div class="sell-list" id="sell-list"></div></section>
+      <section class="wtab" id="tab-finance"><div class="fin-grid" id="fin-grid"></div></section>
       <section class="wtab" id="tab-table"><div class="table-wrap"><table class="league" id="league-table"><thead><tr><th>#</th><th>Verein</th><th>Sp</th><th>S</th><th>U</th><th>N</th><th>Tore</th><th>Pkt</th></tr></thead><tbody></tbody></table></div><div class="two-col"><div><h3>Bisherige Spiele</h3><ul class="results" id="results-list"></ul></div><div><h3>Torjäger</h3><div class="scorers" id="scorers"></div></div></div></section>
       <section class="wtab" id="tab-radio"><div class="radio" id="radio"></div></section>
     </main>
