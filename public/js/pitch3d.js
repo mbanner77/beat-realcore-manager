@@ -408,7 +408,7 @@ export class Pitch3D {
       if (celebrating || happy) { const j = Math.abs(Math.sin(this.t * (happy ? 7 : 9) + p.num * 1.3)); P = { lean: -0.1, shL: -2.7 - j * 0.3, shR: -2.7 - j * 0.3, spreadL: 0.5, spreadR: 0.5, elL: -0.2, elR: -0.2, hipL: -0.3 * j, hipR: -0.3 * j, knL: 0.7 * j, knR: 0.7 * j, head: -0.3 }; f.root.position.y = j * (p === this.celeb?.p ? 0.55 : 0.35); }
       else if (sad) { P = { lean: 0.55, head: 0.45, shL: 0.05, shR: 0.05, spreadL: 0.05, spreadR: 0.05, elL: -0.1, elR: -0.1, knL: 0.15, knR: 0.15, hipL: -0.1, hipR: 0.05 }; f.root.position.y = 0; }
       if (p.injured) { P.lean = 0.45; P.knL = 0.6; P.shR = -0.6; P.elR = -1.4; }
-      { const want = !!this.cine || this.camMode === 'near' || this.camMode === 'goal' || !!this.celeb; if (f.face && f.faceOn !== want) { f.faceOn = want; for (const m of f.face) m.setEnabled(want); } }
+      { const want = !this.noFaces && (!!this.cine || this.camMode === 'near' || this.camMode === 'goal' || !!this.celeb); if (f.face && f.faceOn !== want) { f.faceOn = want; for (const m of f.face) m.setEnabled(want); } }
       // Kopf folgt dem Ball
       { const ang = Math.atan2(b.x - px, b.y - py) - f.root.rotation.y; P.headYaw = Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(ang), Math.cos(ang)))); }
       this.blendPose(f, P, dt, an && an.until > now ? 22 : 12);

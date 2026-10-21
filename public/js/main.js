@@ -1,7 +1,7 @@
 // Beat RealCore – Legacy League: Oberfläche und Spielablauf
 import { initI18n, tr, isEN, LANG, setLang } from './i18n.js';
 import { INTENSITY, ATTR_NAMES, SEASON_LEN, STADIUM, FACILITIES, ECON, WEATHER, TALKS, OBJECTIVES, DIFFICULTY, FORMATIONS, STYLES, TEMPO, TRAINING, OPPONENTS, POS, POS_GROUP, EVENTS, CLUB, SEASON_SCORE } from './data.js';
-import { Season, rating, posFit, ATTRS } from './manager.js';
+import { Season, rating, posFit, ATTRS, rng } from './manager.js';
 import { Match, MATCH_REAL } from './match.js';
 import { Pitch } from './pitch.js';
 import { Pitch3D, loadBabylon, webglOk } from './pitch3d.js';
@@ -47,6 +47,7 @@ function show(id) {
   document.body.classList.toggle('ingame', id === 'match'); document.body.classList.toggle('on-title', id === 'title');
   if (id !== 'intro' && S.prev !== 'intro') { const w = $('#wipe'); w.classList.remove('go'); void w.offsetWidth; w.classList.add('go'); }
   if (id === 'match') sizePitch();
+  if (id === 'title') { ensureBg3d(); renderHomeDynamic(); } else dropBg3d();
 }
 let toastT = null;
 function toast(t) { const el = $('#toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 2600); }
@@ -67,7 +68,7 @@ $('#btn-sound').addEventListener('click', () => { audio.unlock(); const on = aud
 // ---------------- Hintergrund: Demo-Spiel ----------------
 const bgPitch = new Pitch($('#bg')); let bgMatch = null;
 function newBg() { const T = demoTeams(); bgMatch = new Match(T[0], T[1], { seed: Date.now() & 0xffff }); bgMatch.speed = 1.2; bgMatch.hooks.onHalf = () => { bgMatch.paused = false; }; }
-function demoTeams() { const s = new Season({ difficulty: 'profi', seed: 42, hooks: {} }); s.day = 6; return [s.teamForMatch(), s.opponentForMatch()]; }
+function demoTeams() { const s = new Season({ difficulty: 'profi', seed: 42, hooks: {} }); s.day = Math.floor(Math.random() * OPPONENTS.length); return [s.teamForMatch(), s.opponentForMatch()]; }
 function sizeBg() { bgPitch.resize(innerWidth, innerHeight); }
 sizeBg(); newBg();
 
@@ -93,6 +94,81 @@ async function loadTitleBoard() {
     el.insertAdjacentHTML('beforeend', d.benchmarkTop ? `<div class="bench">RealCore-Benchmark: <b>${fmt(d.benchmarkTop.score)}</b> (${esc(d.benchmarkTop.name)}). Schafft ihr mehr?</div>` : '<div class="bench">Das RealCore-Team hat heute noch keinen Benchmark gesetzt.</div>');
   } catch { $('#title-board').innerHTML = '<p class="empty">Bestenliste offline.</p>'; }
 }
+// ---------------- Startseite 2.0 ----------------
+const FEATS = [
+  ['ball', '3D-Spieltag', 'Stadion mit Flutlicht, Wetter, Torwiederholung in Zeitlupe und vier Kameraperspektiven.'],
+  ['training', 'Training 2.0', 'Schwerpunkt, Intensität, Einzeltraining – und Eingespieltheit, die im Spiel zählt.'],
+  ['money', 'Wirtschaft & Stadion', 'Eintrittspreise, Fan-Stimmung, Stadionausbau, Fanshop und VIP-Logen.'],
+  ['press', 'Echter Kommentar', 'Deutsche und englische Sprecher – jede Ansage auch als Untertitel.'],
+  ['market', 'Transfermarkt', 'Talente verpflichten, Stars verkaufen, Potenzial entwickeln.'],
+  ['bolt', 'Die Legacy-KI', 'Ein Gegner, der stört: Release-Freeze, Schatten-IT und Ticketflut.'],
+];
+const STYLE_NAME = { silo: 'Ballhalten', chaos: 'Chaos-Fußball', swarm: 'Schwarm', wall: 'Abwehrbeton', press: 'Pressing', longshot: 'Weitschüsse', boss: 'Endgegner' };
+function renderHomeStatic() {
+  $('#feat-grid').innerHTML = FEATS.map(([ic, t, d], i) => `<div class="feat" style="--i:${i}"><span class="feat-ic">${icon(ic)}</span><b>${esc(t)}</b><p>${esc(d)}</p></div>`).join('');
+  $('#club-rail').innerHTML = OPPONENTS.map((o, i) => `<div class="club" style="--c:${o.color};--i:${i}"><div class="club-top">${crest(o, 58)}<span class="club-n">${i + 1}</span></div><b>${esc(o.club)}</b><small>${esc(STYLE_NAME[o.style] || '')}</small><div class="club-str"><i style="width:${Math.round((o.strength - 50) / 35 * 100)}%"></i></div><p>${esc(o.teaser)}</p></div>`).join('');
+}
+// Persönliche Bilanz (nur auf diesem Gerät)
+function loadStats() { try { return JSON.parse(localStorage.getItem('brcm-stats')) || null; } catch { return null; } }
+function saveStats(r, se) {
+  if (KIOSK) return; const st = loadStats() || { seasons: 0, titles: 0, best: 0, bestRank: 99, goals: 0, wins: 0 };
+  st.seasons++; if (r.won) st.titles++; st.best = Math.max(st.best, r.score); st.bestRank = Math.min(st.bestRank, r.rank); st.goals += se.stats.goals; st.wins += se.stats.wins; st.last = { score: r.score, rank: r.rank, at: Date.now() };
+  try { localStorage.setItem('brcm-stats', JSON.stringify(st)); } catch { /* ignore */ }
+}
+function renderHomeDynamic() {
+  const st = loadStats(), nm = S.player.name;
+  $('#me-card').innerHTML = `<div class="card-head"><span>${nm ? `Deine Bilanz · ${esc(nm)}` : 'Deine Bilanz'}</span></div>` + (st && st.seasons ? `<div class="me-grid"><div><b>${st.seasons}</b><small>Saisons</small></div><div><b>${st.titles}</b><small>Titel</small></div><div><b>${fmt(st.best)}</b><small>Rekord</small></div><div><b>${st.bestRank}.</b><small>Bester Platz</small></div></div>` : '<p class="me-empty">Noch keine Saison gespielt. Deine Rekorde erscheinen hier.</p>');
+  const sv = readSave(); $('#btn-continue').hidden = !sv;
+  if (sv) { const d = sv.season, rk = d.day ? [...d.table].sort((a, b) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf).findIndex(t => t.me) + 1 : 0; $('#continue-sub').textContent = `Spieltag ${d.day + 1} / ${d.len} · ${d.day ? `Platz ${rk} · ` : ''}${DIFFICULTY[d.diffKey]?.name || ''}`; }
+  $('#btn-play').querySelector('small').textContent = sv ? 'Neue Saison – der alte Spielstand wird ersetzt' : 'Kurze oder volle Saison bis zum Finale gegen den Monolithen';
+}
+// Live-Matchcenter: zeigt das Demo-Spiel im Hintergrund
+let lcT = 0, lcEv = -1;
+function updateLiveCard(now) {
+  if (!bgMatch || now - lcT < 250) return; lcT = now; const M = bgMatch, [A, B2] = M.teams;
+  const h = $('#lc-home'); if (h.dataset.k !== A.short + B2.short) { h.dataset.k = A.short + B2.short; h.innerHTML = `${crest({ ...A, me: true }, 46)}<span>${esc(A.short)}</span>`; $('#lc-away').innerHTML = `${crest(B2, 46)}<span>${esc(B2.short)}</span>`; lcEv = -1; }
+  $('#lc-res').textContent = `${M.score[0]} : ${M.score[1]}`; $('#lc-min').textContent = M.over ? 'Abpfiff' : `${Math.min(90, Math.floor(M.min))}'`;
+  const pt = M.poss[0] + M.poss[1]; $('#lc-poss').style.width = (pt > 1 ? Math.round(100 * M.poss[0] / pt) : 50) + '%';
+  const ev = [...M.events].reverse().find(e => e.text && e.type !== 'tick'); const n = M.events.length;
+  if (ev && n !== lcEv) { lcEv = n; const el = $('#lc-ev'); el.textContent = `${Math.floor(ev.min ?? M.min)}' · ${ev.text}`; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); if (ev.type === 'goal') $('#live-card').classList.add('goal'), setTimeout(() => $('#live-card').classList.remove('goal'), 2400); }
+}
+// 3D-Stadion als Hintergrund der Startseite (lädt nach dem ersten Bild, fällt sonst auf 2D zurück)
+let bg3 = null, bg3Busy = false, bg3T0 = 0;
+async function ensureBg3d() {
+  if (bg3 || bg3Busy || !want3d() || !webglOk() || params.has('no3d')) return; bg3Busy = true;
+  await new Promise(r => setTimeout(r, document.readyState === 'complete' ? 300 : 1400));
+  if (S.screen === 'title' && await loadBabylon() && S.screen === 'title') {
+    try { const c = $('#bg3d'); bg3 = new Pitch3D(c); bg3.labels = false; bg3.noFaces = true; bg3.setDaylight?.(false); bg3.resize(innerWidth, innerHeight); bg3T0 = performance.now(); setTimeout(() => document.body.classList.add('bg3d-on'), 400); } catch (e) { console.warn('3D-Hintergrund nicht verfügbar', e); bg3 = null; }
+  }
+  bg3Busy = false;
+}
+function dropBg3d() { if (!bg3) return; document.body.classList.remove('bg3d-on'); const b = bg3; bg3 = null; b.dispose(); }
+// Spielstand: wird in jeder Spielwoche automatisch gesichert
+const SAVE_KEY = 'brcm-save';
+function writeSave() {
+  const se = S.season; if (KIOSK || !se || se.over) return;
+  const { hooks, r, ...data } = se;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ v: 1, at: Date.now(), gameId: S.gameId, player: S.player, diff: S.diff, len: S.len, season: data })); } catch { /* ignore */ }
+}
+function readSave() { if (KIOSK) return null; try { const d = JSON.parse(localStorage.getItem(SAVE_KEY)); if (!d || d.v !== 1 || !d.season || Date.now() - d.at > 21 * 864e5) return null; return d; } catch { return null; } }
+function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch { /* ignore */ } }
+function resumeSeason() {
+  const d = readSave(); if (!d) return; audio.unlock(); audio.play('confirm');
+  const se = Object.assign(Object.create(Season.prototype), d.season); se.hooks = seasonHooks(); se.r = rng(Date.now() & 0xffffffff);
+  S.season = se; S.gameId = d.gameId; S.player = { ...S.player, ...d.player }; S.diff = se.diffKey; S.len = se.lenKey;
+  S.radioUnread = 0; S.tab = 'home'; S.selSlot = null; S.ceremonyDone = false; S.weekSpoken = null; S.decisionDay = se.decision && !se.decision.chosen ? null : se.day;
+  if (want3d() && webglOk()) loadBabylon();
+  renderWeek(); show('week'); toast(`Willkommen zurück! Spieltag ${se.day + 1} wartet.`);
+}
+$('#btn-continue').addEventListener('click', resumeSeason);
+$('#btn-play2').addEventListener('click', () => $('#btn-play').click());
+$('#btn-board2').addEventListener('click', () => $('#btn-board').click());
+$('#scroll-hint').addEventListener('click', (e) => { e.preventDefault(); $('#home-features').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+$('#screen-title').addEventListener('scroll', () => { const y = $('#screen-title').scrollTop; $('#scroll-hint').classList.toggle('gone', y > 40); document.body.classList.toggle('title-scrolled', y > 60); S.heroVis = y < $('.hero').offsetHeight - 40; }, { passive: true });
+S.heroVis = true;
+renderHomeStatic();
+{ const io = 'IntersectionObserver' in window ? new IntersectionObserver((es) => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('seen'); io.unobserve(e.target); } }), { root: $('#screen-title'), threshold: 0.12 }) : null; $$('.home-sec').forEach(el => io ? io.observe(el) : el.classList.add('seen')); }
+setTimeout(() => { renderHomeDynamic(); ensureBg3d(); }, 0);
 async function loadConfig() { try { S.config = await api('/api/config'); } catch { S.config = { ai: false }; } }
 $('#btn-play').addEventListener('click', () => { audio.unlock(); audio.play('click'); showSetup(); });
 $('#btn-intro').addEventListener('click', () => { audio.unlock(); audio.play('click'); startIntro(() => show('title')); });
@@ -108,8 +184,8 @@ $('#link-privacy').addEventListener('click', (e) => { e.preventDefault(); show('
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && S.screen === 'intro') { $('#btn-intro-skip').click(); return; }
   if (S.screen !== 'title' || e.target.tagName === 'INPUT') return;
-  const m = { Enter: '#btn-play', b: '#btn-board', '?': '#btn-howto', o: '#btn-settings', i: '#btn-intro' }[e.key.length === 1 ? e.key.toLowerCase() : e.key];
-  if (m) { e.preventDefault(); $(m).click(); }
+  const m = { w: '#btn-continue', Enter: '#btn-play', b: '#btn-board', '?': '#btn-howto', o: '#btn-settings', i: '#btn-intro' }[e.key.length === 1 ? e.key.toLowerCase() : e.key];
+  if (m && !$(m).hidden) { e.preventDefault(); $(m).click(); }
 });
 
 // ---------------- Setup ----------------
@@ -158,16 +234,19 @@ async function newSeason() {
   S.gameId = null;
   try { const r = await api('/api/game/start', { mission: 'league', difficulty: S.diff }, 4000); S.gameId = r.gameId; } catch { S.gameId = null; }
   S.radioUnread = 0;
-  S.season = new Season({ difficulty: S.diff, length: S.len || 'short', hooks: {
+  S.season = new Season({ difficulty: S.diff, length: S.len || 'short', hooks: seasonHooks() });
+  S.tab = 'home'; S.selSlot = null; S.ceremonyDone = false;
+  if (want3d() && webglOk()) loadBabylon();
+  renderWeek(); show('week');
+}
+function seasonHooks() {
+  return {
     onMessage: (m) => { S.radioUnread++; if (S.season) { renderRadio(); updateDots(); } },
     onEvent: (ev) => { if (ev.type === 'director') { audio.play('legacy'); toast(`${EVENTS[ev.event].name}: ${ev.detail}`); const last = [...S.season.log].reverse().find(m => m.who === 'legacy'); if (last) voice.say(tr(last.text), { lang: LANG, prio: 2, pitch: 0.75 }); renderWeek(); } },
     onEnd: (r) => endSeason(r),
     onDecision: (d, note) => { $('#dec-note').textContent = note; },
     director: S.config.ai && S.gameId ? (summary) => api('/api/ai/director', { gameId: S.gameId, summary, lang: LANG }, 5500).then(d => d && d.event ? d : null) : null,
-  } });
-  S.tab = 'home'; S.selSlot = null; S.ceremonyDone = false;
-  if (want3d() && webglOk()) loadBabylon();
-  renderWeek(); show('week');
+  };
 }
 const SE = () => S.season;
 function teamStrength() { const T = SE().teamForMatch(); return Math.round(T.players.reduce((s, p) => s + rating(p, p.pos), 0) / Math.max(1, T.players.length)); }
@@ -184,10 +263,11 @@ function renderWeek() {
   if (dec && S.decisionDay !== se.day) { S.decisionDay = se.day; openDecision(); }
   $$('#week-nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === S.tab)); $$('.wtab').forEach(t => t.classList.toggle('on', t.id === 'tab-' + S.tab));
   renderHome(); renderSquad(); renderTactics(); renderTraining(); renderMarket(); renderFinance(); renderTable(); renderRadio(); updateDots();
+  writeSave();
   const prob = se.lineupProblems(); $('#btn-match').disabled = prob.some(p => /unbesetzt|verletzt|gesperrt/.test(p));
 }
 $$('#week-nav button[data-ico]').forEach(b => b.insertAdjacentHTML('afterbegin', icon(b.dataset.ico)));
-$$('#week-nav button').forEach(b => b.addEventListener('click', () => { audio.play('click'); if (b.dataset.tab === 'quit') { if (confirm(tr('Saison wirklich abbrechen? Der Spielstand geht verloren.'))) { S.season = null; show('title'); } return; } S.tab = b.dataset.tab; if (S.tab === 'radio') S.radioUnread = 0; renderWeek(); }));
+$$('#week-nav button').forEach(b => b.addEventListener('click', () => { audio.play('click'); if (b.dataset.tab === 'quit') { if (confirm(tr('Saison wirklich abbrechen? Der Spielstand geht verloren.'))) { S.season = null; clearSave(); show('title'); } return; } S.tab = b.dataset.tab; if (S.tab === 'radio') S.radioUnread = 0; renderWeek(); }));
 
 // Übersicht
 function renderHome() {
@@ -374,7 +454,7 @@ async function ensurePitch() {
   if (!pitch) pitch = new Pitch($('#pitch'));
   S.pitch3d = pitch instanceof Pitch3D; $('.pitch-wrap').classList.toggle('three', S.pitch3d);
 }
-window.addEventListener('resize', () => { sizeBg(); if (S.screen === 'match') sizePitch(); });
+window.addEventListener('resize', () => { sizeBg(); if (bg3) bg3.resize(innerWidth, innerHeight); if (S.screen === 'match') sizePitch(); });
 $('#btn-match').addEventListener('click', async () => { audio.unlock(); audio.play('whistle'); $('#btn-match').disabled = true; await ensurePitch(); $('#btn-match').disabled = false; startMatch(); });
 function startMatch() {
   const se = SE(), o = se.opponent; se.autoFillIfNeeded?.();
@@ -542,7 +622,7 @@ function endSeason(r) { S.finalResult = r; }
 async function showResult(r) {
   const se = SE(); S.finalResult = r; audio.setCrowd(0);
   if (!S.ceremonyDone) {
-    S.ceremonyDone = true; const sc = $('#screen-ceremony'); sc.className = 'screen ' + (r.won ? 'win' : 'lose'); show('ceremony');
+    S.ceremonyDone = true; clearSave(); saveStats(r, se); const sc = $('#screen-ceremony'); sc.className = 'screen ' + (r.won ? 'win' : 'lose'); show('ceremony');
     $('#cer-trophy').hidden = !r.won; $('#cer-sub').textContent = r.won ? 'Legacy League · Saison beendet' : 'Saisonende';
     $('#cer-title').textContent = r.won ? 'MEISTER!' : r.rank <= 3 ? `PLATZ ${r.rank}` : 'SAISONENDE';
     $('#cer-text').textContent = r.won ? `${S.player.name} führt TechHub United zum Titel – der Legacy-Monolith FC ist gestürzt.` : r.rank <= 3 ? `${S.player.name} und TechHub United landen auf Platz ${r.rank}. Die Legacy-IT bleibt knapp vorn.` : `Platz ${r.rank} für TechHub United. Die Legacy-KI hat diese Saison gewonnen.`;
@@ -623,7 +703,10 @@ function frame(now) {
     const excite = Math.min(1, 0.4 + Math.abs(sc[0] - sc[1]) * 0.1 + (M.ball.mode === 'shot' ? 0.4 : 0)); audio.setCrowd(excite * 0.8);
     if (!M.paused && !M.over && M.speed <= 1 && voice.idle && now - voice.lastEnd > 14000 && now - (S.fillerT || 0) > 24000) { S.fillerT = now; speakFiller(); }
   } else if (S.screen === 'title' || S.screen === 'setup' || S.screen === 'brief' || S.screen === 'board' || S.screen === 'howto' || S.screen === 'privacy' || S.screen === 'result' || S.screen === 'report') {
-    if (bgMatch) { bgMatch.tick(dt); if (bgMatch.over) newBg(); bgPitch.draw(bgMatch, dt); bgPitch.ctx.setTransform(bgPitch.dpr, 0, 0, bgPitch.dpr, 0, 0); bgPitch.ctx.fillStyle = 'rgba(3,8,7,0.62)'; bgPitch.ctx.fillRect(0, 0, bgPitch.w, bgPitch.h); }
+    if (bgMatch && bg3 && S.screen === 'title') { bgMatch.tick(dt); if (bgMatch.over) { if (!S.bgOverT) S.bgOverT = now; else if (now - S.bgOverT > 4000) { S.bgOverT = 0; newBg(); } }
+      const t = (now - bg3T0) / 1000, b = bgMatch.ball; S.bgTx = (S.bgTx ?? 52) + ((b.x * 0.55 + 52 * 0.45) - (S.bgTx ?? 52)) * Math.min(1, dt * 0.6); S.bgTz = (S.bgTz ?? 34) + ((b.y * 0.5 + 34 * 0.5) - (S.bgTz ?? 34)) * Math.min(1, dt * 0.6);
+      bg3.setCine({ alpha: -Math.PI / 2 - 0.55 + Math.sin(t * 0.045) * 0.9, beta: 1.02 + Math.sin(t * 0.07) * 0.1, radius: Math.max(46, 74 - t * 2.4) + Math.sin(t * 0.05) * 6, tx: S.bgTx, tz: S.bgTz, ty: 0.6 }); if (S.heroVis) bg3.draw(bgMatch, dt); updateLiveCard(now); }
+    else if (bgMatch) { bgMatch.tick(dt); if (bgMatch.over) newBg(); if (S.screen === 'title') updateLiveCard(now); bgPitch.draw(bgMatch, dt); bgPitch.ctx.setTransform(bgPitch.dpr, 0, 0, bgPitch.dpr, 0, 0); bgPitch.ctx.fillStyle = 'rgba(3,8,7,0.62)'; bgPitch.ctx.fillRect(0, 0, bgPitch.w, bgPitch.h); }
   }
   requestAnimationFrame(frame);
 }
@@ -632,15 +715,39 @@ function frame(now) {
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('/sw.js').catch(() => {});
 
 // ---------------- Start ----------------
+// Startbildschirm: echte Ladeschritte mit Fortschritt, Lichtstimmung im Stadion
+function gateDust(cv) {
+  const ctx = cv.getContext('2d'); let w = 0, h = 0; const P = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), r: 0.5 + Math.random() * 1.8, s: 0.004 + Math.random() * 0.012, a: Math.random() * 6 }));
+  const fit = () => { const d = Math.min(2, devicePixelRatio || 1); w = cv.clientWidth; h = cv.clientHeight; cv.width = w * d; cv.height = h * d; ctx.setTransform(d, 0, 0, d, 0, 0); }; fit(); addEventListener('resize', fit);
+  const loop = (t) => { if (cv.closest('[hidden]')) return; ctx.clearRect(0, 0, w, h); for (const p of P) { p.y -= p.s * 0.016; if (p.y < -0.02) { p.y = 1.02; p.x = Math.random(); } const al = 0.18 + 0.22 * Math.sin(t / 900 + p.a); ctx.fillStyle = `rgba(200,255,220,${al.toFixed(3)})`; ctx.beginPath(); ctx.arc(p.x * w + Math.sin(t / 2400 + p.a) * 14, p.y * h, p.r, 0, 6.283); ctx.fill(); } requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+}
+async function runGate() {
+  const gate = $('#intro-gate'), bar = $('#gate-bar'), st = $('#gate-status'); gate.hidden = false; gateDust($('#gate-dust'));
+  let seen = false; try { seen = localStorage.getItem('brcm-intro') === '1'; } catch { /* ignore */ }
+  const go = $('#gate-go'), alt = $('#gate-skip');
+  if (seen) { go.textContent = "▶ Los geht's"; alt.textContent = 'Intro ansehen'; }
+  const toTitle = () => { gate.hidden = true; audio.unlock(); audio.play('confirm'); show('title'); };
+  const toIntro = () => { gate.hidden = true; audio.unlock(); audio.play('confirm'); startIntro(() => show('title')); };
+  go.onclick = seen ? toTitle : toIntro; alt.onclick = seen ? toIntro : toTitle;
+  $('#btn-intro-skip').onclick = () => { gate.hidden = true; show('title'); };
+  const steps = [
+    ['Schriften und Oberfläche', document.fonts ? document.fonts.ready : null],
+    ['Sprecher und Stimmen', voice.ready],
+    ['Liga und Bestenliste', loadTitleBoard()],
+    ['3D-Stadion', want3d() && webglOk() && !params.has('no3d') ? loadBabylon() : null],
+  ].filter(([, p]) => p);
+  let done = 0; const upd = (label) => { const k = done / steps.length; bar.style.width = Math.round(8 + k * 92) + '%'; st.textContent = k >= 1 ? 'Bereit – Flutlicht an!' : `${label} …`; };
+  upd(steps[0][0]);
+  await Promise.all(steps.map(([l, p], i) => Promise.resolve(p).catch(() => null).then(() => { done++; const next = steps.find((_, j) => j > i) || steps[0]; upd(next[0]); })));
+  upd(''); gate.classList.add('ready');
+}
 async function init() {
-  rotateNews(); await loadConfig(); loadTitleBoard(); requestAnimationFrame(frame);
-  // Intro beim Start: ein Klick schaltet Ton und Sprecher frei, dann läuft der Film
-  if (!params.has('nointro') && !params.has('debug')) {
-    show('intro'); const gate = $('#intro-gate'); gate.hidden = false;
-    const go = () => { gate.hidden = true; audio.unlock(); audio.play('confirm'); startIntro(() => show('title')); };
-    gate.querySelector('button').addEventListener('click', go, { once: true });
-    $('#btn-intro-skip').onclick = () => { gate.hidden = true; show('title'); };
-  }
+  const boot = $('#boot'); if (boot) { boot.classList.add('out'); setTimeout(() => boot.remove(), 700); }
+  rotateNews(); requestAnimationFrame(frame);
+  const cfg = loadConfig();
+  if (!params.has('nointro') && !params.has('debug')) { show('intro'); runGate(); } else loadTitleBoard();
+  await cfg;
   if (KIOSK) setInterval(() => { if (S.screen === 'title') loadTitleBoard(); }, 30000);
 }
 init();
