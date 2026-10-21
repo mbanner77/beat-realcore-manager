@@ -2,8 +2,19 @@
 // Gleiche Schnittstelle wie die 2D-Variante (pitch.js): resize(w, h), draw(M, dt), goalFlash(team), burst(x, y, color), focus.
 import { PW, PH, GOAL_W } from './match.js';
 // Spielerfiguren: CC0-Modell und Animationen von Quaternius (Universal Animation Library 1+2), aufbereitet mit tools/build-player-model.mjs
-const RIG_URL = '/models/player.glb?v=1';
-let rigData = null; // ArrayBuffer, einmal je Seite geladen
+const RIG_URL = '/models/player.glb?v=2';
+let rigData = null;
+// Einzelaktionen aus Mixamo: Start kurz vor dem Ballkontakt, gespielte Länge, Tempo
+const ONCE_NAMES = new Set(['M_pass', 'M_chip', 'M_strike', 'M_penalty', 'M_gkdropkick', 'M_gkthrow', 'M_header', 'M_tackle', 'M_gkdiveL', 'M_gkdiveR', 'M_gkcatch', 'M_trip', 'M_standup']);
+const ONCE = {
+  pass: { n: 'M_pass', from: 0.32, len: 0.85, sp: 1.15 }, chip: { n: 'M_chip', from: 0.38, len: 0.9, sp: 1.1 },
+  shot: { n: 'M_strike', from: 0.32, len: 0.85, sp: 1.05 }, penalty: { n: 'M_penalty', from: 0.62, len: 0.75, sp: 1 },
+  gkkick: { n: 'M_gkdropkick', from: 1.95, len: 0.95, sp: 1 }, throw: { n: 'M_gkthrow', from: 1.38, len: 0.95, sp: 1.1 },
+  header: { n: 'M_header', from: 1.2, len: 0.75, sp: 1.1 }, tackle: { n: 'M_tackle', from: 0, len: 1.35, sp: 1.15 },
+  diveL: { n: 'M_gkdiveL', from: 0.95, len: 1.7, sp: 1.35 }, diveR: { n: 'M_gkdiveR', from: 0.85, len: 1.7, sp: 1.35 },
+  catch: { n: 'M_gkcatch', from: 0.45, len: 0.85, sp: 1 }, trip: { n: 'M_trip', from: 0, len: 1.45, sp: 1.1 },
+  standup: { n: 'M_standup', from: 0, len: 1.6, sp: 1.05 },
+}; // ArrayBuffer, einmal je Seite geladen
 async function rigBytes() { if (!rigData) rigData = fetch(RIG_URL).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); return rigData; }
 
 let B = null; // Babylon-Modul (lazy)
@@ -55,7 +66,7 @@ export class Pitch3D {
     try {
       const bytes = await rigBytes(); if (!bytes || this.disposed) return;
       const c = await B.LoadAssetContainerAsync(new Uint8Array(bytes), this.scene, { pluginExtension: '.glb' }); if (this.disposed) return;
-      this.rig = c; this.rigNames = c.animationGroups.map(g => g.name);
+      this.rig = c; this.rigNames = c.animationGroups.map(g => g.name); this.mx = this.rigNames.includes('M_jog');
       for (const f of this.figs.values()) this.disposeFig(f); this.figs.clear(); if (this.ref) { const o = this.ref; this.disposeFig(o); this.ref = null; }
     } catch (e) { console.warn('Spielermodell nicht geladen – einfache Figuren', e); }
   }
@@ -82,12 +93,14 @@ export class Pitch3D {
     return { root, j, ags, w: {}, rig: true, mat, skel: inst.skeletons[0], phase: Math.random() * 6, scale, face: null, faceOn: false };
   }
   // Animationen mischen: Ziele { Name: Gewicht } (Summe 1), Tempo je Animation
-  rigAnim(f, tw, dt, speeds = {}, rate = 8) {
+  rigAnim(f, tw, dt, speeds = {}, rate = 8, once = null) {
     const k = Math.min(1, dt * rate);
     for (const name of new Set([...Object.keys(f.w), ...Object.keys(tw)])) {
       const g = f.ags[name]; if (!g) continue; const target = tw[name] || 0, w = (f.w[name] || 0) + (target - (f.w[name] || 0)) * k;
       if (w < 0.01 && target === 0) { if (g.isStarted) g.stop(); delete f.w[name]; continue; }
-      if (!g.isStarted) g.start(true, speeds[name] || 1); g.speedRatio = speeds[name] || 1; g.setWeightForAllAnimatables(w); f.w[name] = w;
+      if (once && once.n === name && f.onceKey !== once.key) { f.onceKey = once.key; g.stop(); g.start(false, once.sp, g.from + once.from * 60, g.to); }
+      else if (!g.isStarted && !(once && once.n === name) && !ONCE_NAMES.has(name)) g.start(true, speeds[name] || 1);
+      if (!(once && once.n === name)) g.speedRatio = speeds[name] || 1; g.setWeightForAllAnimatables(w); f.w[name] = w;
     }
   }
   // ---------- Aufbau ----------
@@ -358,8 +371,16 @@ export class Pitch3D {
   // Ereignisse aus dem Spiel: Parade, Grätsche, Tor (Publikum)
   onEvent(e, M) {
     const now = performance.now();
-    if (e.type === 'save' || e.type === 'pen_save') { const k = M.keeper(1 - e.team); if (k) this.anim.set(k, { kind: 'dive', until: now + 900, side: Math.random() < 0.5 ? -1 : 1 }); }
-    else if (e.type === 'tackle' && e.p) this.anim.set(e.p, { kind: 'slide', until: now + 700 });
+    const act = (pl, kind, extra = {}) => { const c = ONCE[kind]; this.anim.set(pl, { kind, until: now + (c ? c.len / c.sp * 1000 : 900), t0: now, ...extra }); };
+    if (e.type === 'save' || e.type === 'pen_save') {
+      const k = M.keeper(1 - e.team); if (!k) return; const f = this.figs.get(k), b = M.ball;
+      // Seite aus Sicht des Torwarts: Ball links oder rechts der Blickrichtung
+      const fy = f ? f.root.rotation.y : 0, rx = b.x - k.x, rz = b.y - k.y, cross = Math.sin(fy) * rz - Math.cos(fy) * rx, side = cross > 0 ? -1 : 1;
+      if (this.mx) { if (Math.hypot(rx, rz) < 1.6 || Math.random() < 0.25) act(k, 'catch'); else act(k, side < 0 ? 'diveL' : 'diveR'); }
+      else this.anim.set(k, { kind: 'dive', until: now + 900, side, t0: now });
+    }
+    else if (e.type === 'tackle' && e.p) { if (this.mx) act(e.p, 'tackle'); else this.anim.set(e.p, { kind: 'slide', until: now + 700 }); }
+    else if (e.type === 'injury' && e.p && this.mx) act(e.p, 'trip', { next: { kind: 'down', ms: 2200, then: 'standup' } });
     else if (e.type === 'goal') { this.crowdPulse = 1; const gx = M.goalOf(e.team).x; this.netHit = { side: gx > PW / 2 ? 1 : 0, t: performance.now() }; }
     else if (e.type === 'yellow' || e.type === 'red') { if (e.p) this.anim.set(e.p, { kind: 'protest', until: now + 1500 }); }
   }
@@ -433,30 +454,51 @@ export class Pitch3D {
       let end; if (b.mode === 'pass' && b.target) end = { x: b.target.x, y: b.target.y }; else if (b.mode === 'shot') end = M.goalOf(b.shooter.team); else end = { x: b.x + b.vx, y: b.y + b.vy };
       const total = Math.max(2, dist(b, end)); const r = Math.random();
       const h = b.mode === 'shot' ? (r < 0.5 ? 0.3 + r : 1.2 + r * 1.2) : (total > 22 ? 2 + Math.min(4, total / 10) * r : r < 0.35 ? 0.6 + r : 0);
-      this.flight = { mode: b.mode, from: b.from, shooter: b.shooter, start: { x: b.x, y: b.y }, total, h };
+      this.flight = { mode: b.mode, from: b.from, shooter: b.shooter, start: { x: b.x, y: b.y }, total, h }; this.lastFlightH = h;
     }
     const f = this.flight, pr = Math.min(1, dist(f.start, b) / f.total);
     return f.h * 4 * pr * (1 - pr);
   }
+  // Welche Schuss-/Passbewegung passt? (Torwart: Abwurf oder Abstoß, lange Bälle als Chip, Schüsse aus dem Stand oder Lauf)
+  actionFor(k, b, M, now) {
+    const f = this.figs.get(k), v = f ? Math.hypot(f.mvx || 0, f.mvy || 0) : 0, len = b.mode === 'pass' && b.target ? Math.hypot(b.target.x - k.x, b.target.y - k.y) : 0;
+    let kind = b.mode === 'shot' ? (v < 1.2 ? 'penalty' : 'shot') : k.pos === 'TW' ? (len > 32 || Math.random() < 0.4 ? 'gkkick' : 'throw') : len > 28 ? 'chip' : 'pass';
+    if (!this.mx) kind = k.pos === 'TW' && b.mode === 'pass' && this.rig && Math.random() < 0.5 ? 'throw' : 'kick';
+    const c = ONCE[kind]; return { kind, until: now + (c && this.mx ? c.len / c.sp * 1000 : kind === 'throw' ? 650 : 420), t0: now };
+  }
   // Modellfigur: Laufen/Sprinten/Stehen gemischt, Sonderaktionen als eigene Animationen
   driveRig(f, p, s, dt) {
-    const { v, run, sprint, an, now } = s; let tw, sp = {}, rate = 8;
-    f.root.position.y = 0;
-    if (an && an.kind === 'slide') { tw = { Slide_Loop: 1 }; rate = 14; }
-    else if (an && an.kind === 'dive') { const k = 1 - (an.until - now) / 950, kk = Math.sin(Math.min(1, k * 1.25) * Math.PI); f.root.rotation.z = an.side * 1.3 * kk; f.root.position.y = 0.5 * kk; tw = { Jump_Loop: 1 }; rate = 16; }
+    const { v, run, sprint, an, now } = s, MX = this.mx; let tw, sp = {}, rate = 8, once = null;
+    f.root.position.y = 0; f.root.rotation.z = 0;
+    const cfg = an && MX ? ONCE[an.kind] : null;
+    if (cfg) { once = { n: cfg.n, key: an.t0, from: cfg.from, sp: cfg.sp }; tw = { [cfg.n]: 1 }; rate = 20; }
+    else if (an && an.kind === 'down') tw = MX ? { M_fallen: 1 } : { Crouch_Idle_Loop: 1 };
+    else if (an && an.kind === 'slide' || an && an.kind === 'tackle') { tw = { Slide_Loop: 1 }; rate = 14; }
+    else if (an && (an.kind === 'dive' || an.kind === 'diveL' || an.kind === 'diveR')) { const k = 1 - (an.until - now) / 950, kk = Math.sin(Math.min(1, k * 1.25) * Math.PI); f.root.rotation.z = (an.side || 1) * 1.3 * kk; f.root.position.y = 0.5 * kk; tw = { Jump_Loop: 1 }; rate = 16; }
     else if (an && an.kind === 'protest') tw = { Idle_No_Loop: 1 };
     else if (an && an.kind === 'throw') { tw = { OverhandThrow: 1 }; sp = { OverhandThrow: 1.6 }; rate = 14; }
-    else if (s.celebrating || s.happy) { tw = (p.num % 2 || p === this.celeb?.p) ? { Dance_Loop: 1 } : { Yes: 1 }; sp = { Dance_Loop: 1.15, Yes: 1.1 }; }
+    else if (s.celebrating || s.happy) {
+      if (MX) { const scorer = p === this.celeb?.p; tw = scorer ? { M_cheer: 1 } : s.happy ? (p.num % 3 === 0 ? { M_victory: 1 } : p.num % 3 === 1 ? { M_cheer: 1 } : { M_fistpump: 1 }) : (p.num % 2 ? { M_fistpump: 1 } : { M_cheer: 1 }); sp = { M_cheer: 1.1, M_fistpump: 1.1, M_victory: 1 }; }
+      else { tw = (p.num % 2 || p === this.celeb?.p) ? { Dance_Loop: 1 } : { Yes: 1 }; sp = { Dance_Loop: 1.15, Yes: 1.1 }; }
+    }
     else if (s.sad) { tw = { Idle_No_Loop: 1 }; sp = { Idle_No_Loop: 0.55 }; }
-    else if (p.injured) tw = { Crouch_Idle_Loop: 1 };
+    else if (p.injured) tw = MX ? { M_fallen: 1 } : { Crouch_Idle_Loop: 1 };
+    else if (s.ready && MX) {
+      // Torwart: Bereitschaft, seitliche Schritte je nach Bewegungsrichtung
+      const fw = f.root.rotation.y, lat = Math.cos(fw) * (f.mvx || 0) - Math.sin(fw) * (f.mvy || 0);
+      if (v > 0.6) { tw = lat > 0 ? { M_gkstepR: 1 } : { M_gkstepL: 1 }; sp = { M_gkstepL: Math.max(0.7, Math.min(1.6, v / 2.4)), M_gkstepR: Math.max(0.7, Math.min(1.6, v / 2.4)) }; }
+      else tw = { M_gkidle: 1 };
+    }
     else if (s.ready) tw = { Crouch_Idle_Loop: 1 };
     else {
-      const jog = run * (1 - sprint), spr = run * sprint, idle = 1 - run;
-      tw = { Idle_Loop: idle, Jog_Fwd_Loop: jog, Sprint_Loop: spr };
-      sp = { Jog_Fwd_Loop: Math.max(0.65, Math.min(1.7, v / 3.6)), Sprint_Loop: Math.max(0.8, Math.min(1.5, v / 7.2)), Idle_Loop: 1 };
+      const ss = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+      const walkIn = ss(0.25, 1.1, v), jogIn = ss(1.6, 3.4, v), sprIn = ss(6.2, 8.2, v);
+      const idleN = MX && !f.gk && !f.ref ? 'M_offidle' : MX && f.gk ? 'M_gkidle' : 'Idle_Loop', jogN = MX ? (s.owner ? 'M_dribble' : 'M_jog') : 'Jog_Fwd_Loop';
+      tw = { [idleN]: 1 - walkIn, Walk_Loop: walkIn * (1 - jogIn), [jogN]: jogIn * (1 - sprIn), Sprint_Loop: sprIn };
+      sp = { Walk_Loop: Math.max(0.6, Math.min(1.5, v / 2.0)), [jogN]: Math.max(0.7, Math.min(1.6, v / (MX ? 4.0 : 4.4))), Sprint_Loop: Math.max(0.8, Math.min(1.5, v / 8.6)), [idleN]: 1 };
     }
-    if (an && an.kind === 'kick') { f.kick = { until: an.until, len: 420 }; }
-    this.rigAnim(f, tw, dt, sp, rate);
+    if (an && an.kind === 'kick' && !MX) { f.kick = { until: an.until, len: 420 }; }
+    this.rigAnim(f, tw, dt, sp, rate, once);
   }
   draw(M, dt) {
     if (!M) return; this.t += dt; this.syncRoster(M);
@@ -469,16 +511,20 @@ export class Pitch3D {
       if (now - R.t0 > R.dur) { this.replay = null; rp = null; b = M.ball; }
     }
     // Abschlag/Pass: Beinschwung des Schützen, Kick-Sound-Hinweis
-    if (!rp) { if (this.prevMode === 'held' && (b.mode === 'pass' || b.mode === 'shot')) { const k = b.mode === 'pass' ? b.from : b.shooter; if (k) this.anim.set(k, k.pos === 'TW' && b.mode === 'pass' && this.rig && Math.random() < 0.5 ? { kind: 'throw', until: now + 650, t0: now } : { kind: 'kick', until: now + 420, t0: now }); this.kicked = true; } this.prevMode = b.mode; }
+    if (!rp) { if (this.prevMode === 'held' && (b.mode === 'pass' || b.mode === 'shot')) { const k = b.mode === 'pass' ? b.from : b.shooter; if (k) this.anim.set(k, this.actionFor(k, b, M, now)); this.kicked = true; }
+      if (this.mx && this.prevMode === 'pass' && b.mode === 'held' && b.owner && this.lastFlightH > 1.6 && b.owner.pos !== 'TW') { const c = ONCE.header; this.anim.set(b.owner, { kind: 'header', t0: now, until: now + c.len / c.sp * 1000 }); } this.prevMode = b.mode; }
     // Spieler
     for (const [p, f] of this.figs) {
       if (p.out) continue; f.root.setEnabled(true);
       const rpp = rp ? rp.pl.get(p) : null; const px = rpp ? rpp.x : p.x, py = rpp ? rpp.y : p.y, pvx = rpp ? rpp.vx : p.vx, pvy = rpp ? rpp.vy : p.vy;
-      const v = Math.hypot(pvx, pvy), run = Math.min(1, v / 6), sprint = Math.max(0, Math.min(1, (v - 6) / 3));
+      // tatsächliche Bewegung auf dem Bildschirm (steht das Spiel, stehen auch die Figuren still)
+      let mvx = 0, mvy = 0; if (f.prev && dt > 0) { mvx = (px - f.prev.x) / dt; mvy = (py - f.prev.y) / dt; if (Math.hypot(mvx, mvy) > 16) { mvx = 0; mvy = 0; } } f.prev = { x: px, y: py };
+      const kv = Math.min(1, dt * 7); f.mvx = (f.mvx || 0) + (mvx - (f.mvx || 0)) * kv; f.mvy = (f.mvy || 0) + (mvy - (f.mvy || 0)) * kv;
+      const v = Math.hypot(f.mvx, f.mvy), run = Math.min(1, v / 6), sprint = Math.max(0, Math.min(1, (v - 6) / 3));
       f.phase += dt * (3 + v * 1.35);
       f.root.position.set(px, 0, py); f.root.rotation.z = 0; f.root.rotation.x = 0;
-      if (v > 0.3) { const ty = Math.atan2(pvx, pvy); let d = ty - f.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); f.root.rotation.y += d * Math.min(1, dt * 10); }
-      else if (b.owner === p || (!rp && p.pos !== 'TW')) { const ty = Math.atan2(b.x - px, b.y - py); let d = ty - f.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); f.root.rotation.y += d * Math.min(1, dt * 4); }
+      if (v > 0.8 && !(f.gk && v < 3.5 && b.owner !== p)) { const ty = Math.atan2(f.mvx, f.mvy); let d = ty - f.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); f.root.rotation.y += d * Math.min(1, dt * 10); }
+      else { const ty = Math.atan2(b.x - px, b.y - py); let d = ty - f.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); f.root.rotation.y += d * Math.min(1, dt * 4); }
       let P = this.runPose(f.phase, run, sprint);
       f.root.position.y = run > 0.15 ? Math.max(0, Math.sin(f.phase * 2)) * 0.05 * run : 0;
       if (run < 0.15) { const br = Math.sin(this.t * 2 + p.num) * 0.02; P = { lean: 0.08 + br, knL: 0.14, knR: 0.12, hipL: -0.05, hipR: 0.04, shL: 0.05, shR: -0.05, elL: -0.35, elR: -0.3, head: 0.02 }; }
@@ -494,13 +540,13 @@ export class Pitch3D {
         else if (an.kind === 'dive') { const kk = Math.sin(Math.min(1, k * 1.25) * Math.PI); f.root.rotation.z = an.side * 1.35 * kk; f.root.position.y = 0.55 * kk; P = { lean: 0.1, shL: -2.9 * kk, shR: -2.9 * kk, spreadL: 0.25, spreadR: 0.25, elL: -0.1, elR: -0.1, hipL: 0.1, hipR: -0.4 * kk, knL: 0.3, knR: 0.6 * kk, head: -0.2 }; }
         else if (an.kind === 'slide') { const kk = Math.sin(Math.min(1, k) * Math.PI); P = { lean: -0.6 * kk, drop: 0.55 * kk, hipL: -1.45 * kk, knL: 0.05, hipR: -0.35 * kk, knR: 1.6 * kk, shL: 0.6 * kk, shR: -0.9 * kk, spreadL: 0.6, spreadR: 0.4, elL: -0.2, elR: -0.4, head: 0.3 * kk }; }
         else if (an.kind === 'protest') { const kk = Math.abs(Math.sin(now / 160)); P = { ...P, shL: -1.5 - kk * 0.5, shR: -1.5 - kk * 0.5, spreadL: 0.8, spreadR: 0.8, elL: -0.5, elR: -0.5, lean: -0.05, head: -0.1 }; }
-      } else if (an) this.anim.delete(p);
+      } else if (an) { this.anim.delete(p); if (an.next) { const nx = an.next, c = ONCE[nx.kind]; this.anim.set(p, { kind: nx.kind, t0: now, until: now + (nx.ms || (c ? c.len / c.sp * 1000 : 1000)), next: nx.then ? { kind: nx.then } : null }); } }
       const celebrating = this.celeb && this.celeb.until > now && p.team === this.celeb.p.team && (p === this.celeb.p || Math.hypot(p.x - this.celeb.p.x, p.y - this.celeb.p.y) < 12);
       const happy = this.mood && this.mood.until > now && p.team === this.mood.win, sad = this.mood && this.mood.until > now && this.mood.win !== null && p.team !== this.mood.win;
       if (celebrating || happy) { const j = Math.abs(Math.sin(this.t * (happy ? 7 : 9) + p.num * 1.3)); P = { lean: -0.1, shL: -2.7 - j * 0.3, shR: -2.7 - j * 0.3, spreadL: 0.5, spreadR: 0.5, elL: -0.2, elR: -0.2, hipL: -0.3 * j, hipR: -0.3 * j, knL: 0.7 * j, knR: 0.7 * j, head: -0.3 }; f.root.position.y = j * (p === this.celeb?.p ? 0.55 : 0.35); }
       else if (sad) { P = { lean: 0.55, head: 0.45, shL: 0.05, shR: 0.05, spreadL: 0.05, spreadR: 0.05, elL: -0.1, elR: -0.1, knL: 0.15, knR: 0.15, hipL: -0.1, hipR: 0.05 }; f.root.position.y = 0; }
       if (p.injured) { P.lean = 0.45; P.knL = 0.6; P.shR = -0.6; P.elR = -1.4; }
-      if (f.rig) { this.driveRig(f, p, { v, run, sprint, an: an && an.until > now ? an : null, celebrating, happy, sad, ready: f.gk && run < 0.4 && Math.hypot(b.x - px, b.y - py) < 24, now }, dt); const showLbl = this.labels && (this.camMode === 'tv' || this.camMode === 'top' || b.owner === p); f.plane.setEnabled(showLbl); if (showLbl) this.label(f, p); continue; }
+      if (f.rig) { this.driveRig(f, p, { v, run, sprint, owner: b.owner === p, an: an && an.until > now ? an : null, celebrating, happy, sad, ready: f.gk && run < 0.4 && Math.hypot(b.x - px, b.y - py) < 24, now }, dt); const showLbl = this.labels && (this.camMode === 'tv' || this.camMode === 'top' || b.owner === p); f.plane.setEnabled(showLbl); if (showLbl) this.label(f, p); continue; }
       { const want = !this.noFaces && (!!this.cine || this.camMode === 'near' || this.camMode === 'goal' || !!this.celeb); if (f.face && f.faceOn !== want) { f.faceOn = want; for (const m of f.face) m.setEnabled(want); } }
       // Kopf folgt dem Ball
       { const ang = Math.atan2(b.x - px, b.y - py) - f.root.rotation.y; P.headYaw = Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(ang), Math.cos(ang)))); }

@@ -993,3 +993,8 @@ body.on-title.title-scrolled .lang-sw { opacity: 0; pointer-events: none; transf
 .fix li { display: grid; grid-template-columns: 28px 1fr 70px; gap: 10px; align-items: center; }
 .fix span b { display: block; font-size: 13.5px; } .fix span small { color: var(--muted); font-size: 12px; }
 .fix .bar b { background: linear-gradient(90deg, var(--amber), var(--red)) !important; }
+/* Intro-Schlusstitel im selben Look wie Startbildschirm und Startseite */
+.intro-title small { color: var(--muted); letter-spacing: .24em; }
+.intro-title h1 span { background: linear-gradient(100deg, #3ddc84 0%, #b8ffd8 40%, #3ddc84 60%, #22b866 100%); background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: titleSheen 5s linear infinite; filter: drop-shadow(0 0 30px rgba(61,220,132,0.45)); }
+.intro-title em { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 12px; font-family: var(--mono); font-weight: 600; font-size: clamp(14px, 2vw, 22px); letter-spacing: .55em; color: #ff8a5c; }
+.intro-title em::before, .intro-title em::after { content: ''; width: 50px; height: 1px; background: #ff8a5c; }
