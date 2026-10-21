@@ -45,7 +45,7 @@ function show(id) {
   const changed = S.screen !== id; if (changed) S.prev = S.screen; S.screen = id;
   $$('.screen').forEach(s => { const on = s.id === 'screen-' + id; s.classList.toggle('active', on); if (on && changed) { s.classList.remove('enter'); void s.offsetWidth; s.classList.add('enter'); } });
   document.body.classList.toggle('ingame', id === 'match'); document.body.classList.toggle('on-title', id === 'title');
-  const w = $('#wipe'); w.classList.remove('go'); void w.offsetWidth; w.classList.add('go');
+  if (id !== 'intro' && S.prev !== 'intro') { const w = $('#wipe'); w.classList.remove('go'); void w.offsetWidth; w.classList.add('go'); }
   if (id === 'match') sizePitch();
 }
 let toastT = null;
@@ -242,7 +242,7 @@ function renderSquad() {
   $$('#lineup-board .slot').forEach(el => el.addEventListener('click', () => { const i = +el.dataset.i; if (S.selSlot === i) S.selSlot = null; else if (S.selSlot !== null) { const a = se.slots[S.selSlot]; se.slots[S.selSlot] = se.slots[i]; se.slots[i] = a; S.selSlot = null; audio.play('confirm'); } else { S.selSlot = i; audio.play('click'); } renderWeek(); }));
   const inL = new Set(se.slots);
   const list = [...se.players].sort((a, b) => { const o = ['TW', 'IV', 'AV', 'DM', 'ZM', 'FL', 'ST']; return o.indexOf(a.pos) - o.indexOf(b.pos) || rating(b) - rating(a); });
-  $('#player-list').innerHTML = list.map(p => { const [st, stt] = statusOf(p); const r = rating(p); const canSell = se.players.length > 14 && !inL.has(p.id);
+  $('#player-list').innerHTML = list.map(p => { const [st, stt] = statusOf(p); const r = rating(p); const canSell = se.players.length > 14;
     return `<div class="pl ${inL.has(p.id) ? 'in' : ''} ${se.available(p) ? '' : 'na'}" data-id="${p.id}">${avatar(p, CLUB, 40)}<span class="pos ${p.pos === 'TW' ? 'tw' : ''}">${esc(p.pos)}</span><span class="name"><b>${esc(p.name)}${p.id === se.captain ? ' <i class="cap" title="Kapitän">C</i>' : ''}${p.id === se.penTaker ? ' <i class="pen" title="Elfmeterschütze">11m</i>' : ''}</b><small>${esc(p.nick || '')} · ${p.age} J. · <span class="stars" title="Potenzial">${'★'.repeat(p.pot || 3)}<i>${'★'.repeat(5 - (p.pot || 3))}</i></span> · ${money(p.value)}</small></span><span class="rt ${r >= 78 ? 'hi' : r < 62 ? 'lo' : ''}">${r}</span>${attrsHtml(p)}<span class="fit"><b>${Math.round(p.fitness)} %</b>Fitness</span><span class="stt"><i class="st st-${st}" title="${esc(stt)}"></i></span><span class="act">${inL.has(p.id) && p.pos !== 'TW' && p.id !== se.captain ? `<button class="btn xs" data-cap="${p.id}" title="Zum Kapitän machen">C</button>` : ''}${inL.has(p.id) && p.pos !== 'TW' && p.id !== se.penTaker ? `<button class="btn xs" data-pen="${p.id}" title="Elfmeterschütze">11m</button>` : ''}${canSell ? `<button class="btn xs" data-sell="${p.id}" title="Verkaufen">€</button>` : ''}</span></div>`; }).join('');
   $$('#player-list .pl').forEach(el => {
     el.addEventListener('click', (e) => { if (e.target.dataset.sell || e.target.dataset.cap || e.target.dataset.pen) return; const id = el.dataset.id; const p = se.players.find(x => x.id === id);
@@ -253,7 +253,7 @@ function renderSquad() {
   });
   $$('[data-cap]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); se.setCaptain(b.dataset.cap); audio.play('confirm'); toast(`${se.players.find(p => p.id === b.dataset.cap).name} trägt die Kapitänsbinde.`); renderWeek(); }));
   $$('[data-pen]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); se.setPenTaker(b.dataset.pen); audio.play('confirm'); renderWeek(); }));
-  $$('[data-sell]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); const p = se.players.find(x => x.id === b.dataset.sell); if (confirm(tr(`${p.name} für ${money(Math.round(p.value * 0.6))} verkaufen?`))) { const r = se.sell(p.id); if (r.ok) { audio.play('cash'); } else { toast(r.reason); audio.play('deny'); } renderWeek(); } }));
+  $$('[data-sell]').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); const p = se.players.find(x => x.id === b.dataset.sell); if (confirm(tr(`${p.name} für ${money(se.salePrice(p))} verkaufen?`))) { const r = se.sell(p.id); if (r.ok) { audio.play('cash'); } else { toast(r.reason); audio.play('deny'); } renderWeek(); } }));
   $('#lineup-problems').innerHTML = se.lineupProblems().map(p => `<li>${esc(p)}</li>`).join('');
   $('#lineup-hint').textContent = S.selSlot !== null ? 'Jetzt eine:n Spieler:in in der Liste wählen – oder eine zweite Position zum Tauschen.' : 'Klicke eine Position und dann eine:n Spieler:in in der Liste.';
 }
@@ -284,6 +284,9 @@ function renderMarket() {
   const se = SE();
   $('#market-cards').innerHTML = se.market.map(p => `<div class="mcard2"><div class="top">${avatar(p, { color: '#5aa9ff', color2: '#1b3a6b' }, 40)}<b>${esc(p.name)}</b>${ring(rating(p), 40)}</div><div class="meta">${esc(POS[p.pos])} · ${p.age} J. · <span class="stars">${'★'.repeat(p.pot || 3)}<i>${'★'.repeat(5 - (p.pot || 3))}</i></span></div>${attrsHtml(p)}<p>${esc(p.desc)}</p><div class="foot"><span class="price">${money(p.value)}</span><button class="btn sm ${p.value <= se.budget ? 'primary' : ''}" data-buy="${p.id}" ${p.value > se.budget ? 'disabled' : ''}>Verpflichten</button></div></div>`).join('') || '<p class="hint">Diese Woche ist der Markt leer.</p>';
   $$('[data-buy]').forEach(b => b.addEventListener('click', () => { const r = se.buy(b.dataset.buy); if (r.ok) { audio.play('cash'); toast('Transfer abgeschlossen.'); } else { audio.play('deny'); toast(r.reason); } renderWeek(); }));
+  const inL = new Set(se.slots), full = se.players.length <= 14;
+  $('#sell-list').innerHTML = [...se.players].sort((a, b) => b.value - a.value).map(p => `<div class="sell-row ${inL.has(p.id) ? 'in' : ''}">${avatar(p, CLUB, 34)}<span class="pos ${p.pos === 'TW' ? 'tw' : ''}">${esc(p.pos)}</span><span class="nm"><b>${esc(p.name)}</b><small>${p.age} J. · Stärke ${rating(p)} · Form ${p.form > 0 ? '+' + p.form : p.form}${inL.has(p.id) ? ' · Startelf' : ''}${p.injured > 0 ? ' · verletzt' : ''}</small></span><span class="val"><small>Marktwert</small>${money(p.value)}</span><span class="price"><small>Erlös</small>${money(se.salePrice(p))}</span><button class="btn sm" data-sell2="${p.id}" ${full ? 'disabled' : ''}>Verkaufen</button></div>`).join('');
+  $$('[data-sell2]').forEach(b => b.addEventListener('click', () => { const p = se.players.find(x => x.id === b.dataset.sell2); if (!p) return; if (confirm(tr(`${p.name} für ${money(se.salePrice(p))} verkaufen?`))) { const r = se.sell(p.id); if (r.ok) { audio.play('cash'); toast(tr(`${p.name} verkauft: +${money(r.gain)}`)); } else { toast(r.reason); audio.play('deny'); } renderWeek(); } }));
 }
 // Tabelle & Ergebnisse
 function tableRows(tb, full) { tb.innerHTML = SE().standings().map((t, i) => { const o = t.me ? { ...CLUB, me: true } : OPPONENTS.find(x => x.id === t.id); return `<tr class="${t.me ? 'me' : ''}"><td>${i + 1}</td><td class="cl">${crest(o, 22)} ${esc(t.club)}</td><td class="r">${t.w + t.d + t.l}</td>${full ? `<td class="r">${t.w}</td><td class="r">${t.d}</td><td class="r">${t.l}</td>` : ''}<td class="r">${t.gf}:${t.ga}</td><td class="r"><b>${t.pts}</b></td></tr>`; }).join(''); }

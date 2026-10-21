@@ -752,3 +752,13 @@ body.ingame .subtitle { bottom: 18px; }
 .le-grid span { position: relative; height: 22px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; display: grid; place-items: center; }
 .le-grid i { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--green); } .le-grid .mid i { background: var(--amber); } .le-grid .low i { background: var(--red); } .le-grid .inj { outline: 1px solid var(--red); }
 .le-grid b { position: relative; font-family: var(--mono); font-size: 10.5px; color: var(--text); }
+#screen-intro.enter, #screen-title.enter { animation: introFade .8s ease both; }
+@keyframes introFade { from { opacity: 0; } to { opacity: 1; } }
+#intro-canvas { opacity: 0; transition: opacity 1.2s ease; } #intro-canvas.ready { opacity: 1; }
+.sell-list { display: grid; gap: 6px; margin-top: 8px; }
+.sell-row { display: grid; grid-template-columns: auto 30px 1fr 100px 100px auto; gap: 10px; align-items: center; padding: 6px 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--line2); border-radius: 8px; }
+.sell-row.in { border-left: 3px solid var(--green); }
+.sell-row .pos { font-family: var(--mono); font-size: 11px; color: var(--green); } .sell-row .pos.tw { color: #ffd166; }
+.sell-row .nm { display: grid; min-width: 0; } .sell-row .nm b { font-size: 14px; } .sell-row .nm small { color: var(--muted); font-size: 11px; }
+.sell-row .val, .sell-row .price { display: grid; font-family: var(--mono); font-size: 13px; text-align: right; } .sell-row small { font-family: var(--mono); font-size: 9.5px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; } .sell-row .price { color: var(--amber); }
+@media (max-width: 760px) { .sell-row { grid-template-columns: auto 1fr auto; } .sell-row .pos, .sell-row .val { display: none; } .sell-row .price { grid-column: 3; } .sell-row .btn { grid-column: 1 / -1; } }

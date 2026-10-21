@@ -95,13 +95,17 @@ export class Season {
     this.msg('hub', `${p.name} unterschreibt bei TechHub United. ${p.desc}`);
     return { ok: true };
   }
+  // Verkaufspreis: Grundwert 60 % des Marktwerts, Form und Alter verschieben ihn; Verletzte bringen weniger
+  salePrice(p) { const f = MARKET_SELL_FACTOR + (p.form || 0) * 0.03 + (p.age <= 23 ? 0.08 : p.age >= 31 ? -0.08 : 0) - (p.injured > 0 ? 0.15 : 0); return Math.max(20, Math.round(p.value * f / 10) * 10); }
   sell(id) {
     const i = this.players.findIndex(p => p.id === id); if (i < 0) return { ok: false };
     const p = this.players[i];
     if (this.players.length <= 14) return { ok: false, reason: 'Mindestens 14 Spieler im Kader.' };
-    const gain = Math.round(p.value * MARKET_SELL_FACTOR);
+    if (p.pos === 'TW' && this.players.filter(x => x.pos === 'TW').length <= 1) return { ok: false, reason: 'Der letzte Torwart bleibt im Kader.' };
+    const gain = this.salePrice(p);
+    if (this.captain === id) this.captain = null; if (this.penTaker === id) this.penTaker = null;
     this.budget += gain; this.players.splice(i, 1); this.stats.transfersOut++;
-    this.slots = this.slots.map(s => s === id ? null : s); this.fillLineup();
+    this.slots = this.slots.map(s => s === id ? null : s); this.fillLineup(); this.pickLeaders();
     this.msg('hub', `${p.name} wechselt für ${gain} T€. Das Budget freut sich, die Kabine weniger.`);
     return { ok: true, gain };
   }

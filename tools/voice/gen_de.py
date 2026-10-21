@@ -5,13 +5,13 @@ import sys
 LANG=sys.argv[1]
 lines = json.load(open(f'mgr/lines_{LANG}.json'))
 PRON = [
- (r'Legacy League', 'Lägäsi Liig'), (r'Legacy-Monolith FC', 'Lägäsi-Monoliet Eff-Zeh'), (r'United', 'Junaited'), (r'deployed', 'diploit'), (r'Clubs', 'Klabs'), (r'Monolithen', 'Monolieten'), (r'Monolith', 'Monoliet'), (r'Data Lake GmbH', 'Däta Leik Geh-Em-Beh-Hah'), (r'Ticketflut', 'Tickettflut'), (r'S/4HANA', 'Ess-vier-Hana'), (r'\bR/3\b', 'Er drei'), (r'\bST22\b', 'Ess Teh zweiundzwanzig'), (r'AI4BIZ', 'Äi for Bis'),
+ (r'Legacy League', '[[ lˈɛɡəsi lˈiːk ]]'), (r'\bFax\b', '[[ fˈaks ]]'), (r'Legacy-Monolith FC', '[[ lˈɛɡəsi ]] Monoliet Eff-Zeh'), (r'United', 'Junaited'), (r'deployed', 'diploit'), (r'Clubs', 'Klabs'), (r'Monolithen', 'Monolieten'), (r'Monolith', 'Monoliet'), (r'Data Lake GmbH', 'Däta Leik Geh-Em-Beh-Hah'), (r'Ticketflut', 'Tickettflut'), (r'S/4HANA', 'Ess-vier-Hana'), (r'\bR/3\b', 'Er drei'), (r'\bST22\b', 'Ess Teh zweiundzwanzig'), (r'AI4BIZ', 'Äi for Bis'),
  (r'Never touch a running system', 'Näwwer tatsch ä ranning Sisstem'), (r'Change Advisory Board', 'Tschäinsch Edweisori Bord'),
  (r'Change[- ]Requests', 'Tschäinsch-Rikwests'), (r'Change[- ]Request', 'Tschäinsch-Rikwest'),
  (r'Release-Freeze', 'Rilies-Friehs'), (r'Clean Core', 'Kliehn-Kohr'), (r'RealCore', 'Riel-Kohr'), (r'TechHub', 'Tech-Hab'),
  (r'Go-Live', 'Go-Leif'), (r'Joule', 'Dschul'), (r'Mainframes', 'Mehn-Frehms'), (r'Mainframe', 'Mehn-Frehm'),
- (r'Batchlauf', 'Bätsch-Lauf'), (r'Batch', 'Bätsch'), (r'Schatten-IT', 'Schatten-I-Teh'), (r'Legacy-IT', 'Lägäsi-I-Teh'), (r'Legacy-KI', 'Lägäsi-Ka-I'),
- (r'Upgrade', 'App-Gräid'), (r'Monolith erwacht', 'Mono-Liet erwacht'), (r'Legacy', 'Lägäsi'), (r'Access', 'Äkzess'), (r'Controlling', 'Kontrolling'), (r'Deployment', 'Diploiment'), (r'deployt', 'diploit'),
+ (r'Batchlauf', 'Bätsch-Lauf'), (r'Batch', 'Bätsch'), (r'Schatten-IT', 'Schatten-I-Teh'), (r'Legacy-IT', '[[ lˈɛɡəsi ]] I-Teh'), (r'Legacy-KI', '[[ lˈɛɡəsi ]] Ka-I'),
+ (r'Upgrade', 'App-Gräid'), (r'Monolith erwacht', 'Mono-Liet erwacht'), (r'Legacy', '[[ lˈɛɡəsi ]]'), (r'Access', 'Äkzess'), (r'Controlling', 'Kontrolling'), (r'Deployment', 'Diploiment'), (r'deployt', 'diploit'),
  (r'Meeting-Camps?', 'Mieting-Kämp'), (r'Meeting', 'Mieting'), (r'Hypercare', 'Heiper-Kehr'), (r'Jour fixe', 'Schur fix'), (r'Templates?', 'Tämplet'), (r'Datenrennen', 'Daten-Rennen'),
  (r'Rollout', 'Rollaut'), (r'\bUI\b', 'U I'), (r'Integration Suite', 'Integrehschen Swiet'), (r'Data Lake', 'Däta Leik'),
  (r'Datenpipelines', 'Datenpeiplains'), (r'Datenpipeline', 'Datenpeiplain'), (r'Pipeline', 'Peiplain'), (r'Onboarding', 'Onbording'),

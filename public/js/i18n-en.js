@@ -489,4 +489,8 @@ export default {
   "Kabinenansprache": "Team talk", "Feuer machen": "Fire them up", "Ruhe bewahren": "Stay calm", "Loben": "Praise",
   "Tempo und Schuss +4 %, kostet etwas Kondition.": "Pace and shooting +4 %, costs some stamina.", "Technik und Abwehr +4 % – weniger Fehler.": "Technique and defence +4 % – fewer mistakes.", "Alle Werte +2 %, Kondition +5 %.": "All attributes +2 %, stamina +5 %.",
   "Kondition – Klick öffnet Wechsel": "Stamina – click for substitutions", "Lena: {0} ist angeschlagen – Wechsel? (Taktik-Taste)": "Lena: {0} is struggling – substitute? (Tactics button)", "Lena: {0} ist platt – Wechsel? (Taktik-Taste)": "Lena: {0} is exhausted – substitute? (Tactics button)",
+  "Freie Spieler:innen aus der Cloud. Kader: 14 bis 22.": "Free agents from the cloud. Squad: 14 to 22.", "Spieler verkaufen": "Sell players",
+  "Verkaufspreis: rund 60 % des Marktwerts – gute Form und junges Alter bringen mehr, Verletzte weniger. Wer in der Startelf steht, wird automatisch ersetzt.": "Sale price: around 60 % of market value – good form and youth bring more, injured players less. Starters are replaced automatically.",
+  "Marktwert": "Market value", "Erlös": "Proceeds", "Startelf": "Starting XI", "{0} verkauft: +{1}": "{0} sold: +{1}", "Der letzte Torwart bleibt im Kader.": "The last goalkeeper stays in the squad.",
+  "{0} J. · Stärke {1} · Form {2}": "{0} yrs · Strength {1} · Form {2}", "{0} J. · Stärke {1} · Form {2} · Startelf": "{0} yrs · Strength {1} · Form {2} · Starting XI", "{0} J. · Stärke {1} · Form {2} · verletzt": "{0} yrs · Strength {1} · Form {2} · injured", "{0} J. · Stärke {1} · Form {2} · Startelf · verletzt": "{0} yrs · Strength {1} · Form {2} · Starting XI · injured",
 };

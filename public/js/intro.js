@@ -31,7 +31,7 @@ export async function playIntro({ canvas, captionEl, titleEl, skipBtn, audio, vo
   const shots = SHOTS.map(sh => { const text = sh.title ? 'Beat RealCore – Legacy League. Saison starten!' : sh.text; const d = voice ? voice.durationOf(tr ? tr(text) : text, lang) : 0; return { ...sh, dur: Math.max(sh.dur, d ? d + 1.6 : sh.dur) }; });
   if (webglOk() && await loadBabylon()) { try { pitch = new Pitch3D(canvas); pitch.resize(canvas.clientWidth, canvas.clientHeight); pitch.setLamps(0); } catch { pitch = null; } }
   if (done) return;
-  canvas.hidden = !pitch;
+  canvas.hidden = !pitch; canvas.classList.remove('ready');
   const onResize = () => { if (pitch) pitch.resize(canvas.clientWidth, canvas.clientHeight); }; window.addEventListener('resize', onResize);
   let shotIdx = -1, shotT = 0;
   const showCaption = (sh) => {
@@ -53,9 +53,9 @@ export async function playIntro({ canvas, captionEl, titleEl, skipBtn, audio, vo
     if (pitch && M) {
       const e = ease(shotT), f = sh.from, g = sh.to;
       pitch.setCine({ alpha: lerp(f.alpha, g.alpha, e), beta: lerp(f.beta, g.beta, e), radius: lerp(f.radius, g.radius, e), tx: lerp(f.tx, g.tx, e), tz: lerp(f.tz, g.tz, e), ty: 1 });
-      if (sh.lights === 'flicker') { const on = shotT < 0.15 ? 0 : shotT < 0.45 ? (Math.random() < 0.5 ? 0.2 : 0.9) * Math.min(1, (shotT - 0.15) / 0.1) : 1; pitch.setLamps(on); } else pitch.setLamps(1);
+      if (sh.lights === 'flicker') { const k = Math.max(0, Math.min(1, (shotT - 0.1) / 0.45)), on = k * k * (3 - 2 * k); pitch.setLamps(on); } // Flutlicht fährt weich hoch else pitch.setLamps(1);
       if (!M.over) M.tick(dt * (idx === 0 ? 0 : 1));
-      pitch.draw(M, dt);
+      pitch.draw(M, dt); if (!canvas.classList.contains('ready')) requestAnimationFrame(() => canvas.classList.add('ready'));
     }
     // Text ausblenden gegen Ende der Einstellung
     if (!sh.title) captionEl.classList.toggle('out', shotT > 0.86);
