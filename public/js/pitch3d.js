@@ -15,32 +15,45 @@ const ONCE = {
   catch: { n: 'M_gkcatch', from: 0.45, len: 0.85, sp: 1 }, trip: { n: 'M_trip', from: 0, len: 1.45, sp: 1.1 },
   standup: { n: 'M_standup', from: 0, len: 1.6, sp: 1.05 },
 }; // ArrayBuffer, einmal je Seite geladen
-async function rigBytes() { if (!rigData) rigData = fetch(RIG_URL).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); return rigData; }
+// Modelle robust laden (schwaches WLAN): bis zu drei Versuche mit Zeitlimit, Datei muss vollständig sein (GLB-Kopf + Länge)
+async function fetchGLB(url, tries = 3) {
+  for (let i = 0; i < tries; i++) {
+    const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 45000);
+    try { const r = await fetch(i ? url + (url.includes('?') ? '&' : '?') + 'r=' + i : url, { signal: ctl.signal, cache: i ? 'reload' : 'default' }); if (!r.ok) throw new Error(r.status); const buf = await r.arrayBuffer(); const dv = new DataView(buf);
+      if (buf.byteLength > 20 && dv.getUint32(0, true) === 0x46546C67 && dv.getUint32(8, true) === buf.byteLength) return buf; throw new Error('unvollständig'); }
+    catch (e) { console.warn('Modell laden', url, 'Versuch', i + 1, e.message || e); await new Promise(res => setTimeout(res, 1500 * (i + 1))); }
+    finally { clearTimeout(tm); }
+  }
+  return null;
+}
+async function rigBytes() { if (!rigData) rigData = fetchGLB(RIG_URL).then(b => { if (!b) rigData = null; return b; }); return rigData; }
+// langsame Verbindung oder Datensparmodus: keine HD-Figuren
+const slowNet = () => { try { const c = navigator.connection; return !!c && (c.saveData || /(^|-)2g|3g/.test(c.effectiveType || '') || (c.downlink && c.downlink < 1.5)); } catch { return false; } };
 // HD-Figur: realistischer Körper (Quaternius Universal Base Characters, CC0) mit Texturen und Trikot-Zonenkarte
 const HD_URL = '/models/player-hd.glb?v=3', HD_DIR = '/models/hd/', HDF_URL = '/models/player-hd-f.glb?v=1', HDF_DIR = '/models/hd/f/';
 // Spielerinnen erkennen (Vornamen der Kader- und Gegnerlisten)
 const FEM = new Set(['Sina', 'Pia', 'Clara', 'Fiona', 'Kim', 'Dana', 'Hanna', 'Ida', 'Greta', 'Mila', 'Lotte', 'Hilde', 'Ines', 'Marta', 'Elke', 'Mandy', 'Vera', 'Zenzi', 'Sabine', 'Moni', 'Tanja', 'Inka', 'Nadja', 'Ria', 'Dagmar', 'Silke', 'Doris', 'Pamela', 'Conny', 'Rosa', 'Nele', 'Lia', 'Mia', 'Yara', 'Lena', 'Anna', 'Lisa', 'Sara', 'Julia']);
 export const isFemale = (p) => !!p && (p.female === true || (p.female !== false && String(p.name || '').split(/[\s-]+/).some(w => FEM.has(w))));
 export const gfx = () => { try { return localStorage.getItem('brcm-gfx') || 'auto'; } catch { return 'auto'; } };
-const wantHD = () => { try { const q = new URLSearchParams(location.search).get('hd'); if (q) return q !== '0'; } catch { /* ignore */ } const g = gfx(); if (g === 'high') return true; if (g === 'mid' || g === 'low') return false; return (navigator.hardwareConcurrency || 4) > 4 && Math.min(screen.width, screen.height) >= 700; };
+const wantHD = () => { try { const q = new URLSearchParams(location.search).get('hd'); if (q) return q !== '0'; } catch { /* ignore */ } const g = gfx(); if (g === 'high') return true; if (g === 'mid' || g === 'low') return false; return !slowNet() && (navigator.hardwareConcurrency || 4) > 4 && Math.min(screen.width, screen.height) >= 700; };
 // Modelle schon im Hintergrund laden (nur Netzwerk), damit Intro und Anpfiff nicht warten
 export function prefetchModels() { rigBytes(); if (wantHD()) { hdAssets(); hdAssetsF(); } }
 let hdData = null, hdDataF = null; const KIT_PIX = new Map(); // Trikotbilder (Pixel) seitenweit wiederverwenden
 function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
 async function hdAssets() {
   if (!hdData) hdData = (async () => {
-    const [bytes, zones, light, dark] = await Promise.all([fetch(HD_URL).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error('HD'))), loadImg(HD_DIR + 'kit-zones.png'), loadImg(HD_DIR + 'skin-light.jpg'), loadImg(HD_DIR + 'skin-dark.jpg')]);
+    const [bytes, zones, light, dark] = await Promise.all([fetchGLB(HD_URL, 2).then(b => b || Promise.reject(new Error('HD'))), loadImg(HD_DIR + 'kit-zones.png'), loadImg(HD_DIR + 'skin-light.jpg'), loadImg(HD_DIR + 'skin-dark.jpg')]);
     const S = 512, cv = (img, smooth = true) => { const c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d', { willReadFrequently: true }); g.imageSmoothingEnabled = smooth; g.drawImage(img, 0, 0, S, S); return g.getImageData(0, 0, S, S).data; };
     return { bytes, S, zones: cv(zones, false), light: cv(light), dark: cv(dark) };
-  })().catch(() => null);
+  })().catch(() => { hdData = null; return null; });
   return hdData;
 }
 async function hdAssetsF() {
   if (!hdDataF) hdDataF = (async () => {
-    const [bytes, zones, light, dark] = await Promise.all([fetch(HDF_URL).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error('HDF'))), loadImg(HDF_DIR + 'kit-zones.png'), loadImg(HDF_DIR + 'skin-light.jpg'), loadImg(HDF_DIR + 'skin-dark.jpg')]);
+    const [bytes, zones, light, dark] = await Promise.all([fetchGLB(HDF_URL, 2).then(b => b || Promise.reject(new Error('HDF'))), loadImg(HDF_DIR + 'kit-zones.png'), loadImg(HDF_DIR + 'skin-light.jpg'), loadImg(HDF_DIR + 'skin-dark.jpg')]);
     const S = 512, cv = (img, smooth = true) => { const c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d', { willReadFrequently: true }); g.imageSmoothingEnabled = smooth; g.drawImage(img, 0, 0, S, S); return g.getImageData(0, 0, S, S).data; };
     return { bytes, S, zones: cv(zones, false), light: cv(light), dark: cv(dark), female: true };
-  })().catch(() => null);
+  })().catch(() => { hdDataF = null; return null; });
   return hdDataF;
 }
 
@@ -156,9 +169,10 @@ export class Pitch3D {
       const c = await B.LoadAssetContainerAsync(new Uint8Array(bytes), this.scene, { pluginExtension: '.glb' }); if (this.disposed) return; this.tParse = performance.now() - tl0;
       if (hd) { try { const hf = await hdAssetsF(); if (hf && !this.disposed) { this.rigF = await B.LoadAssetContainerAsync(new Uint8Array(hf.bytes), this.scene, { pluginExtension: '.glb' }); this.hdF = hf; this.hdNormalF = new B.Texture(HDF_DIR + 'normal.jpg', this.scene, false, false); } } catch (e) { console.warn('Spielerinnen-Modell nicht geladen', e); this.rigF = null; this.hdF = null; } }
       if (hd) { const { Texture, StandardMaterial, Color3 } = B; this.hdNormal = new Texture(HD_DIR + 'normal.jpg', this.scene, false, false); const em = this.hdEye = new StandardMaterial('hdEye', this.scene); em.diffuseTexture = new Texture(HD_DIR + 'eye.jpg', this.scene, false, false); em.specularColor = new Color3(0.6, 0.6, 0.6); em.specularPower = 64; this.hdBrowTex = new Texture(HD_DIR + 'brows.png', this.scene, false, false); this.kitCache = new Map(); }
+      if (c.animationGroups.length < 10 || !c.animationGroups.some(g => g.name === 'Idle_Loop')) { console.warn('Spielermodell ohne Bewegungen', c.animationGroups.length); c.dispose(); if (hd) { this.noHD = true; this.hd = null; this.rigF = null; this.hdF = null; return this.loadRig(); } rigData = null; throw new Error('Animationen fehlen'); }
       this.rig = c; this.figCheck = null; this.rigNames = c.animationGroups.map(g => g.name); this.mx = this.rigNames.includes('M_jog');
       for (const f of this.figs.values()) this.disposeFig(f); this.figs.clear(); if (this.ref) { const o = this.ref; this.disposeFig(o); this.ref = null; }
-    } catch (e) { console.warn('Spielermodell nicht geladen – einfache Figuren', e); }
+    } catch (e) { console.warn('Spielermodell nicht geladen – einfache Figuren', e); if (!this.disposed && (this.rigTries = (this.rigTries || 0) + 1) < 4) setTimeout(() => { if (!this.disposed && !this.rig) this.rigPromise = this.loadRig(); }, 6000 * this.rigTries); }
   }
   // Rückfall, wenn die Spielerfiguren auf diesem Gerät nicht gezeichnet werden können (Shaderfehler oder nie bereit):
   // erst ohne HD-Körper und Schatten, dann einfache Figuren
@@ -231,6 +245,7 @@ export class Pitch3D {
       else if (!g.isStarted && !(once && once.n === name) && !ONCE_NAMES.has(name)) g.start(true, speeds[name] || 1);
       if (!(once && once.n === name)) g.speedRatio = speeds[name] || 1; g.setWeightForAllAnimatables(w); f.w[name] = w;
     }
+    if (!Object.keys(f.w).length) { const g = f.ags.Idle_Loop || f.ags.M_offidle; if (g) { if (!g.isStarted) g.start(true, 1); g.setWeightForAllAnimatables(1); f.w[g.name.split('#')[0]] = 1; } }
   }
   // ---------- Aufbau ----------
   cmat(hex, spec = 0.08) { this.mc ||= new Map(); const k = hex + spec; if (!this.mc.has(k)) this.mc.set(k, this.mat('c' + k, hex, { spec })); return this.mc.get(k); }
