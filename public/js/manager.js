@@ -354,8 +354,9 @@ export class Season {
     const dev = [];
     for (const p of this.players) { const rt = res.ratings?.[p.id]; if (rt !== undefined && rt >= 7 && p.age < 27 && this.r() < 0.25 + (p.pot || 3) * 0.12) { const a = ATTRS[Math.floor(this.r() * ATTRS.length)]; p[a] = clamp(p[a] + 1 + (p.pot >= 5 ? 1 : 0), 1, 99); p.value = Math.round(p.value * 1.04 / 10) * 10; dev.push(p.name); this.stats.developed++; } }
     if (dev.length) this.msg('hub', `Entwicklung: ${dev.join(', ')} ${dev.length > 1 ? 'haben' : 'hat'} im Spiel dazugelernt.`);
-    this.results.push({ day: this.day, opp: o.id, club: o.club, home: this.home, gf, ga, won, draw, pts, income, att: fin.att, event: this.pendingEvent?.event || null, objective: obj });
+    this.results.push({ day: this.day, opp: o.id, club: o.club, home: this.home, gf, ga, won, draw, pts, income, att: fin.att, cap: fin.cap, event: this.pendingEvent?.event || null, objective: obj });
     this.simulateOthers();
+    (this.rankHist ||= []).push(this.rank());
     this.msg(won ? 'hub' : 'legacy', won ? `${gf}:${ga} gegen ${o.club} – ${o.real}` : pick(this.r, TAUNTS.win));
     if (won) this.msg('legacy', pick(this.r, TAUNTS.lose));
     this.hooks.onEvent?.({ type: 'result', won, draw, gf, ga, income, pts });

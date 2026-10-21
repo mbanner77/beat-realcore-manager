@@ -39,7 +39,7 @@
 <!-- ============ Titel / Startseite ============ -->
 <section id="screen-title" class="screen active">
 <div class="home">
-  <header class="hero">
+  <header class="home-hero">
     <div class="hero-left">
       <a class="rc-logo" href="https://www.realcore.de" target="_blank" rel="noopener" title="realcore.de"><svg class="rc-mark" viewBox="0 0 107 107" aria-hidden="true"><path fill-rule="evenodd" d="M107 0H0V107H107V0ZM53 92C74.5391 92 92 74.5391 92 53C92 31.4609 74.5391 14 53 14C31.4609 14 14 31.4609 14 53C14 74.5391 31.4609 92 53 92Z"/></svg><img src="/img/realcore-wordmark.png" alt="the real core" width="532" height="223"></a>
       <div class="pres">RealCore <b>TechHub</b> präsentiert</div>
@@ -80,8 +80,13 @@
     <div class="club-rail" id="club-rail"></div>
   </section>
 
+  <section class="home-sec" id="home-ach">
+    <div class="sec-head"><small>// ERFOLGE</small><h2>Deine Erfolge <span id="ach-count"></span></h2><p>Gelten über alle Saisons – auf diesem Gerät gespeichert.</p></div>
+    <div class="ach-grid" id="ach-grid"></div>
+  </section>
+
   <section class="home-sec two">
-    <div class="card board-card"><div class="card-head"><span>Liga · Top heute</span><span class="tag" id="title-board-tag">Alle Stufen</span></div><div id="title-board" class="mini-board">Lade …</div><button class="btn sm ghost" id="btn-board2">Ganze Bestenliste →</button></div>
+    <div class="card board-card"><div class="card-head"><span>Liga · Top heute</span><span class="tag" id="title-board-tag">Alle Stufen</span></div><div id="title-board" class="mini-board">Lade …</div><button class="btn sm ghost" id="btn-home-board">Ganze Bestenliste →</button></div>
     <div class="card how-card"><div class="card-head"><span>In drei Schritten</span></div>
       <ol class="steps"><li><b>Woche planen</b><span>Aufstellung, Taktik, Training, Transfers, Eintrittspreis.</span></li><li><b>Spiel erleben</b><span>3D-Stadion, Live-Kommentar, Wechsel und Kabinenansprache.</span></li><li><b>RealCore schlagen</b><span>Punkte sammeln, Benchmark knacken, Gutschein holen.</span></li></ol>
     </div>
@@ -92,7 +97,7 @@
     <p>Eine kurze Saison dauert rund 20 Minuten.</p>
     <button class="btn primary big" id="btn-play2">Saison starten</button>
   </section>
-  <footer class="title-foot"><span>RealCore Group · SAP · BTP · KI · <span class="ver">v2.4</span></span><span><a href="#" id="link-privacy">Datenschutz</a></span><p class="tm-note">SAP, SAP S/4HANA, SAP HANA, SAP BTP, SAP Fiori, SAP Integration Suite, SAP Datasphere, ABAP, Joule, Kyma und SAP R/3 sind Marken oder eingetragene Marken der SAP SE oder ihrer verbundenen Unternehmen in Deutschland und anderen Ländern. Dieses Spiel ist nicht von SAP SE oder einem verbundenen Unternehmen autorisiert oder gesponsert.</p></footer>
+  <footer class="title-foot"><span>RealCore Group · SAP · BTP · KI · <span class="ver">v2.5</span></span><span><a href="#" id="link-privacy">Datenschutz</a></span><p class="tm-note">SAP, SAP S/4HANA, SAP HANA, SAP BTP, SAP Fiori, SAP Integration Suite, SAP Datasphere, ABAP, Joule, Kyma und SAP R/3 sind Marken oder eingetragene Marken der SAP SE oder ihrer verbundenen Unternehmen in Deutschland und anderen Ländern. Dieses Spiel ist nicht von SAP SE oder einem verbundenen Unternehmen autorisiert oder gesponsert.</p></footer>
 </div>
 </section>
 
@@ -115,7 +120,7 @@
       <em class="gate-sub">LEGACY LEAGUE</em>
       <p class="gate-tag">Der Fußballmanager gegen die Legacy-IT.</p>
       <div class="gate-load"><div class="gate-bar"><i id="gate-bar"></i></div><span id="gate-status">Stadion wird vorbereitet …</span></div>
-      <div class="gate-btns"><button class="btn primary big" id="gate-go">▶ Los geht's</button><button class="btn ghost" id="gate-skip">Intro überspringen</button></div>
+      <div class="gate-btns"><button class="btn primary big" id="gate-go">▶ Los geht's</button></div>
       <div class="gate-chips"><span>🔊 Mit Ton und Sprecher</span><span>⏱ rund 20 Minuten je Saison</span><span>🏆 TechHub-Gutscheine</span></div>
     </div>
     <div class="gate-foot"><span>RealCore Group · SAP · BTP · KI</span><span>Esc überspringt</span></div>
@@ -185,7 +190,7 @@
       <section class="wtab" id="tab-squad">
         <div class="squad-grid">
           <div class="board-col"><div class="board-head"><h3>Aufstellung <small id="lineup-form"></small></h3><button class="btn sm" id="btn-auto">Auto-Aufstellung</button></div><div class="lineup-board" id="lineup-board"></div><p class="hint" id="lineup-hint">Klicke eine Position und dann eine:n Spieler:in in der Liste.</p><ul class="problems" id="lineup-problems"></ul></div>
-          <div class="list-col"><div class="board-head"><h3>Kader <small id="squad-n"></small></h3><span class="legend"><i class="st-ok"></i> fit <i class="st-tired"></i> müde <i class="st-inj"></i> verletzt <i class="st-ban"></i> gesperrt</span></div><div class="player-list" id="player-list"></div></div>
+          <div class="list-col"><div class="board-head"><h3>Kader <small id="squad-n"></small></h3><div class="sq-ctl"><select id="sq-sort" aria-label="Sortierung"><option value="pos">Position</option><option value="str">Stärke</option><option value="form">Form</option><option value="fit">Fitness</option><option value="val">Marktwert</option><option value="age">Alter</option><option value="goals">Tore</option></select><div class="seg sm" id="sq-filter"><button data-f="all" class="on">Alle</button><button data-f="xi">Startelf</button><button data-f="bench">Bank</button><button data-f="out">Ausfälle</button></div></div><span class="legend"><i class="st-ok"></i> fit <i class="st-tired"></i> müde <i class="st-inj"></i> verletzt <i class="st-ban"></i> gesperrt</span></div><div class="player-list" id="player-list"></div></div>
         </div>
       </section>
       <section class="wtab" id="tab-tactics">
@@ -210,7 +215,7 @@
       </section>
       <section class="wtab" id="tab-market"><p class="lead">Freie Spieler:innen aus der Cloud. Kader: 14 bis 22.</p><div class="market-cards" id="market-cards"></div><h3>Spieler verkaufen</h3><p class="hint">Verkaufspreis: rund 60 % des Marktwerts – gute Form und junges Alter bringen mehr, Verletzte weniger. Wer in der Startelf steht, wird automatisch ersetzt.</p><div class="sell-list" id="sell-list"></div></section>
       <section class="wtab" id="tab-finance"><div class="fin-grid" id="fin-grid"></div></section>
-      <section class="wtab" id="tab-table"><div class="table-wrap"><table class="league" id="league-table"><thead><tr><th>#</th><th>Verein</th><th>Sp</th><th>S</th><th>U</th><th>N</th><th>Tore</th><th>Pkt</th></tr></thead><tbody></tbody></table></div><div class="two-col"><div><h3>Bisherige Spiele</h3><ul class="results" id="results-list"></ul></div><div><h3>Torjäger</h3><div class="scorers" id="scorers"></div></div></div></section>
+      <section class="wtab" id="tab-table"><div class="table-wrap"><table class="league" id="league-table"><thead><tr><th>#</th><th>Verein</th><th>Sp</th><th>S</th><th>U</th><th>N</th><th>Tore</th><th>Pkt</th></tr></thead><tbody></tbody></table></div><div class="rank-chart" id="rank-chart"></div><div class="two-col"><div><h3>Bisherige Spiele</h3><ul class="results" id="results-list"></ul></div><div><h3>Torjäger</h3><div class="scorers" id="scorers"></div></div></div></section>
       <section class="wtab" id="tab-radio"><div class="radio" id="radio"></div></section>
     </main>
   </div>
@@ -368,6 +373,7 @@
     </div>
   </div>
 </div>
+<div class="ach-pop" id="ach-pop" hidden></div>
 <div id="toast" class="toast" hidden></div>
 <script type="module" src="/js/main.js"></script>
 </body>

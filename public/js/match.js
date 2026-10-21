@@ -15,7 +15,7 @@ export const COMMENT = {
   full: ['Abpfiff! Das Spiel ist ausgerollt.', 'Schluss! Der Stapellauf ist durch.'],
   goal: ['TOR! {p} integriert den Ball sauber ins Netz!', 'TOOOR für {t}! {p} – Schnittstelle sauber, Ball drin.', 'Inbetriebnahme! {p} trifft, {k} ohne Chance.', 'TOR! {p} schließt ab wie eine erfolgreiche Systemumstellung.'],
   goal_opp: ['Tor für {t}. {p} trifft – das riecht nach Altlast.', 'Gegentor durch {p}. Der Absturz sitzt.', 'Tor für {t}: {p} nutzt eine Lücke, die nicht im Pflichtenheft stand.'],
-  save: ['{k} hält! Die Brandmauer greift.', 'Starke Parade von {k} – Zugriff verweigert.', '{p} zieht ab, {k} ist da. Anfrage abgelehnt.'],
+  save: ['{k} hält! Da kommt nichts durch.', 'Starke Parade von {k} – Zugriff verweigert.', '{p} zieht ab, {k} ist da. Anfrage abgelehnt.'],
   wide: ['{p} schießt – vorbei. Das ging ins Archiv.', 'Knapp daneben, {p}! Vorgang geschlossen ohne Lösung.', '{p} aus der Distanz – über das Tor, wie ein Fax ins Nirgendwo.'],
   post: ['PFOSTEN! {p} scheitert am Aluminium – Zeitüberschreitung an der Schnittstelle.', 'Latte! {p} hat den Treffer im Testsystem, aber nicht im Produktivsystem.'],
   block: ['Geblockt! Die Abwehr von {t2} steht wie ein sauberer Systemkern.', '{p} zieht ab, aber der Schuss wird geblockt – Berechtigung fehlt.'],

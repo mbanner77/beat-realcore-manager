@@ -5,7 +5,7 @@ export const FILLER = {
   de: {
     lead: ['Nach {n} Minuten führt {t} mit {a} zu {b}. Der Gegner sucht noch nach einer Lücke im Pflichtenheft.', '{t} verwaltet die Führung – sauberer Kern im Mittelfeld.', 'Es steht {a} zu {b}. {t} hat das Spiel im Griff wie eine saubere Auslieferung.'],
     behind: ['{n} Minuten gespielt, {t} liegt zurück. Zeit für eine Schnellkorrektur?', 'Es steht {a} zu {b} – {t} braucht jetzt einen Änderungsantrag mit höchster Dringlichkeit.', 'Die Uhr läuft: {n} Minuten, {t} im Rückstand.'],
-    level: ['Noch kein Unterschied nach {n} Minuten – beide Teams tasten sich ab wie beim Projektauftakt.', 'Es steht {a} zu {b}. Die Abwehrreihen stehen wie zwei Brandmauern.', 'Unentschieden nach {n} Minuten.'],
+    level: ['Noch kein Unterschied nach {n} Minuten – beide Teams tasten sich ab wie beim Projektauftakt.', 'Es steht {a} zu {b}. Beide Abwehrreihen stehen wie eine Mauer.', 'Unentschieden nach {n} Minuten.'],
     poss: ['{t} hat {pc} Prozent Ballbesitz – die Integration läuft.', '{pc} Prozent Ballbesitz für {t}, aber ein Tor braucht am Ende einen Abschluss.'],
     rain: ['Der Regen wird stärker. Der Rasen ist rutschig wie ein ungetestetes Update.'],
     snow: ['Es schneit in der Arena. Kurze Pässe sind jetzt Gold wert.'],

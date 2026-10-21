@@ -17,7 +17,7 @@ Der RealCore-Fußballmanager im Browser: Führe TechHub United durch sieben Spie
 - Intro läuft beim Start (Klick auf „Los geht's“ schaltet Ton frei), Abpfiff-Animation (Sieg/Remis/Niederlage) und Meisterfeier mit Feuerwerk, Pokal und Konfetti
 - Spielanimation: Schuss-/Passbewegung, Torwartparaden, Grätschen, Protest bei Karten, Schiedsrichter, TV-Zoom im Angriffsdrittel, Torwiederholung in Zeitlupe aus der Torkamera, pulsierendes Publikum, Kick-Sounds
 - Untertitel: jede gesprochene Ansage (Sprecher, Lena, Legacy-KI, Live-Kommentar) wird auch als Text eingeblendet
-- Kommentar in deutscher Sprache (Inbetriebnahme, Schnellkorrektur, Änderungsantrag, Brandmauer …), Aussprachehilfen für englische Spielernamen in der Sprachausgabe; Halbzeitfazit, Nachspielzeit, gegnerische Auswechslungen
+- Kommentar in deutscher Sprache (Inbetriebnahme, Schnellkorrektur, Änderungsantrag, Schnittstelle …), Aussprachehilfen für englische Spielernamen in der Sprachausgabe; Halbzeitfazit, Nachspielzeit, gegnerische Auswechslungen
 - Live-Kommentar mit echter Stimme: Satzteile, Spieler-/Vereinsnamen und Zahlen werden einzeln produziert (`tools/voice/frags.mjs` + `gen_frags.py`, Ausgabe `public/audio/voice/<lang>/c/`) und im Browser per Web Audio nahtlos zusammengesetzt; Gerätestimme nur noch als Rückfall
 - Wetter (Sonne, Regen, Sturm, Schnee) mit Einfluss auf Pässe, Tempo und Abschlüsse sowie 3D-Regen/-Schnee; Kabinenansprache zur Halbzeit; Live-Konditionsanzeige mit Wechselhinweisen
 - Wirtschaft: Eintrittspreis (10–60 €) mit Zuschauerprognose, Fan-Stimmung (Ergebnisse, Tore, Preise, volle Ränge), Stadionausbau in drei Stufen (12.000 → 42.000 Plätze), Fanshop, VIP-Logen, Trainingszentrum, Reha-Zentrum, Gehälter und Unterhalt, Abrechnung je Spieltag mit Verlauf
@@ -29,3 +29,6 @@ Der RealCore-Fußballmanager im Browser: Führe TechHub United durch sieben Spie
 - Spielerprofil per Klick im Kader: Netzdiagramm (aktuell vs. Saisonstart), Werteentwicklung, Statistiken, Aktionen (Kapitän, Elfmeter, Einzeltraining, Verkaufen)
 - Startseite 2.0: 3D-Stadion im Hintergrund mit laufendem Demo-Spiel und Kamerafahrt, Live-Matchcenter, persönliche Bilanz, Bereiche „Das Spiel“, „Die Gegner“, „In drei Schritten“; Spielstand wird automatisch gesichert („Weiterspielen“)
 - Startbildschirm: sofortige Ladeanzeige, Flutlicht-Stimmung, echter Ladefortschritt (Schriften, Stimmen, Liga, 3D-Stadion), Wahl zwischen Intro und direktem Einstieg
+- Erfolge: 16 freischaltbare Erfolge über alle Saisons (z. B. Weiße Weste, Hattrick, Comeback, Monolith gestürzt, Beat RealCore) mit Einblendung und Übersicht auf der Startseite
+- Übersicht: Gegneranalyse (Abwehr/Mittelfeld/Angriff im Vergleich, Tipp zur Spielweise), Mini-Tabelle, Restprogramm; Kader sortier- und filterbar; Saisonverlauf (Tabellenplatz je Spieltag) im Tabellen-Tab
+- Das Intro läuft bei jedem Start nach „Los geht's“ (im Intro überspringbar)

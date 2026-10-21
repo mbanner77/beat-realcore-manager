@@ -43,7 +43,7 @@ const I = {
   market: 'M3 6h18l-2 9H6zM8 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm9 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', table: 'M4 5h16M4 12h16M4 19h16', press: 'M4 5h16v14H4zM8 9h8M8 13h5', quit: 'M9 5H5v14h4M13 17l5-5-5-5M18 12H9',
   goal: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 4 4 3-1.5 5h-5L8 10z', card: 'M7 3h10v18H7z', injury: 'M12 3v18M3 12h18', sub: 'M7 7h10l-3-3M17 17H7l3 3', whistle: 'M14 6h5v4l-4 2-1 6a5 5 0 1 1-6-5l2-7z', trophy: 'M8 3h8v4a4 4 0 0 1-8 0zM6 5H3v2a3 3 0 0 0 3 3M18 5h3v2a3 3 0 0 1-3 3M12 11v5M8 21h8M10 16h4v5',
   target: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm0 3a1 1 0 1 0 0 2 1 1 0 0 0 0-2z', board: 'M4 4h16v12H4zM8 20h8M12 16v4', bolt: 'M13 2 4 14h7l-1 8 9-12h-7z', star: 'm12 3 2.7 5.7 6.3.8-4.6 4.3 1.2 6.2L12 17l-5.6 3 1.2-6.2L3 9.5l6.3-.8z',
-  pen: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm-3 8h6', clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 4v5l3 2', money: 'M3 7h18v10H3zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', up: 'M12 19V5M5 12l7-7 7 7', ball: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7l4 3-1.5 5h-5L8 10zM12 7V3M16 10l4-1M14.5 15l2 4M9.5 15l-2 4M8 10 4 9',
+  lock: 'M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4', pen: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm-3 8h6', clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 4v5l3 2', money: 'M3 7h18v10H3zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', up: 'M12 19V5M5 12l7-7 7 7', ball: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7l4 3-1.5 5h-5L8 10zM12 7V3M16 10l4-1M14.5 15l2 4M9.5 15l-2 4M8 10 4 9',
 };
 export function icon(name, cls = '') { return `<svg class="ico ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${I[name] || I.ball}"/></svg>`; }
 
