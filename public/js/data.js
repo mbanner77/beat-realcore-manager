@@ -76,7 +76,14 @@ export const TRAINING = {
   abwehr:    { name: 'Clean-Core-Abwehr', desc: 'Abwehr + für Verteidigung und Torwart.', gain: { abwehr: 3, kondition: 1 }, group: ['def', 'tw'] },
   kondition: { name: 'Hypercare-Lauf', desc: 'Kondition + für alle, Fitness vollständig regeneriert.', gain: { kondition: 2 }, group: ['tw', 'def', 'mid', 'att'], fit: true },
   team:      { name: 'Teambuilding', desc: 'Moral + für alle. Kein Attributgewinn.', gain: {}, group: [], morale: 12 },
+  taktik:    { name: 'Taktiktraining', desc: 'Eingespieltheit in aktueller Formation und Spielstil steigt deutlich.', gain: {}, group: [], tactic: true },
 };
+export const INTENSITY = {
+  light:  { name: 'Leicht', desc: 'Weniger Fortschritt, Fitness und Stimmung steigen.', gain: 0.6, fit: 6, morale: 2, inj: 0 },
+  normal: { name: 'Normal', desc: 'Ausgewogen: guter Fortschritt, etwas müde Beine.', gain: 1, fit: -6, morale: 0, inj: 0 },
+  hard:   { name: 'Hart', desc: 'Deutlich mehr Fortschritt – aber Fitness sinkt stark und es kann Verletzungen geben.', gain: 1.35, fit: -14, morale: -2, inj: 0.05 },
+};
+export const ATTR_NAMES = { tempo: 'Tempo', technik: 'Technik', abwehr: 'Abwehr', schuss: 'Schuss', kondition: 'Kondition' };
 
 // Gegner der Legacy League – sieben Spieltage, jede Begegnung spiegelt ein Legacy-Thema
 export const OPPONENTS = [

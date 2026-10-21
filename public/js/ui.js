@@ -49,3 +49,13 @@ export function icon(name, cls = '') { return `<svg class="ico ${cls}" viewBox="
 
 // Formkurve: letzte Ergebnisse als Chips
 export function formChips(results) { return results.slice(-5).map(r => `<i class="fc ${r.won ? 'w' : r.draw ? 'd' : 'l'}" title="${esc(r.club)} ${r.gf}:${r.ga}">${r.won ? 'S' : r.draw ? 'U' : 'N'}</i>`).join('') || '<i class="fc n">–</i>'; }
+
+// Netzdiagramm der fünf Werte (aktuell gefüllt, Saisonstart als Linie)
+export function radar(vals, start, labels, color = '#3ddc84', size = 220) {
+  const n = vals.length, c = size / 2, R = size / 2 - 30, pt = (i, v) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return [c + Math.cos(a) * R * v / 99, c + Math.sin(a) * R * v / 99]; };
+  const poly = (arr) => arr.map((v, i) => pt(i, v).map(x => x.toFixed(1)).join(',')).join(' ');
+  const rings = [25, 50, 75, 99].map(r => `<polygon points="${poly(Array(n).fill(r))}" fill="none" stroke="rgba(255,255,255,0.08)"/>`).join('');
+  const axes = vals.map((_, i) => { const [x, y] = pt(i, 99); return `<line x1="${c}" y1="${c}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.08)"/>`; }).join('');
+  const lbl = labels.map((l, i) => { const [x, y] = pt(i, 122); return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#8aa79d" font-family="JetBrains Mono, monospace">${l} ${Math.round(vals[i])}</text>`; }).join('');
+  return `<svg class="radar" viewBox="-26 -6 ${size + 52} ${size + 12}" width="${size + 52}" height="${size + 12}" style="overflow:visible">${rings}${axes}${start ? `<polygon points="${poly(start)}" fill="none" stroke="rgba(255,255,255,0.45)" stroke-dasharray="3 3"/>` : ''}<polygon points="${poly(vals)}" fill="${color}33" stroke="${color}" stroke-width="2"/>${lbl}</svg>`;
+}

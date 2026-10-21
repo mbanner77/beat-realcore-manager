@@ -517,4 +517,18 @@ export default {
   "Vierzehn Spieltage in Hin- und Rückrunde, sieben Legacy-Clubs, ein Ziel: die Legacy League.": "Fourteen matchdays home and away, seven legacy clubs, one goal: the Legacy League.",
   "Pressekonferenz in der Clean-Core-Arena: {0} übernimmt TechHub United{1}. Vierzehn Spieltage in Hin- und Rückrunde, sieben Legacy-Clubs, ein Ziel: die Legacy League.": "Press conference at the Clean Core Arena: {0} takes over TechHub United{1}. Fourteen matchdays home and away, seven legacy clubs, one goal: the Legacy League.",
   "Kamera wechseln": "Switch camera", "Nah": "Close", "Hinter dem Angriff": "Behind the attack", "Taktik": "Tactics", "Kamera: {0}": "Camera: {0}",
+  // ---------- Training 2.0 & Spielerprofil ----------
+  "1 · Schwerpunkt": "1 · Focus", "2 · Intensität": "2 · Intensity", "3 · Einzeltraining": "3 · Individual training", "bis zu zwei Spieler:innen": "up to two players", "Training starten": "Start training", "Zweite Einheit starten": "Start second session",
+  "Leicht": "Light", "Normal": "Normal", "Hart": "Hard", "Weniger Fortschritt, Fitness und Stimmung steigen.": "Less progress, fitness and morale rise.", "Ausgewogen: guter Fortschritt, etwas müde Beine.": "Balanced: good progress, slightly tired legs.",
+  "Deutlich mehr Fortschritt – aber Fitness sinkt stark und es kann Verletzungen geben.": "Much more progress – but fitness drops sharply and injuries can occur.", "Verletzungsrisiko je Spieler:in {0} %.": "Injury risk per player {0} %.",
+  "– niemand –": "– nobody –", "Taktiktraining": "Tactical training", "Eingespieltheit in aktueller Formation und Spielstil steigt deutlich.": "Cohesion in the current formation and playing style rises significantly.",
+  "Eingespieltheit {0} → höher": "Cohesion {0} → higher", "Fitness für alle": "Fitness for everyone", "Stimmung für alle": "Morale for everyone", "{0} Spieler:innen · bis +{1}": "{0} players · up to +{1}",
+  "Diese Woche wurde bereits trainiert.": "Training has already been done this week.", "{0} · {1}": "{0} · {1}", "{0} · {1} · {2}× Einzeltraining": "{0} · {1} · {2}× individual training",
+  "Eingespieltheit": "Cohesion", "Blind eingespielt": "Perfectly drilled", "Gut eingespielt": "Well drilled", "Holprig": "Rough", "Neu zusammengewürfelt": "Thrown together", "Formation {0}": "Formation {0}", "Stil {0}": "Style {0}",
+  "Eingespieltheit wirkt auf alle Werte im Spiel (−4 % bis +4 %). Taktiktraining und Spiele in derselben Formation erhöhen sie.": "Cohesion affects all attributes in the match (−4 % to +4 %). Tactical training and matches in the same formation increase it.",
+  "Trainingsbericht": "Training report", "Noch kein Training in dieser Woche.": "No training yet this week.", "Keine sichtbaren Wertänderungen.": "No visible attribute changes.", "Verletzt: {0}": "Injured: {0}", "Eingespieltheit {0}: {1}": "Cohesion {0}: {1}",
+  "{0}: {1} Verbesserungen": "{0}: {1} improvements", "{0}: {1} Verbesserungen · {2} verletzt": "{0}: {1} improvements · {2} injured",
+  "// SPIELERPROFIL": "// PLAYER PROFILE", "Kapitän": "Captain", "Elfmeter": "Penalties", "Startelf": "Starting XI", "verletzt ({0})": "injured ({0})", "Gestrichelt: Werte zum Saisonstart.": "Dashed: attributes at season start.",
+  "Spiele": "Matches", "Tore / Vorlagen": "Goals / assists", "Zum Kapitän": "Make captain", "Einzeltraining planen": "Plan individual training", "Verkaufen · {0}": "Sell · {0}",
+  "Training: {0} ({1}). {2} Spieler:innen haben sich verbessert.": "Training: {0} ({1}). {2} players improved.", "Die Abläufe sitzen besser.": "The routines are working better.",
 };

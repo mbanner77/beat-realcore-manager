@@ -1,5 +1,5 @@
 // Saison- und Vereinslogik: Kader, Training, Transfers, Taktik, Tabelle, Störungen der Legacy-KI, Punktewertung
-import { DIFFICULTY, FORMATIONS, STYLES, TEMPO, SQUAD, MARKET_POOL, MARKET_SELL_FACTOR, TRAINING, OPPONENTS, SEASON_SCORE, EVENTS, TAUNTS, POS_GROUP, CLUB, OBJECTIVES, DECISIONS, SEASON_LEN, STADIUM, FACILITIES, ECON } from './data.js';
+import { DIFFICULTY, FORMATIONS, STYLES, TEMPO, SQUAD, MARKET_POOL, MARKET_SELL_FACTOR, TRAINING, OPPONENTS, SEASON_SCORE, EVENTS, TAUNTS, POS_GROUP, CLUB, OBJECTIVES, DECISIONS, SEASON_LEN, STADIUM, FACILITIES, ECON, INTENSITY, ATTR_NAMES } from './data.js';
 
 // Deterministischer Zufall (für Tages-Challenge und Tests)
 export function rng(seed) { let s = (seed >>> 0) || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return (s >>> 0) / 4294967296; }; }
@@ -32,7 +32,9 @@ export class Season {
     // Wirtschaft
     this.econ = { price: ECON.priceDefault, stadium: 0, pending: null, fac: { shop: 0, vip: 0, train: 0, medic: 0 }, fans: 50, invested: 0, history: [], last: null };
     this.players = SQUAD.map(p => ({ ...p, fitness: 100, morale: 70, form: 0, injured: 0, suspended: 0, yellows: 0, goals: 0, assists: 0, apps: 0, own: true, pot: potentialOf(p, this.r) }));
+    for (const p of this.players) p.start = Object.fromEntries(ATTRS.map(a => [a, p[a]]));
     this.formation = '4-4-2'; this.style = 'clean'; this.tempo = 'normal';
+    this.coh = { '4-4-2': 60, '4-3-3': 40, '5-3-2': 40, '3-5-2': 35 }; this.cohStyle = { clean: 60, agile: 40, bigbang: 40 }; this.lastTraining = null;
     this.slots = []; this.autoLineup();
     this.captain = null; this.penTaker = null; this.pickLeaders();
     this.objective = null; this.decision = null; this.decided = []; this.sponsorPerWin = false; this.oppMod = 0; this.extraTraining = false;
@@ -77,24 +79,54 @@ export class Season {
       this.market.push(p);
     }
   }
-  train(k) {
+  // Training: Schwerpunkt + Intensität + bis zu zwei Einzeltrainings; liefert einen Bericht mit den Veränderungen
+  train(k, o = {}) {
     if ((this.trained && !this.extraTraining) || !TRAINING[k]) return false;
-    const T = TRAINING[k]; if (this.trained) this.extraTraining = false; this.trained = k; this.stats.trainings++;
+    const T = TRAINING[k], I = INTENSITY[o.intensity] || INTENSITY.normal, fac = 1 + 0.2 * (this.econ?.fac.train || 0), r = this.r;
+    if (this.trained) this.extraTraining = false; this.trained = k; this.stats.trainings++;
+    const before = new Map(this.players.map(p => [p.id, Object.fromEntries(ATTRS.map(a => [a, p[a]]))])), injured = [];
+    const pf = (p) => (0.5 + (p.pot || 3) * 0.2) * (p.age >= 31 ? 0.75 : 1);
     for (const p of this.players) {
-      if (T.group.includes(POS_GROUP[p.pos])) for (const a in T.gain) p[a] = clamp(p[a] + T.gain[a] * (0.5 + (p.pot || 3) * 0.2) * (1 + 0.2 * (this.econ?.fac.train || 0)), 1, 99);
-      if (T.fit) p.fitness = 100;
+      if (p.injured > 0) continue;
+      const inGroup = T.group.includes(POS_GROUP[p.pos]);
+      if (inGroup) for (const a in T.gain) p[a] = clamp(p[a] + T.gain[a] * pf(p) * fac * I.gain, 1, 99);
+      if (T.fit) p.fitness = clamp(o.intensity === 'hard' ? 85 : 100, 0, 100);
+      else p.fitness = clamp(p.fitness + I.fit, 0, 100);
       if (T.morale) p.morale = clamp(p.morale + T.morale, 0, 100);
-      if (!T.fit && !T.morale) p.fitness = clamp(p.fitness - 6, 0, 100);
+      p.morale = clamp(p.morale + I.morale, 0, 100);
+      if (I.inj && (inGroup || T.fit) && r() < I.inj) { p.injured = 1; injured.push(p.name); }
     }
-    this.msg('hub', `Training: ${T.name}. ${T.fit ? 'Alle sind wieder topfit.' : T.morale ? 'Die Stimmung ist spürbar besser.' : 'Die Werte steigen – aber die Beine sind etwas schwerer.'}`);
-    return true;
+    // Einzeltraining
+    for (const it of (o.individual || []).slice(0, 2)) {
+      const p = this.players.find(x => x.id === it.id); if (!p || p.injured > 0 || !ATTRS.includes(it.attr)) continue;
+      p[it.attr] = clamp(p[it.attr] + 1.6 * pf(p) * fac * I.gain, 1, 99); p.fitness = clamp(p.fitness - 4, 0, 100);
+    }
+    // Taktiktraining: Eingespieltheit
+    let coh = null;
+    if (T.tactic) { const g = Math.round(18 * I.gain + 4); this.coh[this.formation] = clamp((this.coh[this.formation] || 40) + g, 0, 100); this.cohStyle[this.style] = clamp((this.cohStyle[this.style] || 40) + Math.round(g * 0.6), 0, 100); coh = { formation: this.formation, style: this.style, value: this.coh[this.formation], styleValue: this.cohStyle[this.style] }; }
+    // Bericht: sichtbare Veränderungen (gerundet)
+    const changes = [];
+    for (const p of this.players) { const b0 = before.get(p.id); if (!b0) continue; const d = {}; for (const a of ATTRS) { const x = Math.round(p[a]) - Math.round(b0[a]); if (x) d[a] = x; } if (Object.keys(d).length) changes.push({ id: p.id, name: p.name, pos: p.pos, d }); }
+    for (const c of changes) { const p = this.players.find(x => x.id === c.id), r0 = rating({ ...p, ...before.get(p.id) }), r1 = rating(p); if (r0 > 0) p.value = Math.round(p.value * (r1 / r0) ** 2 / 10) * 10; }
+    this.lastTraining = { k, name: T.name, intensity: o.intensity || 'normal', changes, injured, coh, individual: o.individual || [] };
+    this.msg('hub', `Training: ${T.name} (${I.name}). ${changes.length ? changes.length + ' Spieler:innen haben sich verbessert.' : T.fit ? 'Alle sind wieder topfit.' : T.morale ? 'Die Stimmung ist spürbar besser.' : coh ? 'Die Abläufe sitzen besser.' : ''}${injured.length ? ' Verletzt: ' + injured.join(', ') + '.' : ''}`);
+    if (injured.length) this.fillLineup();
+    return this.lastTraining;
   }
+  // Vorschau: wer profitiert vom Schwerpunkt
+  trainPreview(k, intensity = 'normal') {
+    const T = TRAINING[k], I = INTENSITY[intensity] || INTENSITY.normal; if (!T) return null;
+    const who = this.players.filter(p => p.injured <= 0 && T.group.includes(POS_GROUP[p.pos]));
+    const gain = Object.values(T.gain).reduce((a, b) => a + b, 0) * I.gain * (1 + 0.2 * (this.econ?.fac.train || 0));
+    return { n: who.length, gain: Math.round(gain * 10) / 10, risk: I.inj, fit: T.fit ? (intensity === 'hard' ? 85 : 100) : null };
+  }
+  cohesion() { return Math.round(((this.coh[this.formation] || 40) * 0.6 + (this.cohStyle[this.style] || 40) * 0.4)); }
   buy(id) {
     const i = this.market.findIndex(p => p.id === id); if (i < 0) return { ok: false, reason: 'Nicht verfügbar.' };
     const p = this.market[i];
     if (p.value > this.budget) return { ok: false, reason: 'Nicht genug Budget.' };
     if (this.players.length >= 22) return { ok: false, reason: 'Kader voll (22).' };
-    this.budget -= p.value; this.market.splice(i, 1); this.players.push({ ...p, own: false }); this.stats.transfersIn++;
+    this.budget -= p.value; this.market.splice(i, 1); this.players.push({ ...p, own: false, start: Object.fromEntries(ATTRS.map(a => [a, p[a]])) }); this.stats.transfersIn++;
     this.msg('hub', `${p.name} unterschreibt bei TechHub United. ${p.desc}`);
     return { ok: true };
   }
@@ -224,8 +256,8 @@ export class Season {
   }
   bench() { const inL = new Set(this.slots); return this.players.filter(p => !inL.has(p.id) && this.available(p)).sort((a, b) => rating(b) - rating(a)).slice(0, 7); }
   effective(p, pos) {
-    const fit = posFit(p, pos), cond = 0.78 + 0.22 * p.fitness / 100, mor = 0.9 + 0.2 * p.morale / 100, form = 1 + p.form * 0.02;
-    const e = {}; for (const a of ATTRS) e[a] = clamp(p[a] * fit * cond * mor * form, 5, 99); return e;
+    const fit = posFit(p, pos), cond = 0.78 + 0.22 * p.fitness / 100, mor = 0.9 + 0.2 * p.morale / 100, form = 1 + p.form * 0.02, coh = 0.96 + this.cohesion() / 100 * 0.08;
+    const e = {}; for (const a of ATTRS) e[a] = clamp(p[a] * fit * cond * mor * form * coh, 5, 99); return e;
   }
   teamForMatch() {
     const F = FORMATIONS[this.formation];
@@ -313,6 +345,7 @@ export class Season {
     }
     // Wirtschaft: Zuschauer, TV, Fanshop, Logen, Sponsor – minus Gehälter und Unterhalt
     const fin = this.settle(won, draw, gf), income = fin.net;
+    this.coh[this.formation] = clamp((this.coh[this.formation] || 40) + 5, 0, 100); this.cohStyle[this.style] = clamp((this.cohStyle[this.style] || 40) + 3, 0, 100);
     if (won && this.sponsorPerWin) this.msg('hub', 'Data Lake GmbH zahlt den Siegbonus: +150 T€.');
     const obj = this.checkObjective(res, gf, ga);
     if (obj) { this.stats.bonus += obj.bonus; if (obj.ok) this.stats.objectives++; this.msg('hub', obj.ok ? `Wochenziel erreicht: ${obj.name} (+${obj.bonus} Punkte).` : `Wochenziel verfehlt: ${obj.name}.`); }

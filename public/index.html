@@ -141,7 +141,20 @@
         <h3>Tempo</h3><div class="seg" id="tempos"></div>
         <div class="card opp-card" id="opp-card"></div>
       </section>
-      <section class="wtab" id="tab-training"><p class="lead">Ein Schwerpunkt pro Woche. Die Werte steigen dauerhaft – junge Spieler:innen lernen schneller.</p><div class="train-cards" id="train-cards"></div></section>
+      <section class="wtab" id="tab-training">
+        <div class="train-layout">
+          <div class="train-main">
+            <h3>1 · Schwerpunkt</h3><div class="train-cards" id="train-cards"></div>
+            <h3>2 · Intensität</h3><div class="seg" id="train-int"></div><p class="hint" id="train-int-desc"></p>
+            <h3>3 · Einzeltraining <small>bis zu zwei Spieler:innen</small></h3><div class="indiv" id="train-indiv"></div>
+            <div class="train-go"><span class="hint" id="train-summary"></span><button class="btn primary big" id="btn-train">Training starten</button></div>
+          </div>
+          <aside class="train-side">
+            <div class="hcard"><div class="hc-head">Eingespieltheit</div><div id="coh-box"></div></div>
+            <div class="hcard"><div class="hc-head">Trainingsbericht</div><div id="train-report"><p class="hint">Noch kein Training in dieser Woche.</p></div></div>
+          </aside>
+        </div>
+      </section>
       <section class="wtab" id="tab-market"><p class="lead">Freie Spieler:innen aus der Cloud. Kader: 14 bis 22.</p><div class="market-cards" id="market-cards"></div><h3>Spieler verkaufen</h3><p class="hint">Verkaufspreis: rund 60 % des Marktwerts – gute Form und junges Alter bringen mehr, Verletzte weniger. Wer in der Startelf steht, wird automatisch ersetzt.</p><div class="sell-list" id="sell-list"></div></section>
       <section class="wtab" id="tab-finance"><div class="fin-grid" id="fin-grid"></div></section>
       <section class="wtab" id="tab-table"><div class="table-wrap"><table class="league" id="league-table"><thead><tr><th>#</th><th>Verein</th><th>Sp</th><th>S</th><th>U</th><th>N</th><th>Tore</th><th>Pkt</th></tr></thead><tbody></tbody></table></div><div class="two-col"><div><h3>Bisherige Spiele</h3><ul class="results" id="results-list"></ul></div><div><h3>Torjäger</h3><div class="scorers" id="scorers"></div></div></div></section>
@@ -149,6 +162,13 @@
     </main>
   </div>
   <div id="tip" hidden></div>
+<!-- Spielerprofil -->
+<div class="overlay" id="pmodal" hidden>
+  <div class="panel sm pm-panel">
+    <header class="panel-head"><span></span><h2 data-k="// SPIELERPROFIL" id="pm-title">Spieler</h2><button class="btn sm" id="btn-pm-close">Schließen ✕</button></header>
+    <div class="pm-body" id="pm-body"></div>
+  </div>
+</div>
 <!-- Vorstandsentscheidung -->
 <div class="overlay" id="decision" hidden>
   <div class="panel sm">

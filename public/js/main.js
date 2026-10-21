@@ -1,6 +1,6 @@
 // Beat RealCore – Legacy League: Oberfläche und Spielablauf
 import { initI18n, tr, isEN, LANG, setLang } from './i18n.js';
-import { SEASON_LEN, STADIUM, FACILITIES, ECON, WEATHER, TALKS, OBJECTIVES, DIFFICULTY, FORMATIONS, STYLES, TEMPO, TRAINING, OPPONENTS, POS, POS_GROUP, EVENTS, CLUB, SEASON_SCORE } from './data.js';
+import { INTENSITY, ATTR_NAMES, SEASON_LEN, STADIUM, FACILITIES, ECON, WEATHER, TALKS, OBJECTIVES, DIFFICULTY, FORMATIONS, STYLES, TEMPO, TRAINING, OPPONENTS, POS, POS_GROUP, EVENTS, CLUB, SEASON_SCORE } from './data.js';
 import { Season, rating, posFit, ATTRS } from './manager.js';
 import { Match, MATCH_REAL } from './match.js';
 import { Pitch } from './pitch.js';
@@ -9,7 +9,7 @@ import { playIntro } from './intro.js';
 import { Voice } from './voice.js';
 import { Confetti } from './fx.js';
 import { playCeremony } from './ceremony.js';
-import { crest, avatar, shirt, ring, icon, formChips } from './ui.js';
+import { crest, avatar, shirt, ring, icon, formChips, radar } from './ui.js';
 import { FILLER as FILL, HALF, WEATHER_LINE, TALK_LINE, enTemplate } from './commentary.js';
 import EN_DICT from './i18n-en.js';
 import { Audio } from './audio.js';
@@ -214,7 +214,7 @@ function renderHome() {
     <div class="hcard dec ${d && !d.chosen ? 'open' : ''}"><div class="hc-head">${icon('board')} Vorstand</div>${d ? `<b>${esc(d.title)}</b><p>${esc(d.text)}</p>${d.chosen ? `<span class="done">✓ ${esc(d.options.find(x => x.key === d.chosen)?.label || '')}</span>` : `<div class="dec-mini">${d.options.map(x => `<button class="btn sm" data-dec="${x.key}" title="${esc(x.effect)}">${esc(x.label)}</button>`).join('')}</div>`}` : '<p>Der Vorstand meldet sich ab dem zweiten Spieltag.</p>'}</div>
     <div class="hcard ev ${ev ? 'on' : ''}"><div class="hc-head">${icon('bolt')} Legacy-KI</div>${ev ? `<b>${esc(ev.name)}</b><p>${esc(ev.desc)}</p>` : '<p>Diese Woche keine Störung gemeldet – noch nicht.</p>'}</div>
     <div class="hcard form"><div class="hc-head">${icon('up')} Form</div><div class="chips">${formChips(se.results)}</div><div class="top3">${form.map(p => `<div class="tp">${avatar(p, CLUB, 40)}<span><b>${esc(p.name.split(' ')[0])}</b><small>${esc(POS[p.pos])} · Form ${p.form > 0 ? '+' + p.form : p.form}</small></span><em>${rating(p)}</em></div>`).join('')}</div>${inj.length ? `<p class="inj">${icon('injury')} ${inj.map(p => esc(p.name) + (p.injured > 0 ? ' (verletzt)' : ' (gesperrt)')).join(', ')}</p>` : ''}</div>
-    <div class="hcard kpis"><div class="hc-head">${icon('money')} Verein</div><div class="kgrid"><div><small>Budget</small><b>${money(se.budget)}</b></div><div><small>Training</small><b>${se.trained ? esc(TRAINING[se.trained].name) : '<span class="warn">offen</span>'}</b></div><div><small>Kader</small><b>${se.players.length} · Ø ${Math.round(se.players.reduce((a, p) => a + p.age, 0) / se.players.length)} J.</b></div><div><small>Stimmung</small><b>${Math.round(se.players.reduce((a, p) => a + p.morale, 0) / se.players.length)}</b></div><div><small>Fans</small><b>${Math.round(se.econ.fans)}</b></div><div><small>${se.home ? 'Erwartete Zuschauer' : 'Stadion'}</small><b>${se.home ? se.forecast().att.toLocaleString('de-DE') : se.capacity.toLocaleString('de-DE') + ' Plätze'}</b></div></div></div>
+    <div class="hcard kpis"><div class="hc-head">${icon('money')} Verein</div><div class="kgrid"><div><small>Budget</small><b>${money(se.budget)}</b></div><div><small>Training</small><b>${se.trained ? esc(TRAINING[se.trained].name) : '<span class="warn">offen</span>'}</b></div><div><small>Kader</small><b>${se.players.length} · Ø ${Math.round(se.players.reduce((a, p) => a + p.age, 0) / se.players.length)} J.</b></div><div><small>Stimmung</small><b>${Math.round(se.players.reduce((a, p) => a + p.morale, 0) / se.players.length)}</b></div><div><small>Eingespieltheit</small><b>${se.cohesion()}</b></div><div><small>Fans</small><b>${Math.round(se.econ.fans)}</b></div><div><small>${se.home ? 'Erwartete Zuschauer' : 'Stadion'}</small><b>${se.home ? se.forecast().att.toLocaleString('de-DE') : se.capacity.toLocaleString('de-DE') + ' Plätze'}</b></div></div></div>
     <div class="hcard press"><div class="hc-head">${icon('press')} Presse</div>${last.map(m => `<div class="pm ${m.who}"><b>${esc((SPK[m.who] || SPK.hub).n)}</b><p>${esc(m.text)}</p></div>`).join('') || '<p>–</p>'}</div>`;
   $$('#home-grid [data-go]').forEach(b => b.addEventListener('click', () => { S.tab = b.dataset.go; audio.play('click'); renderWeek(); }));
   $$('#home-grid [data-dec]').forEach(b => b.addEventListener('click', () => { if (se.decide(b.dataset.dec)) { audio.play('confirm'); toast($('#dec-note').textContent || ''); } renderWeek(); }));
@@ -233,6 +233,28 @@ $('#btn-dec-later').addEventListener('click', () => { audio.play('click'); $('#d
 $('#btn-dec-close').addEventListener('click', () => { audio.play('click'); $('#decision').hidden = true; renderWeek(); });
 $('#btn-decision').addEventListener('click', () => { audio.play('click'); openDecision(); });
 
+// Spielerprofil
+function openPlayer(id) {
+  const se = SE(), p = se.players.find(x => x.id === id); if (!p) return;
+  const inL = se.slots.includes(p.id), st = p.start || p, delta = ATTRS.map(a => Math.round(p[a]) - Math.round(st[a] ?? p[a]));
+  $('#pm-title').textContent = p.name;
+  $('#pm-body').innerHTML = `<div class="pm-top">${avatar(p, CLUB, 84)}<div><b>${esc(p.name)}</b><small><span>${esc(p.nick || '')}</span> · <span>${esc(POS[p.pos])}</span> · <span>${p.age} ${isEN ? "yrs" : "J."}</span></small><span class="stars">${'★'.repeat(p.pot || 3)}<i>${'★'.repeat(5 - (p.pot || 3))}</i></span><div class="pm-tags">${p.id === se.captain ? '<i class="cap">Kapitän</i>' : ''}${p.id === se.penTaker ? '<i class="pen">Elfmeter</i>' : ''}${inL ? '<i>Startelf</i>' : ''}${p.injured > 0 ? `<i class="down">verletzt (${p.injured})</i>` : ''}${p.suspended > 0 ? '<i class="down">gesperrt</i>' : ''}</div></div>${ring(rating(p), 64)}</div>
+    <div class="pm-grid"><div>${radar(ATTRS.map(a => p[a]), ATTRS.map(a => st[a] ?? p[a]), ATTRS.map(a => tr(ATTR_NAMES[a]).slice(0, 3).toUpperCase()))}<p class="hint">Gestrichelt: Werte zum Saisonstart.</p></div>
+    <div><div class="pm-attrs">${ATTRS.map((a, i) => `<div><span>${esc(ATTR_NAMES[a])}</span><i class="bar"><b style="width:${p[a]}%"></b></i><b>${Math.round(p[a])}</b>${delta[i] ? `<em class="${delta[i] > 0 ? 'up' : 'down'}">${delta[i] > 0 ? '▲' : '▼'}${Math.abs(delta[i])}</em>` : '<em></em>'}</div>`).join('')}</div>
+    <div class="kgrid pm-k"><div><small>Spiele</small><b>${p.apps}</b></div><div><small>Tore / Vorlagen</small><b>${p.goals} / ${p.assists}</b></div><div><small>Fitness</small><b>${Math.round(p.fitness)} %</b></div><div><small>Stimmung</small><b>${Math.round(p.morale)}</b></div><div><small>Form</small><b>${p.form > 0 ? '+' + p.form : p.form}</b></div><div><small>Marktwert</small><b>${money(p.value)}</b></div></div></div></div>
+    <p class="pm-desc">${esc(p.desc || '')}</p>
+    <div class="pm-actions">${inL && p.pos !== 'TW' && p.id !== se.captain ? '<button class="btn sm" data-pa="cap">Zum Kapitän</button>' : ''}${inL && p.pos !== 'TW' && p.id !== se.penTaker ? '<button class="btn sm" data-pa="pen">Elfmeterschütze</button>' : ''}${!se.trained || se.extraTraining ? '<button class="btn sm" data-pa="train">Einzeltraining planen</button>' : ''}${se.players.length > 14 ? `<button class="btn sm" data-pa="sell">Verkaufen · ${money(se.salePrice(p))}</button>` : ''}</div>`;
+  $$('#pm-body [data-pa]').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.pa; audio.play('click');
+    if (k === 'cap') { se.setCaptain(p.id); toast(`${p.name} trägt die Kapitänsbinde.`); }
+    else if (k === 'pen') se.setPenTaker(p.id);
+    else if (k === 'train') { renderTraining(); const P = S.tplan, slot = P.individual.find(x => !x.id) || P.individual[1]; slot.id = p.id; const weak = [...ATTRS].sort((a, c) => p[a] - p[c]).find(a => a !== 'kondition' || p.pos === 'TW') || 'technik'; slot.attr = p.pos === 'ST' ? 'schuss' : p.pos === 'TW' || p.pos === 'IV' ? 'abwehr' : weak; $('#pmodal').hidden = true; S.tab = 'training'; renderWeek(); return; }
+    else if (k === 'sell') { if (!confirm(tr(`${p.name} für ${money(se.salePrice(p))} verkaufen?`))) return; const r = se.sell(p.id); if (r.ok) { audio.play('cash'); $('#pmodal').hidden = true; renderWeek(); return; } toast(r.reason); }
+    renderWeek(); openPlayer(p.id);
+  }));
+  $('#pmodal').hidden = false;
+}
+$('#btn-pm-close').addEventListener('click', () => { $('#pmodal').hidden = true; audio.play('click'); });
 // Kader & Aufstellung
 function attrsHtml(p) { const C = { tempo: '#38e1ff', technik: '#3ddc84', abwehr: '#ffc247', schuss: '#ff6a3d', kondition: '#b87cff' }; return `<div class="attrs">${ATTRS.map(a => `<i style="--v:${p[a]}%;--c:${C[a]}" title="${tr({ tempo: 'Tempo', technik: 'Technik', abwehr: 'Abwehr', schuss: 'Schuss', kondition: 'Kondition' }[a])} ${Math.round(p[a])}"><span>${{ tempo: 'TE', technik: 'TC', abwehr: 'AB', schuss: 'SC', kondition: 'KO' }[a]}</span></i>`).join('')}</div>`; }
 function statusOf(p) { return p.injured > 0 ? ['inj', `verletzt (${p.injured})`] : p.suspended > 0 ? ['ban', 'gesperrt'] : p.fitness < 60 ? ['tired', 'müde'] : ['ok', 'fit']; }
@@ -252,7 +274,7 @@ function renderSquad() {
   $$('#player-list .pl').forEach(el => {
     el.addEventListener('click', (e) => { if (e.target.dataset.sell || e.target.dataset.cap || e.target.dataset.pen) return; const id = el.dataset.id; const p = se.players.find(x => x.id === id);
       if (S.selSlot !== null) { if (!se.available(p)) { toast(p.injured > 0 ? 'Verletzt – nicht einsetzbar.' : 'Gesperrt – nicht einsetzbar.'); audio.play('deny'); return; } se.setSlot(S.selSlot, id); S.selSlot = null; audio.play('confirm'); renderWeek(); }
-      else showTip(el, p); });
+      else { $('#tip').hidden = true; openPlayer(id); } });
     el.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') showTip(el, se.players.find(x => x.id === el.dataset.id)); });
     el.addEventListener('pointerleave', () => { $('#tip').hidden = true; });
   });
@@ -268,7 +290,7 @@ $('#btn-auto').addEventListener('click', () => { SE().autoLineup(); S.selSlot = 
 // Taktik
 function renderTactics() {
   const se = SE(), o = se.opponent;
-  $('#formations').innerHTML = Object.entries(FORMATIONS).map(([k, f]) => `<button class="${k === se.formation ? 'on' : ''}" data-k="${k}">${esc(f.name)}</button>`).join('');
+  $('#formations').innerHTML = Object.entries(FORMATIONS).map(([k, f]) => `<button class="${k === se.formation ? 'on' : ''}" data-k="${k}">${esc(f.name)} <small class="cohv">${se.coh[k] || 40}</small></button>`).join('');
   $$('#formations button').forEach(b => b.addEventListener('click', () => { se.setFormation(b.dataset.k); audio.play('click'); renderWeek(); }));
   $('#styles').innerHTML = Object.entries(STYLES).map(([k, s]) => `<button class="scard ${k === se.style ? 'on' : ''}" data-k="${k}"><b>${esc(s.name)}</b><small>${esc(s.desc)}</small><div class="bars"><span>Pressing<b>${'▮'.repeat(Math.round(s.press * 5))}</b></span><span>Risiko<b>${'▮'.repeat(Math.round(s.risk * 5))}</b></span></div></button>`).join('');
   $$('#styles .scard').forEach(b => b.addEventListener('click', () => { se.style = b.dataset.k; audio.play('click'); renderTactics(); }));
@@ -279,11 +301,28 @@ function renderTactics() {
 }
 // Training
 function renderTraining() {
-  const se = SE();
-  $('#train-cards').innerHTML = Object.entries(TRAINING).map(([k, t]) => `<button class="tcard ${se.trained === k ? 'done' : ''}" data-k="${k}" ${se.trained && !se.extraTraining ? 'disabled' : ''}><b>${esc(t.name)}</b><small>${esc(t.desc)}</small></button>`).join('');
-  $('#train-extra')?.remove(); if (se.extraTraining && se.trained) $('#train-cards').insertAdjacentHTML('beforebegin', '<p class="hint" id="train-extra">Zusatzschicht: Eine zweite Einheit ist möglich.</p>');
-  $$('#train-cards .tcard').forEach(b => b.addEventListener('click', () => { if (se.train(b.dataset.k)) { audio.play('confirm'); toast(`Training: ${TRAINING[b.dataset.k].name}`); } renderWeek(); }));
+  const se = SE(); if (!S.tplan || S.tplan.day !== se.day) S.tplan = { day: se.day, k: 'angriff', intensity: 'normal', individual: [{ id: '', attr: 'schuss' }, { id: '', attr: 'tempo' }] };
+  const P = S.tplan, done = se.trained && !se.extraTraining;
+  $('#train-cards').innerHTML = Object.entries(TRAINING).map(([k, t]) => { const pv = se.trainPreview(k, P.intensity); return `<button class="tcard ${P.k === k ? 'sel' : ''} ${se.trained === k ? 'done' : ''}" data-k="${k}" ${done ? 'disabled' : ''}><b>${esc(t.name)}</b><small>${esc(t.desc)}</small><em>${t.tactic ? `Eingespieltheit ${se.cohesion()} → höher` : t.fit ? 'Fitness für alle' : t.morale ? 'Stimmung für alle' : `${pv.n} Spieler:innen · bis +${pv.gain}`}</em></button>`; }).join('');
+  $$('#train-cards .tcard').forEach(b => b.addEventListener('click', () => { P.k = b.dataset.k; audio.play('click'); renderTraining(); }));
+  $('#train-int').innerHTML = Object.entries(INTENSITY).map(([k, v]) => `<button class="${P.intensity === k ? 'on' : ''}" data-k="${k}" ${done ? 'disabled' : ''}>${esc(v.name)}</button>`).join('');
+  $$('#train-int button').forEach(b => b.addEventListener('click', () => { P.intensity = b.dataset.k; audio.play('click'); renderTraining(); }));
+  const I = INTENSITY[P.intensity]; $('#train-int-desc').textContent = I.desc + (I.inj ? ` Verletzungsrisiko je Spieler:in ${Math.round(I.inj * 100)} %.` : '');
+  const avail = se.players.filter(p => p.injured <= 0).sort((a, b) => (b.pot || 3) - (a.pot || 3) || a.age - b.age);
+  $('#train-indiv').innerHTML = P.individual.map((it, i) => `<div class="ind-row"><select data-i="${i}" ${done ? 'disabled' : ''}><option value="">– niemand –</option>${avail.map(p => `<option value="${p.id}" ${it.id === p.id ? 'selected' : ''}>${esc(p.name)} · ${esc(p.pos)} · ${'★'.repeat(p.pot || 3)}</option>`).join('')}</select><div class="seg sm">${ATTRS.map(a => `<button class="${it.attr === a ? 'on' : ''}" data-i="${i}" data-a="${a}" ${done ? 'disabled' : ''}>${esc(ATTR_NAMES[a])}</button>`).join('')}</div></div>`).join('');
+  $$('#train-indiv select').forEach(sel => sel.addEventListener('change', () => { const o = P.individual.find((x, j) => j !== +sel.dataset.i && x.id === sel.value); if (o && sel.value) o.id = ''; P.individual[+sel.dataset.i].id = sel.value; renderTraining(); }));
+  $$('#train-indiv button').forEach(b => b.addEventListener('click', () => { P.individual[+b.dataset.i].attr = b.dataset.a; audio.play('click'); renderTraining(); }));
+  const n = P.individual.filter(x => x.id).length;
+  $('#train-summary').textContent = done ? 'Diese Woche wurde bereits trainiert.' : `${TRAINING[P.k].name} · ${I.name}${n ? ` · ${n}× Einzeltraining` : ''}`;
+  $('#btn-train').disabled = done; $('#btn-train').textContent = se.extraTraining && se.trained ? 'Zweite Einheit starten' : 'Training starten';
+  // Eingespieltheit
+  const ch = se.cohesion(), fc = se.coh[se.formation] || 40, sc = se.cohStyle[se.style] || 40;
+  $('#coh-box').innerHTML = `<div class="coh"><b>${ch}</b><span>${ch >= 80 ? 'Blind eingespielt' : ch >= 60 ? 'Gut eingespielt' : ch >= 40 ? 'Holprig' : 'Neu zusammengewürfelt'}</span></div><div class="kgrid"><div><small>Formation ${esc(se.formation)}</small><b>${fc}</b><i class="bar"><b style="width:${fc}%"></b></i></div><div><small>Stil ${esc(STYLES[se.style].name)}</small><b>${sc}</b><i class="bar"><b style="width:${sc}%"></b></i></div></div><p class="hint">Eingespieltheit wirkt auf alle Werte im Spiel (−4 % bis +4 %). Taktiktraining und Spiele in derselben Formation erhöhen sie.</p>`;
+  // Bericht
+  const L = se.lastTraining && se.trained ? se.lastTraining : null;
+  $('#train-report').innerHTML = L ? `<p><b>${esc(L.name)}</b> · ${esc(INTENSITY[L.intensity].name)}</p>${L.coh ? `<p class="up">Eingespieltheit ${esc(L.coh.formation)}: ${L.coh.value}</p>` : ''}${L.changes.length ? `<div class="tr-list">${L.changes.slice(0, 14).map(c => `<div class="tr-row">${avatar(se.players.find(p => p.id === c.id) || c, CLUB, 28)}<span>${esc(c.name)}</span><span class="d">${Object.entries(c.d).map(([a, v]) => `<i class="${v > 0 ? 'up' : 'down'}">${ATTR_NAMES[a].slice(0, 3)} ${v > 0 ? '+' : ''}${v}</i>`).join('')}</span></div>`).join('')}</div>` : '<p class="hint">Keine sichtbaren Wertänderungen.</p>'}${L.injured.length ? `<p class="down">Verletzt: ${esc(L.injured.join(', '))}</p>` : ''}` : '<p class="hint">Noch kein Training in dieser Woche.</p>';
 }
+$('#btn-train').addEventListener('click', () => { const se = SE(), P = S.tplan; const r = se.train(P.k, { intensity: P.intensity, individual: P.individual.filter(x => x.id) }); if (r) { audio.play('confirm'); toast(`${r.name}: ${r.changes.length} Verbesserungen${r.injured.length ? ' · ' + r.injured.length + ' verletzt' : ''}`); renderWeek(); } });
 // Transfermarkt
 function renderMarket() {
   const se = SE();
