@@ -32,3 +32,5 @@ Der RealCore-Fußballmanager im Browser: Führe TechHub United durch sieben Spie
 - Erfolge: 16 freischaltbare Erfolge über alle Saisons (z. B. Weiße Weste, Hattrick, Comeback, Monolith gestürzt, Beat RealCore) mit Einblendung und Übersicht auf der Startseite
 - Übersicht: Gegneranalyse (Abwehr/Mittelfeld/Angriff im Vergleich, Tipp zur Spielweise), Mini-Tabelle, Restprogramm; Kader sortier- und filterbar; Saisonverlauf (Tabellenplatz je Spieltag) im Tabellen-Tab
 - Das Intro läuft bei jedem Start nach „Los geht's“ (im Intro überspringbar)
+- 3D-Spieler 2.0: echte Figuren mit Skelett-Animationen (Quaternius, CC0) – Stehen, Joggen, Sprinten, Grätsche, Abwurf, Jubel, Protest, Torwart-Bereitschaft; Schuss als Zusatzbewegung im Code; Trikotfarben über Farbzonen-Palette. Modell neu bauen: `node tools/build-player-model.mjs <UAL1.glb> <UAL2.glb> public/models/player.glb` (benötigt @gltf-transform/core, @gltf-transform/functions, meshoptimizer)
+- Echte Himmel (Poly Haven, CC0) für Tag, Regen/Schnee und Flutlicht; Rasen mit Relief (Normalenkarte „Leafy Grass“, CC0)

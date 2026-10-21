@@ -791,7 +791,6 @@ async function runGate() {
     ['Schriften und Oberfläche', document.fonts ? document.fonts.ready : null],
     ['Sprecher und Stimmen', voice.ready],
     ['Liga und Bestenliste', loadTitleBoard()],
-    ['3D-Stadion', want3d() && webglOk() && !params.has('no3d') ? loadBabylon() : null],
   ].filter(([, p]) => p);
   let done = 0; const upd = (label) => { const k = done / steps.length; bar.style.width = Math.round(8 + k * 92) + '%'; st.textContent = k >= 1 ? 'Bereit – Flutlicht an!' : `${label} …`; };
   upd(steps[0][0]);

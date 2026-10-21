@@ -1,11 +1,15 @@
 // 3D-Darstellung des Spiels mit Babylon.js: Stadion, Rasen, Spielerfiguren mit Laufanimation, Ball mit Flugkurve, Kamera, Effekte.
 // Gleiche Schnittstelle wie die 2D-Variante (pitch.js): resize(w, h), draw(M, dt), goalFlash(team), burst(x, y, color), focus.
 import { PW, PH, GOAL_W } from './match.js';
+// Spielerfiguren: CC0-Modell und Animationen von Quaternius (Universal Animation Library 1+2), aufbereitet mit tools/build-player-model.mjs
+const RIG_URL = '/models/player.glb?v=1';
+let rigData = null; // ArrayBuffer, einmal je Seite geladen
+async function rigBytes() { if (!rigData) rigData = fetch(RIG_URL).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); return rigData; }
 
 let B = null; // Babylon-Modul (lazy)
 export async function loadBabylon() {
   if (B) return B;
-  try { B = await import('../vendor/babylon-lite-8b.js'); return B; } catch { return null; }
+  try { B = await import('../vendor/babylon-lite-9.js'); return B; } catch { return null; }
 }
 export function webglOk() {
   try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
@@ -40,6 +44,51 @@ export class Pitch3D {
       pl.sharpenEnabled = true; pl.sharpen.edgeAmount = 0.25;
     } catch { this.pipe = null; }
     this.fpsT = 0; this.fpsN = 0; this.fpsChecked = false;
+    this.rig = null; this.rigN = 0; this.loadRig(); this.updateSky();
+    // Schussbewegung als Zusatz auf die Skelett-Animation (Oberschenkel nach hinten, dann durchziehen)
+    scene.onAfterAnimationsObservable.add(() => { const now = performance.now(); for (const f of this.kickers || []) { const an = f.kick; if (!an || now > an.until) continue; const k = 1 - (an.until - now) / an.len, back = k < 0.36, t = back ? k / 0.36 : (k - 0.36) / 0.64;
+      const th = back ? 0.75 * t : 0.75 - 2.05 * Math.min(1, t * 1.5) + (t > 0.7 ? (t - 0.7) * 2.4 : 0), ca = back ? 1.3 * t : 1.3 * Math.max(0, 1 - t * 2);
+      const Q = B.Quaternion, ax = B.Vector3; if (f.j.thighR?.rotationQuaternion) f.j.thighR.rotationQuaternion.multiplyInPlace(Q.RotationAxis(new ax(1, 0, 0), th)); if (f.j.calfR?.rotationQuaternion) f.j.calfR.rotationQuaternion.multiplyInPlace(Q.RotationAxis(new ax(0, 0, 1), ca)); } });
+  }
+  async loadRig() {
+    if (!B.LoadAssetContainerAsync || this.noRig) return;
+    try {
+      const bytes = await rigBytes(); if (!bytes || this.disposed) return;
+      const c = await B.LoadAssetContainerAsync(new Uint8Array(bytes), this.scene, { pluginExtension: '.glb' }); if (this.disposed) return;
+      this.rig = c; this.rigNames = c.animationGroups.map(g => g.name);
+      for (const f of this.figs.values()) this.disposeFig(f); this.figs.clear(); if (this.ref) { const o = this.ref; this.disposeFig(o); this.ref = null; }
+    } catch (e) { console.warn('Spielermodell nicht geladen – einfache Figuren', e); }
+  }
+  disposeFig(f) { try { if (f.ags) for (const g of Object.values(f.ags)) g.dispose(); if (f.skel) f.skel.dispose(); f.root.dispose(false, true); } catch { /* ignore */ } if (this.kickers) this.kickers = this.kickers.filter(x => x !== f); }
+  // Figur aus dem Modell: Farbzonen über eine 16×1-Palette (Trikot, Hose, Stutzen, Haut, Schuhe, Haare, Abschluss, Unterarm, Hände)
+  rigFigure(c, scale = 1.45) {
+    const { TransformNode, DynamicTexture, StandardMaterial, Texture, Color3, MeshBuilder } = B, scene = this.scene, id = ++this.rigN;
+    const inst = this.rig.instantiateModelsToScene(n => n + '#' + id, false, { doNotInstantiate: true });
+    const root = new TransformNode('fig', scene), mr = inst.rootNodes[0]; mr.parent = root; root.scaling.set(scale, scale, scale);
+    const tex = new DynamicTexture('pal' + id, { width: 16, height: 1 }, scene, false, Texture.NEAREST_SAMPLINGMODE), g = tex.getContext();
+    const pal = [c.shirt, c.shorts, c.socks, c.skin, c.boots || '#141414', c.hair, c.trim || c.shorts, c.longSleeves ? c.shirt : c.skin, c.gloves || c.skin];
+    pal.forEach((col, i) => { g.fillStyle = col; g.fillRect(i, 0, 1, 1); }); tex.update(); tex.wrapU = tex.wrapV = Texture.CLAMP_ADDRESSMODE;
+    const mat = new StandardMaterial('pm' + id, scene); mat.diffuseTexture = tex; mat.specularColor = new Color3(0.14, 0.14, 0.14); mat.specularPower = 24;
+    for (const m of mr.getChildMeshes()) { m.material = mat; m.isPickable = false; m.alwaysSelectAsActiveMesh = true; }
+    const d = mr.getDescendants(false), bone = (n) => d.find(x => x.name === n + '#' + id);
+    const j = { thighR: bone('thigh_r'), calfR: bone('calf_r'), spine: bone('spine_03'), head: bone('Head') };
+    const ags = {}; inst.animationGroups.forEach((ag, i) => { ag.stop(); ags[this.rigNames[i]] = ag; });
+    root.computeWorldMatrix(true); for (const n of d) n.computeWorldMatrix(true);
+    // Rückennummer und Wappen folgen dem Oberkörper
+    const deco = (mesh, x, y, z, ry) => { mesh.parent = root; mesh.position.set(x, y, z); mesh.rotation.y = ry; mesh.isPickable = false; mesh.computeWorldMatrix(true); if (j.spine) mesh.setParent(j.spine); };
+    if (c.numMat) { const np = MeshBuilder.CreatePlane('num', { width: 0.24, height: 0.24 }, scene); np.material = c.numMat; deco(np, 0, 1.36, -0.155, Math.PI); }
+    if (c.crest) { const cp = MeshBuilder.CreatePlane('crest', { width: 0.08, height: 0.08 }, scene); cp.material = c.crest; deco(cp, 0.075, 1.43, 0.135, 0); }
+    const blob = MeshBuilder.CreateDisc('blob', { radius: 0.5 / scale * 1.32, tessellation: 16 }, scene); blob.rotation.x = Math.PI / 2; blob.position.y = 0.015; blob.scaling.set(1, 0.75, 1); blob.material = this.blobMat; blob.parent = root; blob.isPickable = false;
+    return { root, j, ags, w: {}, rig: true, mat, skel: inst.skeletons[0], phase: Math.random() * 6, scale, face: null, faceOn: false };
+  }
+  // Animationen mischen: Ziele { Name: Gewicht } (Summe 1), Tempo je Animation
+  rigAnim(f, tw, dt, speeds = {}, rate = 8) {
+    const k = Math.min(1, dt * rate);
+    for (const name of new Set([...Object.keys(f.w), ...Object.keys(tw)])) {
+      const g = f.ags[name]; if (!g) continue; const target = tw[name] || 0, w = (f.w[name] || 0) + (target - (f.w[name] || 0)) * k;
+      if (w < 0.01 && target === 0) { if (g.isStarted) g.stop(); delete f.w[name]; continue; }
+      if (!g.isStarted) g.start(true, speeds[name] || 1); g.speedRatio = speeds[name] || 1; g.setWeightForAllAnimatables(w); f.w[name] = w;
+    }
   }
   // ---------- Aufbau ----------
   cmat(hex, spec = 0.08) { this.mc ||= new Map(); const k = hex + spec; if (!this.mc.has(k)) this.mc.set(k, this.mat('c' + k, hex, { spec })); return this.mc.get(k); }
@@ -77,6 +126,8 @@ export class Pitch3D {
     const ground = this.ground = MeshBuilder.CreateGround('ground', { width: W, height: H, subdivisions: 2 }, scene);
     ground.position = new Vector3(PW / 2, 0, PH / 2);
     const gm = new StandardMaterial('gm', scene); gm.diffuseTexture = tex; gm.specularColor = new Color3(0.03, 0.05, 0.03); ground.material = gm;
+    // Rasen-Relief: Normalenkarte (Poly Haven „Leafy Grass“, CC0), fein gekachelt
+    { const nt = new B.Texture('/img/grass-normal.jpg', scene); nt.uScale = W / 1.6; nt.vScale = H / 1.6; gm.bumpTexture = nt; gm.bumpTexture.level = 0.55; gm.specularColor = new Color3(0.07, 0.1, 0.07); gm.specularPower = 18; }
     // Umgebung (dunkler Boden weit außen)
     const outer = MeshBuilder.CreateGround('outer', { width: 420, height: 320 }, scene); outer.position = new Vector3(PW / 2, -0.05, PH / 2); outer.material = this.mat('om', '#07120c');
     // Tore
@@ -267,6 +318,17 @@ export class Pitch3D {
     const { MeshBuilder, DynamicTexture, StandardMaterial, Color3, Mesh } = B, scene = this.scene, T = this.M.teams[p.team];
     const gk = p.pos === 'TW', h = (p.num * 7 + p.team * 13 + (p.name || '').length);
     const shirt = gk ? (p.team === 0 ? '#ffd166' : '#9ad0ff') : T.color, shorts = gk ? '#222222' : T.color2;
+    if (this.rig) {
+      const nt = new DynamicTexture('num' + p.id, { width: 128, height: 128 }, scene, false); nt.hasAlpha = true; const c = nt.getContext(); c.clearRect(0, 0, 128, 128);
+      c.fillStyle = gk ? '#222' : (T.color2 && T.color2 !== shirt ? (T.me ? '#ffffff' : T.color2) : '#fff'); c.font = 'bold 84px "Space Grotesk", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(p.num), 64, 70); nt.update();
+      const numMat = new StandardMaterial('nm' + p.id, scene); numMat.diffuseTexture = nt; numMat.opacityTexture = nt; numMat.specularColor = Color3.Black(); numMat.zOffset = -2;
+      const fig = this.rigFigure({ shirt, shorts, socks: gk ? '#222222' : shirt, trim: gk ? '#111111' : (T.color2 || '#000'), skin: SKIN[h % SKIN.length], hair: ['#2a1a0e', '#111111', '#6b4423', '#b58a3c', '#3b2a1a', '#8a8a8a'][h % 6], gloves: gk ? '#f2f2f2' : null, longSleeves: gk, numMat, crest: this.teamCrest(T, p.team) });
+      const tex = new DynamicTexture('lbl' + p.id, { width: 512, height: 192 }, scene, false); tex.hasAlpha = true;
+      const plane = MeshBuilder.CreatePlane('lbl', { width: 2.4 / fig.scale, height: 0.9 / fig.scale }, scene); plane.position.y = 2.15; plane.parent = fig.root; plane.billboardMode = Mesh.BILLBOARDMODE_ALL;
+      const lm = new StandardMaterial('lm', scene); lm.diffuseTexture = tex; lm.opacityTexture = tex; lm.emissiveColor = new Color3(1, 1, 1); lm.disableLighting = true; lm.backFaceCulling = false; plane.material = lm; plane.isPickable = false;
+      Object.assign(fig, { plane, tex, state: '', gk }); this.label(fig, p); (this.kickers ||= []).push(fig);
+      return fig;
+    }
     const fig = this.body({ shirt, shirtMat: gk ? null : this.teamShirt(T, p.team), crest: this.teamCrest(T, p.team), shorts, socks: gk ? '#222222' : shirt, skin: SKIN[h % SKIN.length], hair: ['#2a1a0e', '#111111', '#6b4423', '#b58a3c', '#3b2a1a', '#8a8a8a'][h % 6], hairStyle: h % 4, gloves: gk ? '#f2f2f2' : null, longSleeves: gk });
     // Rückennummer
     const nt = new DynamicTexture('num' + p.id, { width: 128, height: 128 }, scene, false); nt.hasAlpha = true; const c = nt.getContext(); c.clearRect(0, 0, 128, 128);
@@ -313,7 +375,15 @@ export class Pitch3D {
     const { Color4, Color3 } = B; this.day = day;
     this.scene.clearColor = day ? new Color4(0.55, 0.72, 0.9, 1) : new Color4(0.012, 0.03, 0.028, 1);
     this.hemi.intensity = day ? 1.0 : 0.75; this.sun.intensity = day ? 1.25 : 0.95; this.hemi.groundColor = day ? new Color3(0.2, 0.3, 0.2) : new Color3(0.08, 0.15, 0.1);
-    this.setLamps(day ? 0 : 1);
+    this.setLamps(day ? 0 : 1); this.updateSky();
+  }
+  // Himmelskuppel mit echten Himmelsfotos (Poly Haven, CC0): Sonne mit Wolken, bedeckt, Nacht
+  updateSky() {
+    const { MeshBuilder, StandardMaterial, Texture, Color3, Mesh } = B, w = this.weatherKind || 'sun';
+    const want = !this.day ? 'night' : w === 'sun' ? 'day' : 'grey'; if (this.skyKind === want) return; this.skyKind = want;
+    if (!this.sky) { const m = MeshBuilder.CreateSphere('sky', { diameter: 900, segments: 24, sideOrientation: Mesh.BACKSIDE }, this.scene); m.position.set(PW / 2, -170, PH / 2); m.isPickable = false; m.infiniteDistance = false; const mat = new StandardMaterial('skyM', this.scene); mat.disableLighting = true; mat.backFaceCulling = false; mat.fogEnabled = false; m.material = mat; this.sky = m; this.skyTex = {}; }
+    const t = this.skyTex[want] ||= (() => { const tx = new Texture(`/img/sky-${want}.jpg`, this.scene, false, false, Texture.TRILINEAR_SAMPLINGMODE, () => { if (this.skyKind === want && this.sky) this.sky.setEnabled(true); }); tx.uScale = -1; tx.wrapU = Texture.WRAP_ADDRESSMODE; return tx; })();
+    this.sky.setEnabled(t.isReady()); this.sky.material.emissiveTexture = t; this.sky.material.diffuseColor = Color3.Black(); this.sky.material.emissiveColor = Color3.Black(); this.sky.material.specularColor = Color3.Black();
   }
   setLamps(level) { const { Color3 } = B; this.lampLevel = level; for (const l of this.lamps) l.material.emissiveColor = new Color3(1, 0.96, 0.85).scale(level); if (!this.day) { this.hemi.intensity = 0.25 + 0.5 * level; this.sun.intensity = 0.2 + 0.75 * level; } }
   // Kamerafahrt (Intro): { alpha, beta, radius, tx, tz } oder null
@@ -330,6 +400,7 @@ export class Pitch3D {
       ps.minEmitPower = 1; ps.maxEmitPower = 1; ps.updateSpeed = 0.016; ps.colorDead = new Color4(1, 1, 1, 0); ps.blendMode = ParticleSystem.BLENDMODE_STANDARD; ps.preWarmCycles = 60; ps.start();
     }
     if (this.day) this.scene.clearColor = w === 'sun' ? new Color4(0.55, 0.72, 0.9, 1) : w === 'snow' ? new Color4(0.78, 0.8, 0.84, 1) : new Color4(0.42, 0.47, 0.52, 1);
+    this.updateSky();
     this.weatherDim = w === 'rain' ? 0.8 : w === 'snow' ? 0.92 : w === 'wind' ? 0.95 : 1;
     if (this.ground && w === 'snow') this.ground.material.diffuseColor = new Color3(1.15, 1.18, 1.2); else if (this.ground) this.ground.material.diffuseColor = new Color3(1, 1, 1);
   }
@@ -346,12 +417,13 @@ export class Pitch3D {
     this.ps.emitter.set(x, 0.6, y); this.ps.color1 = new Color4(1, 1, 1, 1); this.ps.color2 = new Color4(c.r, c.g, c.b, 1); this.ps.manualEmitCount = 160;
   }
   buildRef() {
+    if (this.rig) { const f = this.rigFigure({ shirt: '#1c1c1c', shorts: '#111111', socks: '#1c1c1c', trim: '#ffd400', skin: '#e0ac69', hair: '#3b2a1a', boots: '#0d0d0d' }, 1.3); return Object.assign(f, { x: PW / 2 + 8, y: PH / 2 + 6 }); }
     const f = this.body({ shirt: '#1c1c1c', shorts: '#111111', socks: '#1c1c1c', skin: '#e0ac69', hair: '#3b2a1a', hairStyle: 2 }, 1.28);
     return Object.assign(f, { x: PW / 2 + 8, y: PH / 2 + 6 });
   }
   syncRoster(M) {
     if (!this.ref) this.ref = this.buildRef();
-    if (this.M !== M) { for (const f of this.figs.values()) f.root.dispose(); this.figs.clear(); this.M = M; this.flight = null; this.camT = null; }
+    if (this.M !== M) { for (const f of this.figs.values()) this.disposeFig(f); this.figs.clear(); this.M = M; this.flight = null; this.camT = null; }
     for (const p of M.players) { if (p.out) { const f = this.figs.get(p); if (f) f.root.setEnabled(false); continue; } if (!this.figs.has(p)) this.figs.set(p, this.figure(p)); }
   }
   ballHeight(M) {
@@ -366,6 +438,26 @@ export class Pitch3D {
     const f = this.flight, pr = Math.min(1, dist(f.start, b) / f.total);
     return f.h * 4 * pr * (1 - pr);
   }
+  // Modellfigur: Laufen/Sprinten/Stehen gemischt, Sonderaktionen als eigene Animationen
+  driveRig(f, p, s, dt) {
+    const { v, run, sprint, an, now } = s; let tw, sp = {}, rate = 8;
+    f.root.position.y = 0;
+    if (an && an.kind === 'slide') { tw = { Slide_Loop: 1 }; rate = 14; }
+    else if (an && an.kind === 'dive') { const k = 1 - (an.until - now) / 950, kk = Math.sin(Math.min(1, k * 1.25) * Math.PI); f.root.rotation.z = an.side * 1.3 * kk; f.root.position.y = 0.5 * kk; tw = { Jump_Loop: 1 }; rate = 16; }
+    else if (an && an.kind === 'protest') tw = { Idle_No_Loop: 1 };
+    else if (an && an.kind === 'throw') { tw = { OverhandThrow: 1 }; sp = { OverhandThrow: 1.6 }; rate = 14; }
+    else if (s.celebrating || s.happy) { tw = (p.num % 2 || p === this.celeb?.p) ? { Dance_Loop: 1 } : { Yes: 1 }; sp = { Dance_Loop: 1.15, Yes: 1.1 }; }
+    else if (s.sad) { tw = { Idle_No_Loop: 1 }; sp = { Idle_No_Loop: 0.55 }; }
+    else if (p.injured) tw = { Crouch_Idle_Loop: 1 };
+    else if (s.ready) tw = { Crouch_Idle_Loop: 1 };
+    else {
+      const jog = run * (1 - sprint), spr = run * sprint, idle = 1 - run;
+      tw = { Idle_Loop: idle, Jog_Fwd_Loop: jog, Sprint_Loop: spr };
+      sp = { Jog_Fwd_Loop: Math.max(0.65, Math.min(1.7, v / 3.6)), Sprint_Loop: Math.max(0.8, Math.min(1.5, v / 7.2)), Idle_Loop: 1 };
+    }
+    if (an && an.kind === 'kick') { f.kick = { until: an.until, len: 420 }; }
+    this.rigAnim(f, tw, dt, sp, rate);
+  }
   draw(M, dt) {
     if (!M) return; this.t += dt; this.syncRoster(M);
     const { Vector3 } = B, now = performance.now();
@@ -377,7 +469,7 @@ export class Pitch3D {
       if (now - R.t0 > R.dur) { this.replay = null; rp = null; b = M.ball; }
     }
     // Abschlag/Pass: Beinschwung des Schützen, Kick-Sound-Hinweis
-    if (!rp) { if (this.prevMode === 'held' && (b.mode === 'pass' || b.mode === 'shot')) { const k = b.mode === 'pass' ? b.from : b.shooter; if (k) this.anim.set(k, { kind: 'kick', until: now + 380, t0: now }); this.kicked = true; } this.prevMode = b.mode; }
+    if (!rp) { if (this.prevMode === 'held' && (b.mode === 'pass' || b.mode === 'shot')) { const k = b.mode === 'pass' ? b.from : b.shooter; if (k) this.anim.set(k, k.pos === 'TW' && b.mode === 'pass' && this.rig && Math.random() < 0.5 ? { kind: 'throw', until: now + 650, t0: now } : { kind: 'kick', until: now + 420, t0: now }); this.kicked = true; } this.prevMode = b.mode; }
     // Spieler
     for (const [p, f] of this.figs) {
       if (p.out) continue; f.root.setEnabled(true);
@@ -408,6 +500,7 @@ export class Pitch3D {
       if (celebrating || happy) { const j = Math.abs(Math.sin(this.t * (happy ? 7 : 9) + p.num * 1.3)); P = { lean: -0.1, shL: -2.7 - j * 0.3, shR: -2.7 - j * 0.3, spreadL: 0.5, spreadR: 0.5, elL: -0.2, elR: -0.2, hipL: -0.3 * j, hipR: -0.3 * j, knL: 0.7 * j, knR: 0.7 * j, head: -0.3 }; f.root.position.y = j * (p === this.celeb?.p ? 0.55 : 0.35); }
       else if (sad) { P = { lean: 0.55, head: 0.45, shL: 0.05, shR: 0.05, spreadL: 0.05, spreadR: 0.05, elL: -0.1, elR: -0.1, knL: 0.15, knR: 0.15, hipL: -0.1, hipR: 0.05 }; f.root.position.y = 0; }
       if (p.injured) { P.lean = 0.45; P.knL = 0.6; P.shR = -0.6; P.elR = -1.4; }
+      if (f.rig) { this.driveRig(f, p, { v, run, sprint, an: an && an.until > now ? an : null, celebrating, happy, sad, ready: f.gk && run < 0.4 && Math.hypot(b.x - px, b.y - py) < 24, now }, dt); const showLbl = this.labels && (this.camMode === 'tv' || this.camMode === 'top' || b.owner === p); f.plane.setEnabled(showLbl); if (showLbl) this.label(f, p); continue; }
       { const want = !this.noFaces && (!!this.cine || this.camMode === 'near' || this.camMode === 'goal' || !!this.celeb); if (f.face && f.faceOn !== want) { f.faceOn = want; for (const m of f.face) m.setEnabled(want); } }
       // Kopf folgt dem Ball
       { const ang = Math.atan2(b.x - px, b.y - py) - f.root.rotation.y; P.headYaw = Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(ang), Math.cos(ang)))); }
@@ -435,7 +528,7 @@ export class Pitch3D {
     // Schiedsrichter: hält Abstand zum Ball, läuft mit
     if (this.ref && !rp) { const R = this.ref, tx = Math.max(6, Math.min(PW - 6, b.x - (b.x > PW / 2 ? 12 : -12))), tz = Math.max(4, Math.min(PH - 4, b.y + 9)); const dx = tx - R.x, dz = tz - R.y, d = Math.hypot(dx, dz); const sp = Math.min(6.5, d * 1.2);
       if (d > 0.3) { R.x += dx / d * sp * dt; R.y += dz / d * sp * dt; } const face = Math.atan2(b.x - R.x, b.y - R.y); let dd = face - R.root.rotation.y; dd = Math.atan2(Math.sin(dd), Math.cos(dd)); R.root.rotation.y += dd * Math.min(1, dt * 5);
-      R.phase += dt * (3 + sp * 1.35); const rr = Math.min(1, sp / 6); R.root.position.set(R.x, rr > 0.15 ? Math.max(0, Math.sin(R.phase * 2)) * 0.04 * rr : 0, R.y); this.pose(R, rr > 0.15 ? this.runPose(R.phase, rr) : { lean: 0.04, knL: 0.08, knR: 0.08, elL: -0.25, elR: -0.25 }); }
+      R.phase += dt * (3 + sp * 1.35); const rr = Math.min(1, sp / 6); if (R.rig) { R.root.position.set(R.x, 0, R.y); this.rigAnim(R, rr > 0.15 ? { Jog_Fwd_Loop: 1 } : { Idle_Loop: 1 }, dt, { Jog_Fwd_Loop: Math.max(0.7, Math.min(1.5, sp / 4.2)) }); } else { R.root.position.set(R.x, rr > 0.15 ? Math.max(0, Math.sin(R.phase * 2)) * 0.04 * rr : 0, R.y); this.pose(R, rr > 0.15 ? this.runPose(R.phase, rr) : { lean: 0.04, knL: 0.08, knR: 0.08, elL: -0.25, elR: -0.25 }); } }
     if (this.ref) this.ref.root.setEnabled(!rp);
     // Aufzeichnung für die Wiederholung (letzte ~4 s)
     if (!rp && !this.cine) { const pl = new Map(); for (const [p] of this.figs) if (!p.out) pl.set(p, { x: p.x, y: p.y, vx: p.vx, vy: p.vy }); this.hist.push({ t: now, pl, ball: { x: b.x, y: b.y, h: this.ballH, mode: b.mode, owner: null } }); while (this.hist.length && this.hist[0].t < now - 4500) this.hist.shift(); }
@@ -470,5 +563,5 @@ export class Pitch3D {
     if (!this.fpsChecked) { this.fpsT += dt; this.fpsN++; if (this.fpsT > 4) { this.fpsChecked = true; const fps = this.fpsN / this.fpsT; if (fps < 28 && this.pipe) { this.pipe.dispose(); this.pipe = null; this.engine.setHardwareScalingLevel(1); } } }
     this.scene.render();
   }
-  dispose() { try { this.engine.dispose(); } catch { /* ignore */ } }
+  dispose() { this.disposed = true; try { this.engine.dispose(); } catch { /* ignore */ } }
 }

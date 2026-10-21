@@ -195,7 +195,13 @@ function serveFile(res, file, admin = false, req = null) {
   const ext = path.extname(file);
   const sec = admin ? { ...SEC_HEADERS, 'content-security-policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:" } : SEC_HEADERS;
   const vendor = file.includes(`${path.sep}vendor${path.sep}`);
-  const headers = { 'content-type': MIME[ext] || 'application/octet-stream', 'cache-control': ext === '.html' || file.endsWith('sw.js') ? 'no-cache' : vendor ? 'public, max-age=31536000, immutable' : 'public, max-age=300', ...sec };
+  // Seite, Skripte, Stile und Manifeste immer neu prüfen (ETag → 304), damit nach einem Update nie alte und neue Dateien gemischt werden.
+  // Gebündelte Bibliothek und Sprachaufnahmen (Dateiname = Inhalt-Hash) dürfen dauerhaft im Cache bleiben.
+  const hashed = vendor || (ext === '.mp3' && file.includes(`${path.sep}audio${path.sep}voice${path.sep}`));
+  const cc = hashed ? 'public, max-age=31536000, immutable' : ['.html', '.js', '.css', '.json', '.webmanifest'].includes(ext) ? 'no-cache' : 'public, max-age=3600';
+  let etag = null; try { const st = fs.statSync(file); etag = `W/"${st.size.toString(36)}-${Math.round(st.mtimeMs).toString(36)}"`; } catch { /* ignore */ }
+  const headers = { 'content-type': MIME[ext] || 'application/octet-stream', 'cache-control': cc, ...(etag ? { etag } : {}), ...sec };
+  if (req && etag && req.headers['if-none-match'] === etag) { res.writeHead(304, { 'cache-control': cc, etag, vary: 'accept-encoding' }); res.end(); return; }
   // vorkomprimierte Variante (datei.gz) ausliefern, wenn der Browser gzip annimmt
   const gz = file + '.gz';
   if (req && /\bgzip\b/.test(req.headers['accept-encoding'] || '') && fs.existsSync(gz)) { res.writeHead(200, { ...headers, 'content-encoding': 'gzip', vary: 'accept-encoding' }); fs.createReadStream(gz).pipe(res); return; }
