@@ -2,7 +2,7 @@
 // Gleiche Schnittstelle wie die 2D-Variante (pitch.js): resize(w, h), draw(M, dt), goalFlash(team), burst(x, y, color), focus.
 import { PW, PH, GOAL_W } from './match.js';
 // Spielerfiguren: CC0-Modell und Animationen von Quaternius (Universal Animation Library 1+2), aufbereitet mit tools/build-player-model.mjs
-const RIG_URL = '/models/player.glb?v=2';
+const RIG_URL = '/models/player.glb?v=3';
 let rigData = null;
 // Einzelaktionen aus Mixamo: Start kurz vor dem Ballkontakt, gespielte Länge, Tempo
 const ONCE_NAMES = new Set(['M_pass', 'M_chip', 'M_strike', 'M_penalty', 'M_gkdropkick', 'M_gkthrow', 'M_header', 'M_tackle', 'M_gkdiveL', 'M_gkdiveR', 'M_gkcatch', 'M_trip', 'M_standup']);
@@ -17,9 +17,12 @@ const ONCE = {
 }; // ArrayBuffer, einmal je Seite geladen
 async function rigBytes() { if (!rigData) rigData = fetch(RIG_URL).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); return rigData; }
 // HD-Figur: realistischer Körper (Quaternius Universal Base Characters, CC0) mit Texturen und Trikot-Zonenkarte
-const HD_URL = '/models/player-hd.glb?v=1', HD_DIR = '/models/hd/';
-const wantHD = () => { try { const q = new URLSearchParams(location.search).get('hd'); if (q) return q !== '0'; } catch { /* ignore */ } return (navigator.hardwareConcurrency || 4) > 4 && Math.min(screen.width, screen.height) >= 700; };
-let hdData = null;
+const HD_URL = '/models/player-hd.glb?v=2', HD_DIR = '/models/hd/';
+export const gfx = () => { try { return localStorage.getItem('brcm-gfx') || 'auto'; } catch { return 'auto'; } };
+const wantHD = () => { try { const q = new URLSearchParams(location.search).get('hd'); if (q) return q !== '0'; } catch { /* ignore */ } const g = gfx(); if (g === 'high') return true; if (g === 'mid' || g === 'low') return false; return (navigator.hardwareConcurrency || 4) > 4 && Math.min(screen.width, screen.height) >= 700; };
+// Modelle schon im Hintergrund laden (nur Netzwerk), damit Intro und Anpfiff nicht warten
+export function prefetchModels() { rigBytes(); if (wantHD()) hdAssets(); }
+let hdData = null; const KIT_PIX = new Map(); // Trikotbilder (Pixel) seitenweit wiederverwenden
 function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
 async function hdAssets() {
   if (!hdData) hdData = (async () => {
@@ -44,12 +47,12 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const lerp = (a, b, t) => a + (b - a) * t;
 
 export class Pitch3D {
-  constructor(canvas) {
-    this.c = canvas; this.M = null; this.figs = new Map(); this.t = 0; this.rot = false; this.flash = 0; this.shake = 0; this.focus = null;
+  constructor(canvas, opt = {}) {
+    this.t0 = performance.now(); this.c = canvas; this.noHD = opt.hd === false; this.gfx = gfx(); this.lite = !!opt.lite || this.gfx === 'low'; this.M = null; this.figs = new Map(); this.t = 0; this.rot = false; this.flash = 0; this.shake = 0; this.focus = null;
     this.ballH = 0; this.flight = null; this.camT = null; this.ownerRingT = 0; this.cine = null; this.celeb = null; this.lamps = []; this.day = false; this.lampLevel = 1; this.mood = null; this.fw = false; this.fwNext = 0; this.labels = true; this.prevMode = 'held'; this.hist = []; this.replay = null; this.anim = new Map(); this.crowdPulse = 0;
     const { Engine, Scene, Color4, Vector3, HemisphericLight, DirectionalLight, ArcRotateCamera } = B;
     this.engine = new Engine(canvas, true, { stencil: false, preserveDrawingBuffer: false, antialias: true });
-    this.engine.setHardwareScalingLevel(1 / Math.min(1.5, devicePixelRatio || 1));
+    this.engine.setHardwareScalingLevel(this.gfx === 'low' ? 1.25 : 1 / Math.min(this.gfx === 'high' ? 1.5 : 1.25, devicePixelRatio || 1));
     const scene = this.scene = new Scene(this.engine);
     scene.clearColor = new Color4(0.012, 0.03, 0.028, 1); scene.skipPointerMovePicking = true; scene.autoClearDepthAndStencil = true;
     scene.ambientColor = new B.Color3(0.25, 0.3, 0.28);
@@ -67,16 +70,24 @@ export class Pitch3D {
       pl.imageProcessingEnabled = true; pl.imageProcessing.contrast = 1.18; pl.imageProcessing.exposure = 1.06; pl.imageProcessing.vignetteEnabled = true; pl.imageProcessing.vignetteWeight = 1.6; pl.imageProcessing.vignetteColor = new B.Color4(0, 0, 0, 0);
       pl.sharpenEnabled = true; pl.sharpen.edgeAmount = 0.25;
     } catch { this.pipe = null; }
+    if (this.gfx === 'low' && this.pipe) { this.pipe.dispose(); this.pipe = null; }
     this.fpsT = 0; this.fpsN = 0; this.fpsChecked = false;
-    this.rig = null; this.rigN = 0; this.loadRig(); this.updateSky();
+    this.rig = null; this.rigN = 0; this.rigPromise = this.loadRig(); this.updateSky();
     try { this.buildCrowd(); } catch (e) { console.warn('Publikum', e); }
     // Echte Schatten der Spieler (Sonne bzw. Flutlicht), bei schwacher Hardware wieder aus
-    try { const sg = this.shadow = new B.ShadowGenerator(2048, this.sun); sg.usePercentageCloserFiltering = true; sg.filteringQuality = B.ShadowGenerator.QUALITY_MEDIUM; sg.bias = 0.0015; sg.normalBias = 0.02; sg.setDarkness(0.35); this.sun.shadowMinZ = 1; this.sun.shadowMaxZ = 160; this.ground.receiveShadows = true; this.blobMat.alpha = 0.16; if (this.ball) sg.addShadowCaster(this.ball); } catch (e) { this.shadow = null; }
+    this.shadow = null; this.quality = 2; this.qT = 0; this.qN = 0; this.qGood = 0;
+    this.ready = this.rigPromise; // Intro und Spiel warten darauf (mit Zeitlimit)
     // Schussbewegung als Zusatz auf die Skelett-Animation (Oberschenkel nach hinten, dann durchziehen)
     scene.onAfterAnimationsObservable.add(() => { const now = performance.now(); for (const f of this.kickers || []) { const an = f.kick; if (!an || now > an.until) continue; const k = 1 - (an.until - now) / an.len, back = k < 0.36, t = back ? k / 0.36 : (k - 0.36) / 0.64;
       const th = back ? 0.75 * t : 0.75 - 2.05 * Math.min(1, t * 1.5) + (t > 0.7 ? (t - 0.7) * 2.4 : 0), ca = back ? 1.3 * t : 1.3 * Math.max(0, 1 - t * 2);
       const Q = B.Quaternion, ax = B.Vector3; if (f.j.thighR?.rotationQuaternion) f.j.thighR.rotationQuaternion.multiplyInPlace(Q.RotationAxis(new ax(1, 0, 0), th)); if (f.j.calfR?.rotationQuaternion) f.j.calfR.rotationQuaternion.multiplyInPlace(Q.RotationAxis(new ax(0, 0, 1), ca)); } });
   }
+  // Echte Schatten (nur wenn genug Leistung da ist)
+  enableShadows() {
+    if (this.shadow || this.lite) return; try { const sg = this.shadow = new B.ShadowGenerator(1024, this.sun); sg.usePercentageCloserFiltering = true; sg.filteringQuality = B.ShadowGenerator.QUALITY_LOW; sg.bias = 0.0015; sg.normalBias = 0.02; sg.setDarkness(0.35); this.sun.shadowMinZ = 1; this.sun.shadowMaxZ = 160; this.ground.receiveShadows = true; this.blobMat.alpha = 0.16; if (this.ball) sg.addShadowCaster(this.ball);
+      for (const f of this.figs.values()) for (const m of f.root.getChildMeshes()) if (m.skeleton) sg.addShadowCaster(m, false); } catch { this.shadow = null; }
+  }
+  disableShadows() { if (!this.shadow) return; this.shadow.dispose(); this.shadow = null; this.ground.receiveShadows = false; this.blobMat.alpha = 0.38; }
   // Publikum: einfache Figuren (Körper, Kopf, Arme) als Instanzen, Farben je Verein, Jubel bei Toren
   buildCrowd() {
     const { MeshBuilder, Mesh, StandardMaterial, Color3, Matrix, Vector3 } = B, scene = this.scene;
@@ -90,7 +101,7 @@ export class Pitch3D {
     const low = (navigator.hardwareConcurrency || 4) <= 4 || Math.min(innerWidth, innerHeight) < 600;
     const seats = [];
     for (const st of this.stands || []) {
-      st.s.computeWorldMatrix(true); const W = st.s.getWorldMatrix(), c0 = Vector3.TransformCoordinates(Vector3.Zero(), W); let nrm = Vector3.TransformNormal(new Vector3(0, 0, -1), W).normalize(); if (Vector3.Dot(nrm, new Vector3(PW / 2 - c0.x, 0, PH / 2 - c0.z)) < 0) nrm = nrm.scale(-1); nrm.y = Math.max(0, nrm.y); const front = Math.abs(st.roty - Math.PI) < 0.01, step = low ? 1.25 : 0.95, fill = front ? 0.35 : low ? 0.55 : 0.72;
+      st.s.computeWorldMatrix(true); const W = st.s.getWorldMatrix(), c0 = Vector3.TransformCoordinates(Vector3.Zero(), W); let nrm = Vector3.TransformNormal(new Vector3(0, 0, -1), W).normalize(); if (Vector3.Dot(nrm, new Vector3(PW / 2 - c0.x, 0, PH / 2 - c0.z)) < 0) nrm = nrm.scale(-1); nrm.y = Math.max(0, nrm.y); const front = Math.abs(st.roty - Math.PI) < 0.01, step = low || this.lite ? 1.3 : 1.05, fill = front ? 0.3 : low || this.lite ? 0.5 : 0.66;
       for (let v = -st.h / 2 + 0.6; v < st.h / 2 - 0.4; v += 1.05) for (let u = -st.len / 2 + 0.5; u < st.len / 2 - 0.5; u += step) {
         if (Math.random() > fill) continue;
         const p = Vector3.TransformCoordinates(new Vector3(u + (Math.random() - 0.5) * 0.25, v, 0), W).add(nrm.scale(0.55));
@@ -130,18 +141,18 @@ export class Pitch3D {
     if (!B.LoadAssetContainerAsync || this.noRig) return;
     try {
       const hd = !this.noHD && wantHD() ? await hdAssets() : null; this.hd = hd;
-      const bytes = hd ? hd.bytes : await rigBytes(); if (!bytes || this.disposed) return;
-      const c = await B.LoadAssetContainerAsync(new Uint8Array(bytes), this.scene, { pluginExtension: '.glb' }); if (this.disposed) return;
+      const bytes = hd ? hd.bytes : await rigBytes(); if (!bytes || this.disposed) return; const tl0 = performance.now(); this.tFetch = tl0 - this.t0;
+      const c = await B.LoadAssetContainerAsync(new Uint8Array(bytes), this.scene, { pluginExtension: '.glb' }); if (this.disposed) return; this.tParse = performance.now() - tl0;
       if (hd) { const { Texture, StandardMaterial, Color3 } = B; this.hdNormal = new Texture(HD_DIR + 'normal.jpg', this.scene, false, false); const em = this.hdEye = new StandardMaterial('hdEye', this.scene); em.diffuseTexture = new Texture(HD_DIR + 'eye.jpg', this.scene, false, false); em.specularColor = new Color3(0.6, 0.6, 0.6); em.specularPower = 64; this.hdBrowTex = new Texture(HD_DIR + 'brows.png', this.scene, false, false); this.kitCache = new Map(); }
       this.rig = c; this.rigNames = c.animationGroups.map(g => g.name); this.mx = this.rigNames.includes('M_jog');
       for (const f of this.figs.values()) this.disposeFig(f); this.figs.clear(); if (this.ref) { const o = this.ref; this.disposeFig(o); this.ref = null; }
     } catch (e) { console.warn('Spielermodell nicht geladen – einfache Figuren', e); }
   }
-  disposeFig(f) { try { if (this.shadow) for (const m of f.root.getChildMeshes()) this.shadow.removeShadowCaster(m, false); if (f.ags) for (const g of Object.values(f.ags)) g.dispose(); if (f.skel) f.skel.dispose(); f.root.dispose(false, true); } catch { /* ignore */ } if (this.kickers) this.kickers = this.kickers.filter(x => x !== f); }
+  disposeFig(f) { try { if (this.shadow) for (const m of f.root.getChildMeshes()) this.shadow.removeShadowCaster(m, false); if (f.agStore || f.ags) for (const g of Object.values(f.agStore || f.ags)) g?.dispose(); if (f.skel) f.skel.dispose(); f.root.dispose(false, true); } catch { /* ignore */ } if (this.kickers) this.kickers = this.kickers.filter(x => x !== f); }
   // Figur aus dem Modell: Farbzonen über eine 16×1-Palette (Trikot, Hose, Stutzen, Haut, Schuhe, Haare, Abschluss, Unterarm, Hände)
   rigFigure(c, scale = 1.45) {
     const { TransformNode, DynamicTexture, StandardMaterial, Texture, Color3, MeshBuilder } = B, scene = this.scene, id = ++this.rigN;
-    const inst = this.rig.instantiateModelsToScene(n => n + '#' + id, false, { doNotInstantiate: true });
+    const allAg = this.rig.animationGroups; this.rig.animationGroups = []; let inst; try { inst = this.rig.instantiateModelsToScene(n => n + '#' + id, false, { doNotInstantiate: true }); } finally { this.rig.animationGroups = allAg; }
     const root = new TransformNode('fig', scene), mr = inst.rootNodes[0]; mr.parent = root; root.scaling.set(scale, scale, scale);
     const tex = new DynamicTexture('pal' + id, { width: 16, height: 1 }, scene, false, Texture.NEAREST_SAMPLINGMODE), g = tex.getContext();
     const pal = [c.shirt, c.shorts, c.socks, c.skin, c.boots || '#141414', c.hair, c.trim || c.shorts, c.longSleeves ? c.shirt : c.skin, c.gloves || c.skin];
@@ -150,11 +161,12 @@ export class Pitch3D {
     if (this.hd) {
       mat.diffuseTexture = this.kitTexture(c); tex.dispose(); mat.bumpTexture = this.hdNormal; mat.specularColor = new Color3(0.1, 0.1, 0.1); mat.specularPower = 18;
       const brow = new StandardMaterial('br' + id, scene); brow.diffuseTexture = this.hdBrowTex; brow.diffuseColor = Color3.FromHexString(c.hair).scale(2.2); brow.specularColor = Color3.Black();
-      for (const m of mr.getChildMeshes()) { const mn = m.material?.name || ''; m.material = /Eyes/.test(mn) ? this.hdEye : /Hair/.test(mn) ? brow : mat; m.isPickable = false; m.alwaysSelectAsActiveMesh = true; this.shadow?.addShadowCaster(m, false); }
-    } else for (const m of mr.getChildMeshes()) { m.material = mat; m.isPickable = false; m.alwaysSelectAsActiveMesh = true; this.shadow?.addShadowCaster(m, false); }
+      for (const m of mr.getChildMeshes()) { const mn = m.material?.name || ''; m.material = /Eyes/.test(mn) ? this.hdEye : /Hair/.test(mn) ? brow : mat; m.isPickable = false; m.alwaysSelectAsActiveMesh = true; if (m.skeleton) this.shadow?.addShadowCaster(m, false); }
+    } else for (const m of mr.getChildMeshes()) { m.material = mat; m.isPickable = false; m.alwaysSelectAsActiveMesh = true; if (m.skeleton) this.shadow?.addShadowCaster(m, false); }
     const d = mr.getDescendants(false), bone = (n) => d.find(x => x.name === n + '#' + id);
     const j = { thighR: bone('thigh_r'), calfR: bone('calf_r'), spine: bone('spine_03'), head: bone('Head') };
-    const ags = {}; inst.animationGroups.forEach((ag, i) => { ag.stop(); ags[this.rigNames[i]] = ag; });
+    const nodeMap = new Map(d.map(nd => [nd.name.slice(0, nd.name.lastIndexOf('#')), nd]));
+    const store = {}, ags = new Proxy(store, { get: (o, name) => { if (typeof name !== 'string') return o[name]; if (!(name in o)) { const src = allAg.find(g => g.name === name); let cl; if (src) { cl = src.clone(name + '#' + id, (t) => nodeMap.get(t.name) || null); cl.stop(); } o[name] = cl; } return o[name]; } });
     root.computeWorldMatrix(true); for (const n of d) n.computeWorldMatrix(true);
     // Rückennummer und Wappen folgen dem Oberkörper
     const deco = (mesh, x, y, z, ry) => { mesh.parent = root; mesh.position.set(x, y, z); mesh.rotation.y = ry; mesh.isPickable = false; mesh.computeWorldMatrix(true); if (j.spine) mesh.setParent(j.spine); };
@@ -162,7 +174,7 @@ export class Pitch3D {
     if (c.numMat) { const np = MeshBuilder.CreatePlane('num', { width: 0.24, height: 0.24 }, scene); np.material = c.numMat; deco(np, 0, hd ? 1.34 : 1.36, hd ? -0.185 : -0.155, Math.PI); }
     if (c.crest) { const cp = MeshBuilder.CreatePlane('crest', { width: 0.08, height: 0.08 }, scene); cp.material = c.crest; deco(cp, 0.08, hd ? 1.42 : 1.43, hd ? 0.17 : 0.135, 0); }
     const blob = MeshBuilder.CreateDisc('blob', { radius: 0.5 / scale * 1.32, tessellation: 16 }, scene); blob.rotation.x = Math.PI / 2; blob.position.y = 0.015; blob.scaling.set(1, 0.75, 1); blob.material = this.blobMat; blob.parent = root; blob.isPickable = false;
-    return { root, j, ags, w: {}, rig: true, mat, skel: inst.skeletons[0], phase: Math.random() * 6, scale, face: null, faceOn: false };
+    return { root, j, ags, agStore: store, w: {}, rig: true, mat, skel: inst.skeletons[0], phase: Math.random() * 6, scale, face: null, faceOn: false };
   }
   // Trikot auf die Körpertextur malen: Zonen aus der Karte, Schattierung aus dem Körperbild, Haut hell/dunkel gemischt
   kitTexture(c) {
@@ -170,6 +182,7 @@ export class Pitch3D {
     const { DynamicTexture } = B, H = this.hd, S = H.S, rgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
     const col = [rgb(c.shirt), rgb(c.shorts), rgb(c.socks), null, rgb(c.boots || '#141414'), rgb(c.hair), rgb(c.trim || c.shorts), c.longSleeves ? rgb(c.shirt) : null, c.gloves ? rgb(c.gloves) : null];
     const tex = new DynamicTexture('kit' + this.kitCache.size, { width: S, height: S }, this.scene, true), g = tex.getContext(), out = g.createImageData(S, S), o = out.data, t = c.skinT || 0;
+    const cached = KIT_PIX.get(key); if (cached) { o.set(cached); g.putImageData(out, 0, 0); tex.update(false); this.kitCache.set(key, tex); return tex; }
     for (let i = 0; i < S * S; i++) {
       const p = i * 4, z = Math.round(H.zones[p] / 16), br = H.light[p] * (1 - t) + H.dark[p] * t, bg = H.light[p + 1] * (1 - t) + H.dark[p + 1] * t, bb = H.light[p + 2] * (1 - t) + H.dark[p + 2] * t;
       const kc = col[z];
@@ -178,7 +191,7 @@ export class Pitch3D {
       let sh = z === 1 ? 0.92 + (lum - 0.25) * 0.35 : z === 5 ? 0.55 + ((i * 2654435761 >>> 0) % 997) / 997 * 0.55 : 0.8 + (lum - 0.62) * 0.75;
       sh = Math.max(0.55, Math.min(1.15, sh)); o[p] = kc[0] * sh; o[p + 1] = kc[1] * sh; o[p + 2] = kc[2] * sh; o[p + 3] = 255;
     }
-    g.putImageData(out, 0, 0); tex.update(false); tex.hasAlpha = false; this.kitCache.set(key, tex); return tex;
+    KIT_PIX.set(key, new Uint8ClampedArray(o)); g.putImageData(out, 0, 0); tex.update(false); tex.hasAlpha = false; this.kitCache.set(key, tex); return tex;
   }
   // Animationen mischen: Ziele { Name: Gewicht } (Summe 1), Tempo je Animation
   rigAnim(f, tw, dt, speeds = {}, rate = 8, once = null) {
@@ -669,7 +682,7 @@ export class Pitch3D {
     // Aufzeichnung für die Wiederholung (letzte ~4 s)
     if (!rp && !this.cine) { const pl = new Map(); for (const [p] of this.figs) if (!p.out) pl.set(p, { x: p.x, y: p.y, vx: p.vx, vy: p.vy }); this.hist.push({ t: now, pl, ball: { x: b.x, y: b.y, h: this.ballH, mode: b.mode, owner: null } }); while (this.hist.length && this.hist[0].t < now - 4500) this.hist.shift(); }
     // Publikum pulsiert nach einem Tor
-    if (this.crowd) { this.crowd.t += dt; const ex = Math.max(0, this.crowdPulse || 0), every = ex > 0.05 ? 1 : 6; this.crowd.fr = (this.crowd.fr || 0) + 1; if (this.crowd.fr % every === 0) this.crowdPose(Math.min(1, ex * 1.3)); }
+    if (this.crowd) { this.crowd.t += dt; const ex = Math.max(0, this.crowdPulse || 0); if (ex > 0.05) { this.crowd.dirty = true; this.crowdPose(Math.min(1, ex * 1.3)); } else if (this.crowd.dirty) { this.crowd.dirty = false; this.crowdPose(0); } }
     if (this.crowdPulse > 0) { this.crowdPulse -= dt * 0.5; const k = Math.max(0, this.crowdPulse); if (this.crowdMat) { this.crowdMat.diffuseTexture.vOffset = Math.sin(now / 70) * 0.006 * k; } if (this.crowdMat) this.crowdMat.emissiveColor.set(0.35 + k * 0.5 * Math.abs(Math.sin(now / 90)), 0.35 + k * 0.5 * Math.abs(Math.sin(now / 90)), 0.35 + k * 0.4); }
     // Kamera: Kamerafahrt (Intro), Wiederholung, Torjubel oder TV-Kamera, die dem Ball folgt
     const land = !this.rot;
@@ -697,7 +710,11 @@ export class Pitch3D {
       this.fwPs.emitter.set(-10 + Math.random() * (PW + 20), 22 + Math.random() * 18, -8 + Math.random() * (PH + 16)); this.fwPs.color1 = new Color4(c[0], c[1], c[2], 1); this.fwPs.color2 = new Color4(1, 1, 1, 1); this.fwPs.manualEmitCount = 160 + Math.floor(Math.random() * 120);
       this.flash = Math.max(this.flash, 0.35);
     }
-    if (!this.fpsChecked) { this.fpsT += dt; this.fpsN++; if (this.fpsT > 4) { this.fpsChecked = true; const fps = this.fpsN / this.fpsT; if (fps < 28 && this.pipe) { this.pipe.dispose(); this.pipe = null; this.engine.setHardwareScalingLevel(1); } if (fps < 22 && this.shadow) { this.shadow.dispose(); this.shadow = null; this.ground.receiveShadows = false; this.blobMat.alpha = 0.38; } } }
+    // Automatische Qualität: alle 2,5 s messen; bei Ruckeln Effekte abschalten, bei viel Luft Schatten zuschalten
+    { const ft = this.lastNow ? now - this.lastNow : 16; this.lastNow = now; if (ft < 250) { this.qT += ft; this.qN++; }
+      if (this.qT > 2500) { const fps = 1000 * this.qN / this.qT; this.qT = 0; this.qN = 0;
+        if (fps < 42) { this.qGood = 0; if (this.shadow) this.disableShadows(); else if (this.pipe) { this.pipe.dispose(); this.pipe = null; } else if (this.quality > 0) { this.quality = 0; this.engine.setHardwareScalingLevel(Math.min(1.6, this.engine.getHardwareScalingLevel() * 1.3)); if (this.crowd && fps < 30) { this.crowd.arms.setEnabled(false); } } }
+        else if (fps > (this.gfx === 'high' ? 45 : 56) && !this.cine && this.rig && !this.shadow && this.quality > 0 && this.gfx !== 'mid' && ++this.qGood >= 2 && !this.shadowTried) { this.shadowTried = true; this.enableShadows(); } } }
     this.scene.render();
   }
   dispose() { this.disposed = true; if (this.kitCache) for (const t of this.kitCache.values()) t.dispose(); try { this.engine.dispose(); } catch { /* ignore */ } }

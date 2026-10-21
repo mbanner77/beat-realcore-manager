@@ -29,7 +29,8 @@ export async function playIntro({ canvas, captionEl, titleEl, skipBtn, audio, vo
   try { await Promise.race([voice?.ready, new Promise(r => setTimeout(r, 2500))]); } catch { /* ignore */ }
   // Dauer jeder Einstellung an die gesprochene Zeile anpassen (nichts wird abgeschnitten)
   const shots = SHOTS.map(sh => { const text = sh.title ? 'Beat RealCore – Legacy League. Saison starten!' : sh.text; const d = voice ? voice.durationOf(tr ? tr(text) : text, lang) : 0; return { ...sh, dur: Math.max(sh.dur, d ? d + 1.6 : sh.dur) }; });
-  if (webglOk() && await loadBabylon()) { try { pitch = new Pitch3D(canvas); pitch.resize(canvas.clientWidth, canvas.clientHeight); pitch.setLamps(0); pitch.labels = false; } catch { pitch = null; } }
+  if (webglOk() && await loadBabylon()) { try { pitch = new Pitch3D(canvas, { hd: false, lite: true }); pitch.resize(canvas.clientWidth, canvas.clientHeight); pitch.setLamps(0); pitch.labels = false; } catch { pitch = null; } }
+  if (pitch?.ready) await Promise.race([pitch.ready, new Promise(r => setTimeout(r, 3500))]);
   if (done) return;
   canvas.hidden = !pitch; canvas.classList.remove('ready');
   const onResize = () => { if (pitch) pitch.resize(canvas.clientWidth, canvas.clientHeight); }; window.addEventListener('resize', onResize);

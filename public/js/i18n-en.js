@@ -670,4 +670,5 @@ export default {
   "Spieltag {0} · Auswärts": "Matchday {0} · away",
   "Das ist der letzte Spieltag – jetzt zählt alles.": "This is the last matchday – everything counts now.",
   "3D-Figuren, Körper und Animationen: Quaternius (CC0), Fußball-Bewegungen: Mixamo (Adobe) · Himmel und Rasenstruktur: Poly Haven (CC0) · 3D-Engine: Babylon.js (Apache 2.0)": "3D figures, bodies and animations: Quaternius (CC0), football motions: Mixamo (Adobe) · Skies and grass detail: Poly Haven (CC0) · 3D engine: Babylon.js (Apache 2.0)",
+  "Grafik": "Graphics", "Automatisch": "Automatic", "Hoch": "High", "Mittel": "Medium", "Schnell": "Fast", "Grafik geändert – gilt ab dem nächsten Spiel.": "Graphics changed – applies from the next match.",
 };

@@ -4,7 +4,7 @@ import { INTENSITY, ATTR_NAMES, SEASON_LEN, STADIUM, FACILITIES, ECON, WEATHER, 
 import { Season, rating, posFit, ATTRS, rng } from './manager.js';
 import { Match, MATCH_REAL } from './match.js';
 import { Pitch } from './pitch.js';
-import { Pitch3D, loadBabylon, webglOk } from './pitch3d.js';
+import { Pitch3D, loadBabylon, webglOk, prefetchModels } from './pitch3d.js';
 import { playIntro } from './intro.js';
 import { Voice } from './voice.js';
 import { Confetti } from './fx.js';
@@ -66,6 +66,7 @@ $$('[data-go]').forEach(b => b.addEventListener('click', () => { audio.play('cli
 function openSettings() {
   const ov = $('#settings'); ov.hidden = false;
   const cv = $('#opt-voice'); if (cv) { cv.checked = voice.on; cv.onchange = () => { voice.setOn(cv.checked); $('#btn-voice').classList.toggle('off', !voice.on); audio.play('confirm'); if (cv.checked) voice.say(tr('Sprecher aktiv.'), { lang: LANG, prio: 3, interrupt: true }); }; }
+  { const g0 = (() => { try { return localStorage.getItem('brcm-gfx') || 'auto'; } catch { return 'auto'; } })(); $$('#opt-gfx button').forEach(b => { b.classList.toggle('on', b.dataset.g === g0); b.onclick = () => { try { localStorage.setItem('brcm-gfx', b.dataset.g); } catch { /* ignore */ } $$('#opt-gfx button').forEach(x => x.classList.toggle('on', x === b)); if (pitch && pitch.dispose && S.screen !== 'match') { pitch.dispose(); pitch = null; } audio.play('confirm'); toast(tr('Grafik geändert – gilt ab dem nächsten Spiel.')); }; }); }
   const c3 = $('#opt-3d'); if (c3) { c3.checked = want3d(); c3.onchange = () => { try { localStorage.setItem('brcm-3d', c3.checked ? '1' : '0'); } catch { /* ignore */ } if (pitch) { pitch.dispose?.(); pitch = null; } audio.play('confirm'); }; }
   for (const k of ['music', 'sfx']) { const el = $('#vol-' + k), v = Math.round(audio.vol[k] * 100); el.value = v; $('#vol-' + k + '-v').textContent = v + '%'; el.oninput = () => { $('#vol-' + k + '-v').textContent = el.value + '%'; audio.setVolume(k, el.value / 100); }; el.onchange = () => audio.play('confirm'); }
   const el = $('#set-lang'); el.innerHTML = [['de', 'Deutsch'], ['en', 'English']].map(([k, n]) => `<button class="${k === LANG ? 'on' : ''}" data-l="${k}">${n}</button>`).join(''); el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { if (b.dataset.l !== LANG) setLang(b.dataset.l); }));
@@ -151,7 +152,7 @@ async function ensureBg3d() {
   if (bg3 || bg3Busy || !want3d() || !webglOk() || params.has('no3d')) return; bg3Busy = true;
   await new Promise(r => setTimeout(r, document.readyState === 'complete' ? 300 : 1400));
   if (S.screen === 'title' && await loadBabylon() && S.screen === 'title') {
-    try { const c = $('#bg3d'); bg3 = new Pitch3D(c); bg3.labels = false; bg3.noFaces = true; bg3.setDaylight?.(false); bg3.resize(innerWidth, innerHeight); bg3T0 = performance.now(); setTimeout(() => document.body.classList.add('bg3d-on'), 400); } catch (e) { console.warn('3D-Hintergrund nicht verfügbar', e); bg3 = null; }
+    try { const c = $('#bg3d'); bg3 = new Pitch3D(c, { hd: false, lite: true }); bg3.labels = false; bg3.noFaces = true; bg3.setDaylight?.(false); bg3.resize(innerWidth, innerHeight); bg3T0 = performance.now(); setTimeout(() => document.body.classList.add('bg3d-on'), 400); } catch (e) { console.warn('3D-Hintergrund nicht verfügbar', e); bg3 = null; }
   }
   bg3Busy = false;
 }
@@ -510,6 +511,8 @@ const want3d = () => { try { return localStorage.getItem('brcm-3d') !== '0'; } c
 async function ensurePitch() {
   if (pitch) return;
   if (want3d() && webglOk() && await loadBabylon()) { try { pitch = new Pitch3D($('#pitch')); } catch (e) { console.warn('3D nicht verfügbar', e); pitch = null; } }
+  // kurz auf die Spielerfiguren warten, damit das Spiel nicht mit Platzhaltern beginnt und dann hakt
+  if (pitch && pitch.ready) { const b = $('#btn-match'), t0 = b.textContent; b.textContent = tr('Stadion wird vorbereitet …'); await Promise.race([pitch.ready, new Promise(r => setTimeout(r, 6000))]); b.textContent = t0; }
   if (!pitch) pitch = new Pitch($('#pitch'));
   S.pitch3d = pitch instanceof Pitch3D; $('.pitch-wrap').classList.toggle('three', S.pitch3d);
 }
@@ -784,7 +787,7 @@ function gateDust(cv) {
 }
 async function runGate() {
   const gate = $('#intro-gate'), bar = $('#gate-bar'), st = $('#gate-status'); gate.hidden = false; gateDust($('#gate-dust'));
-  const go = $('#gate-go');
+  const go = $('#gate-go'); if (want3d() && webglOk()) setTimeout(prefetchModels, 1200);
   go.onclick = () => { gate.hidden = true; audio.unlock(); audio.play('confirm'); startIntro(() => show('title')); };
   $('#btn-intro-skip').onclick = () => { gate.hidden = true; show('title'); };
   const steps = [

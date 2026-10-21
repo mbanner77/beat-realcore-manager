@@ -18,7 +18,7 @@ export async function playCeremony({ canvas, season, rank, won, name, pitchEl, a
       M.ball.x = PW / 2; M.ball.y = PH / 2; M.ball.owner = null; M.ball.mode = 'loose'; M.ball.vx = M.ball.vy = 0;
     }
   } catch { M = null; }
-  if (webglOk() && await loadBabylon()) { try { pitch = new Pitch3D(canvas); pitch.resize(canvas.clientWidth, canvas.clientHeight); pitch.setDaylight(false); pitch.labels = false; } catch { pitch = null; } }
+  if (webglOk() && await loadBabylon()) { try { pitch = new Pitch3D(canvas, { hd: false, lite: true }); pitch.resize(canvas.clientWidth, canvas.clientHeight); pitch.setDaylight(false); pitch.labels = false; } catch { pitch = null; } }
   if (done) return;
   canvas.hidden = !pitch;
   const onResize = () => { if (pitch) pitch.resize(canvas.clientWidth, canvas.clientHeight); }; window.addEventListener('resize', onResize);
