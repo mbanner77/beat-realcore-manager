@@ -16,6 +16,19 @@ const ONCE = {
   standup: { n: 'M_standup', from: 0, len: 1.6, sp: 1.05 },
 }; // ArrayBuffer, einmal je Seite geladen
 async function rigBytes() { if (!rigData) rigData = fetch(RIG_URL).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); return rigData; }
+// HD-Figur: realistischer Körper (Quaternius Universal Base Characters, CC0) mit Texturen und Trikot-Zonenkarte
+const HD_URL = '/models/player-hd.glb?v=1', HD_DIR = '/models/hd/';
+const wantHD = () => { try { const q = new URLSearchParams(location.search).get('hd'); if (q) return q !== '0'; } catch { /* ignore */ } return (navigator.hardwareConcurrency || 4) > 4 && Math.min(screen.width, screen.height) >= 700; };
+let hdData = null;
+function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
+async function hdAssets() {
+  if (!hdData) hdData = (async () => {
+    const [bytes, zones, light, dark] = await Promise.all([fetch(HD_URL).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error('HD'))), loadImg(HD_DIR + 'kit-zones.png'), loadImg(HD_DIR + 'skin-light.jpg'), loadImg(HD_DIR + 'skin-dark.jpg')]);
+    const S = 512, cv = (img, smooth = true) => { const c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d', { willReadFrequently: true }); g.imageSmoothingEnabled = smooth; g.drawImage(img, 0, 0, S, S); return g.getImageData(0, 0, S, S).data; };
+    return { bytes, S, zones: cv(zones, false), light: cv(light), dark: cv(dark) };
+  })().catch(() => null);
+  return hdData;
+}
 
 let B = null; // Babylon-Modul (lazy)
 export async function loadBabylon() {
@@ -56,21 +69,75 @@ export class Pitch3D {
     } catch { this.pipe = null; }
     this.fpsT = 0; this.fpsN = 0; this.fpsChecked = false;
     this.rig = null; this.rigN = 0; this.loadRig(); this.updateSky();
+    try { this.buildCrowd(); } catch (e) { console.warn('Publikum', e); }
+    // Echte Schatten der Spieler (Sonne bzw. Flutlicht), bei schwacher Hardware wieder aus
+    try { const sg = this.shadow = new B.ShadowGenerator(2048, this.sun); sg.usePercentageCloserFiltering = true; sg.filteringQuality = B.ShadowGenerator.QUALITY_MEDIUM; sg.bias = 0.0015; sg.normalBias = 0.02; sg.setDarkness(0.35); this.sun.shadowMinZ = 1; this.sun.shadowMaxZ = 160; this.ground.receiveShadows = true; this.blobMat.alpha = 0.16; if (this.ball) sg.addShadowCaster(this.ball); } catch (e) { this.shadow = null; }
     // Schussbewegung als Zusatz auf die Skelett-Animation (Oberschenkel nach hinten, dann durchziehen)
     scene.onAfterAnimationsObservable.add(() => { const now = performance.now(); for (const f of this.kickers || []) { const an = f.kick; if (!an || now > an.until) continue; const k = 1 - (an.until - now) / an.len, back = k < 0.36, t = back ? k / 0.36 : (k - 0.36) / 0.64;
       const th = back ? 0.75 * t : 0.75 - 2.05 * Math.min(1, t * 1.5) + (t > 0.7 ? (t - 0.7) * 2.4 : 0), ca = back ? 1.3 * t : 1.3 * Math.max(0, 1 - t * 2);
       const Q = B.Quaternion, ax = B.Vector3; if (f.j.thighR?.rotationQuaternion) f.j.thighR.rotationQuaternion.multiplyInPlace(Q.RotationAxis(new ax(1, 0, 0), th)); if (f.j.calfR?.rotationQuaternion) f.j.calfR.rotationQuaternion.multiplyInPlace(Q.RotationAxis(new ax(0, 0, 1), ca)); } });
   }
+  // Publikum: einfache Figuren (Körper, Kopf, Arme) als Instanzen, Farben je Verein, Jubel bei Toren
+  buildCrowd() {
+    const { MeshBuilder, Mesh, StandardMaterial, Color3, Matrix, Vector3 } = B, scene = this.scene;
+    const torso = MeshBuilder.CreateBox('ct', { width: 0.46, height: 0.62, depth: 0.28 }, scene); torso.position.y = 0.62;
+    const head = MeshBuilder.CreateSphere('ch', { diameter: 0.25, segments: 4 }, scene); head.position.y = 1.08;
+    const body = torso; body.name = 'crowd'; body.bakeCurrentTransformIntoVertices(); head.bakeCurrentTransformIntoVertices(); head.name = 'crowdHeads';
+    const armL = MeshBuilder.CreateBox('ca', { width: 0.11, height: 0.5, depth: 0.11 }, scene); armL.position.set(-0.29, -0.22, 0);
+    const armR = armL.clone('cb'); armR.position.x = 0.29; const arms = Mesh.MergeMeshes([armL, armR], true, true); arms.name = 'crowdArms';
+    const mat = new StandardMaterial('crowdM', scene); mat.specularColor = Color3.Black(); mat.emissiveColor = new Color3(0.12, 0.12, 0.12);
+    body.material = mat; arms.material = mat; head.material = mat; body.isPickable = arms.isPickable = head.isPickable = false;
+    const low = (navigator.hardwareConcurrency || 4) <= 4 || Math.min(innerWidth, innerHeight) < 600;
+    const seats = [];
+    for (const st of this.stands || []) {
+      st.s.computeWorldMatrix(true); const W = st.s.getWorldMatrix(), c0 = Vector3.TransformCoordinates(Vector3.Zero(), W); let nrm = Vector3.TransformNormal(new Vector3(0, 0, -1), W).normalize(); if (Vector3.Dot(nrm, new Vector3(PW / 2 - c0.x, 0, PH / 2 - c0.z)) < 0) nrm = nrm.scale(-1); nrm.y = Math.max(0, nrm.y); const front = Math.abs(st.roty - Math.PI) < 0.01, step = low ? 1.25 : 0.95, fill = front ? 0.35 : low ? 0.55 : 0.72;
+      for (let v = -st.h / 2 + 0.6; v < st.h / 2 - 0.4; v += 1.05) for (let u = -st.len / 2 + 0.5; u < st.len / 2 - 0.5; u += step) {
+        if (Math.random() > fill) continue;
+        const p = Vector3.TransformCoordinates(new Vector3(u + (Math.random() - 0.5) * 0.25, v, 0), W).add(nrm.scale(0.55));
+        seats.push({ x: p.x, y: p.y - 0.45, z: p.z, ry: Math.atan2(PW / 2 - p.x, PH / 2 - p.z) + (Math.random() - 0.5) * 0.5, ph: Math.random() * 6.28, k: Math.random(), s: 0.92 + Math.random() * 0.16 });
+      }
+    }
+    const n = seats.length; this.crowd = { body, arms, head, skin: new Float32Array(n * 4), seats, mBody: new Float32Array(n * 16), mArms: new Float32Array(n * 16), col: new Float32Array(n * 4), t: 0 };
+    this.crowdPose(0, true); body.thinInstanceSetBuffer('matrix', this.crowd.mBody, 16, false); head.thinInstanceSetBuffer('matrix', this.crowd.mBody, 16, false); arms.thinInstanceSetBuffer('matrix', this.crowd.mArms, 16, false);
+    this.crowdColors(null); body.thinInstanceSetBuffer('color', this.crowd.col, 4, false); arms.thinInstanceSetBuffer('color', this.crowd.col, 4, false);
+    { const SK = ['#f1c9a5', '#d9a479', '#8d5524', '#c68642', '#ffdbac', '#5c3a21', '#e0ac69']; seats.forEach((s, i) => { const c = B.Color3.FromHexString(SK[Math.floor(s.k * 7919) % SK.length]); this.crowd.skin.set([c.r * 0.8, c.g * 0.8, c.b * 0.8, 1], i * 4); }); head.thinInstanceSetBuffer('color', this.crowd.skin, 4, true); }
+    body.alwaysSelectAsActiveMesh = arms.alwaysSelectAsActiveMesh = head.alwaysSelectAsActiveMesh = true;
+    // Die Tribünenfläche zeigt jetzt Sitzreihen statt gemalter Zuschauer
+    if (this.crowdMat) { const t = this.crowdMat.diffuseTexture, g = t.getContext(); g.fillStyle = '#1a2124'; g.fillRect(0, 0, 1024, 256); for (let r = 0; r < 256; r += 16) { g.fillStyle = '#2b3438'; g.fillRect(0, r + 6, 1024, 7); g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(0, r + 13, 1024, 3); } t.update(); this.crowdMat.emissiveColor = new Color3(0.18, 0.18, 0.18); }
+  }
+  // Farben: Heimfans in Heimfarben, Gästeblock in Gästefarben, dazu neutrale Zuschauer
+  crowdColors(M) {
+    const C = this.crowd; if (!C) return; const { Color3 } = B;
+    const home = M ? [M.teams[0].color, M.teams[0].color2 || '#ffffff', '#ffffff'] : ['#3ddc84', '#0b3b22', '#ffffff'], away = M ? [M.teams[1].color, M.teams[1].color2 || '#222222'] : ['#ff6a3d', '#2a2f33'];
+    const neutral = ['#d8d8d8', '#2a2f33', '#5a6b73', '#8a6a4a', '#b8c4cc'];
+    C.seats.forEach((s, i) => { const awayBlock = s.x > PW * 0.72 && s.z > PH * 0.3; const pal = s.k < 0.18 ? neutral : awayBlock ? away : s.k < 0.3 ? away : home; const c = Color3.FromHexString(pal[Math.floor(s.k * 997) % pal.length]); const sh = 0.8 + s.k * 0.35; C.col.set([c.r * sh, c.g * sh, c.b * sh, 1], i * 4); });
+    if (C.body.thinInstanceCount) { C.body.thinInstanceBufferUpdated('color'); C.arms.thinInstanceBufferUpdated('color'); }
+  }
+  // Haltung: leichtes Wippen, nach Toren Aufspringen mit erhobenen Armen
+  crowdPose(excite, force) {
+    const C = this.crowd; if (!C) return; const { Matrix, Quaternion, Vector3 } = B; const t = C.t, mb = C.mBody, ma = C.mArms;
+    const tmp = Matrix.Identity(), tmpA = Matrix.Identity(), q = new Quaternion(), qa = new Quaternion(), sc = new Vector3(1, 1, 1), pos = new Vector3(), pa = new Vector3();
+    for (let i = 0; i < C.seats.length; i++) {
+      const s = C.seats[i], jump = excite > 0.05 ? Math.max(0, Math.sin(t * 9 + s.ph)) * 0.45 * excite * (0.4 + s.k) : 0, sway = Math.sin(t * 1.6 + s.ph) * 0.03;
+      Quaternion.RotationYawPitchRollToRef(s.ry, 0, sway, q); sc.set(s.s, s.s, s.s); pos.set(s.x, s.y + jump, s.z);
+      Matrix.ComposeToRef(sc, q, pos, tmp); tmp.copyToArray(mb, i * 16);
+      const up = excite > 0.05 && s.k > 0.25 ? 1 : 0; Quaternion.RotationYawPitchRollToRef(s.ry, up ? Math.PI - 0.25 * Math.sin(t * 7 + s.ph) : 0, 0, qa); pa.set(s.x, s.y + jump + 0.88 * s.s, s.z);
+      Matrix.ComposeToRef(sc, qa, pa, tmpA); tmpA.copyToArray(ma, i * 16);
+    }
+    if (!force) { C.body.thinInstanceBufferUpdated('matrix'); C.head.thinInstanceBufferUpdated('matrix'); C.arms.thinInstanceBufferUpdated('matrix'); }
+  }
   async loadRig() {
     if (!B.LoadAssetContainerAsync || this.noRig) return;
     try {
-      const bytes = await rigBytes(); if (!bytes || this.disposed) return;
+      const hd = !this.noHD && wantHD() ? await hdAssets() : null; this.hd = hd;
+      const bytes = hd ? hd.bytes : await rigBytes(); if (!bytes || this.disposed) return;
       const c = await B.LoadAssetContainerAsync(new Uint8Array(bytes), this.scene, { pluginExtension: '.glb' }); if (this.disposed) return;
+      if (hd) { const { Texture, StandardMaterial, Color3 } = B; this.hdNormal = new Texture(HD_DIR + 'normal.jpg', this.scene, false, false); const em = this.hdEye = new StandardMaterial('hdEye', this.scene); em.diffuseTexture = new Texture(HD_DIR + 'eye.jpg', this.scene, false, false); em.specularColor = new Color3(0.6, 0.6, 0.6); em.specularPower = 64; this.hdBrowTex = new Texture(HD_DIR + 'brows.png', this.scene, false, false); this.kitCache = new Map(); }
       this.rig = c; this.rigNames = c.animationGroups.map(g => g.name); this.mx = this.rigNames.includes('M_jog');
       for (const f of this.figs.values()) this.disposeFig(f); this.figs.clear(); if (this.ref) { const o = this.ref; this.disposeFig(o); this.ref = null; }
     } catch (e) { console.warn('Spielermodell nicht geladen – einfache Figuren', e); }
   }
-  disposeFig(f) { try { if (f.ags) for (const g of Object.values(f.ags)) g.dispose(); if (f.skel) f.skel.dispose(); f.root.dispose(false, true); } catch { /* ignore */ } if (this.kickers) this.kickers = this.kickers.filter(x => x !== f); }
+  disposeFig(f) { try { if (this.shadow) for (const m of f.root.getChildMeshes()) this.shadow.removeShadowCaster(m, false); if (f.ags) for (const g of Object.values(f.ags)) g.dispose(); if (f.skel) f.skel.dispose(); f.root.dispose(false, true); } catch { /* ignore */ } if (this.kickers) this.kickers = this.kickers.filter(x => x !== f); }
   // Figur aus dem Modell: Farbzonen über eine 16×1-Palette (Trikot, Hose, Stutzen, Haut, Schuhe, Haare, Abschluss, Unterarm, Hände)
   rigFigure(c, scale = 1.45) {
     const { TransformNode, DynamicTexture, StandardMaterial, Texture, Color3, MeshBuilder } = B, scene = this.scene, id = ++this.rigN;
@@ -80,17 +147,38 @@ export class Pitch3D {
     const pal = [c.shirt, c.shorts, c.socks, c.skin, c.boots || '#141414', c.hair, c.trim || c.shorts, c.longSleeves ? c.shirt : c.skin, c.gloves || c.skin];
     pal.forEach((col, i) => { g.fillStyle = col; g.fillRect(i, 0, 1, 1); }); tex.update(); tex.wrapU = tex.wrapV = Texture.CLAMP_ADDRESSMODE;
     const mat = new StandardMaterial('pm' + id, scene); mat.diffuseTexture = tex; mat.specularColor = new Color3(0.14, 0.14, 0.14); mat.specularPower = 24;
-    for (const m of mr.getChildMeshes()) { m.material = mat; m.isPickable = false; m.alwaysSelectAsActiveMesh = true; }
+    if (this.hd) {
+      mat.diffuseTexture = this.kitTexture(c); tex.dispose(); mat.bumpTexture = this.hdNormal; mat.specularColor = new Color3(0.1, 0.1, 0.1); mat.specularPower = 18;
+      const brow = new StandardMaterial('br' + id, scene); brow.diffuseTexture = this.hdBrowTex; brow.diffuseColor = Color3.FromHexString(c.hair).scale(2.2); brow.specularColor = Color3.Black();
+      for (const m of mr.getChildMeshes()) { const mn = m.material?.name || ''; m.material = /Eyes/.test(mn) ? this.hdEye : /Hair/.test(mn) ? brow : mat; m.isPickable = false; m.alwaysSelectAsActiveMesh = true; this.shadow?.addShadowCaster(m, false); }
+    } else for (const m of mr.getChildMeshes()) { m.material = mat; m.isPickable = false; m.alwaysSelectAsActiveMesh = true; this.shadow?.addShadowCaster(m, false); }
     const d = mr.getDescendants(false), bone = (n) => d.find(x => x.name === n + '#' + id);
     const j = { thighR: bone('thigh_r'), calfR: bone('calf_r'), spine: bone('spine_03'), head: bone('Head') };
     const ags = {}; inst.animationGroups.forEach((ag, i) => { ag.stop(); ags[this.rigNames[i]] = ag; });
     root.computeWorldMatrix(true); for (const n of d) n.computeWorldMatrix(true);
     // Rückennummer und Wappen folgen dem Oberkörper
     const deco = (mesh, x, y, z, ry) => { mesh.parent = root; mesh.position.set(x, y, z); mesh.rotation.y = ry; mesh.isPickable = false; mesh.computeWorldMatrix(true); if (j.spine) mesh.setParent(j.spine); };
-    if (c.numMat) { const np = MeshBuilder.CreatePlane('num', { width: 0.24, height: 0.24 }, scene); np.material = c.numMat; deco(np, 0, 1.36, -0.155, Math.PI); }
-    if (c.crest) { const cp = MeshBuilder.CreatePlane('crest', { width: 0.08, height: 0.08 }, scene); cp.material = c.crest; deco(cp, 0.075, 1.43, 0.135, 0); }
+    const hd = !!this.hd;
+    if (c.numMat) { const np = MeshBuilder.CreatePlane('num', { width: 0.24, height: 0.24 }, scene); np.material = c.numMat; deco(np, 0, hd ? 1.34 : 1.36, hd ? -0.185 : -0.155, Math.PI); }
+    if (c.crest) { const cp = MeshBuilder.CreatePlane('crest', { width: 0.08, height: 0.08 }, scene); cp.material = c.crest; deco(cp, 0.08, hd ? 1.42 : 1.43, hd ? 0.17 : 0.135, 0); }
     const blob = MeshBuilder.CreateDisc('blob', { radius: 0.5 / scale * 1.32, tessellation: 16 }, scene); blob.rotation.x = Math.PI / 2; blob.position.y = 0.015; blob.scaling.set(1, 0.75, 1); blob.material = this.blobMat; blob.parent = root; blob.isPickable = false;
     return { root, j, ags, w: {}, rig: true, mat, skel: inst.skeletons[0], phase: Math.random() * 6, scale, face: null, faceOn: false };
+  }
+  // Trikot auf die Körpertextur malen: Zonen aus der Karte, Schattierung aus dem Körperbild, Haut hell/dunkel gemischt
+  kitTexture(c) {
+    const key = [c.shirt, c.shorts, c.socks, c.boots, c.trim, c.hair, c.gloves, c.longSleeves ? 1 : 0, c.skinT].join('|'); if (this.kitCache.has(key)) return this.kitCache.get(key);
+    const { DynamicTexture } = B, H = this.hd, S = H.S, rgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+    const col = [rgb(c.shirt), rgb(c.shorts), rgb(c.socks), null, rgb(c.boots || '#141414'), rgb(c.hair), rgb(c.trim || c.shorts), c.longSleeves ? rgb(c.shirt) : null, c.gloves ? rgb(c.gloves) : null];
+    const tex = new DynamicTexture('kit' + this.kitCache.size, { width: S, height: S }, this.scene, true), g = tex.getContext(), out = g.createImageData(S, S), o = out.data, t = c.skinT || 0;
+    for (let i = 0; i < S * S; i++) {
+      const p = i * 4, z = Math.round(H.zones[p] / 16), br = H.light[p] * (1 - t) + H.dark[p] * t, bg = H.light[p + 1] * (1 - t) + H.dark[p + 1] * t, bb = H.light[p + 2] * (1 - t) + H.dark[p + 2] * t;
+      const kc = col[z];
+      if (!kc) { o[p] = br; o[p + 1] = bg; o[p + 2] = bb; o[p + 3] = 255; continue; }
+      const lum = (0.3 * H.light[p] + 0.59 * H.light[p + 1] + 0.11 * H.light[p + 2]) / 255;
+      let sh = z === 1 ? 0.92 + (lum - 0.25) * 0.35 : z === 5 ? 0.55 + ((i * 2654435761 >>> 0) % 997) / 997 * 0.55 : 0.8 + (lum - 0.62) * 0.75;
+      sh = Math.max(0.55, Math.min(1.15, sh)); o[p] = kc[0] * sh; o[p + 1] = kc[1] * sh; o[p + 2] = kc[2] * sh; o[p + 3] = 255;
+    }
+    g.putImageData(out, 0, 0); tex.update(false); tex.hasAlpha = false; this.kitCache.set(key, tex); return tex;
   }
   // Animationen mischen: Ziele { Name: Gewicht } (Summe 1), Tempo je Animation
   rigAnim(f, tw, dt, speeds = {}, rate = 8, once = null) {
@@ -166,7 +254,7 @@ export class Pitch3D {
     const cm = this.crowdMat = new StandardMaterial('cm', scene); cm.diffuseTexture = crowd; cm.specularColor = Color3.Black(); cm.emissiveColor = new Color3(0.35, 0.35, 0.35);
     const standH = 16, tilt = 0.62;
     const mk = (len, cx, cz, roty, off) => {
-      const s = MeshBuilder.CreatePlane('stand', { width: len, height: standH }, scene); s.material = cm;
+      const s = MeshBuilder.CreatePlane('stand', { width: len, height: standH }, scene); s.material = cm; (this.stands ||= []).push({ s, len, roty, h: standH });
       s.position = new Vector3(cx, standH * Math.cos(tilt) / 2 + 0.3, cz); s.rotation.y = roty; s.rotation.x = -tilt;
       s.position.x += Math.sin(roty) * off; s.position.z += Math.cos(roty) * off;
       const base = MeshBuilder.CreateBox('sb', { width: len + 4, height: 1.2, depth: 3 }, scene); base.material = this.mat('sbm', '#1c2426'); base.position = new Vector3(s.position.x, 0.6, s.position.z); base.rotation.y = roty; base.position.x -= Math.sin(roty) * 1.2; base.position.z -= Math.cos(roty) * 1.2;
@@ -335,7 +423,7 @@ export class Pitch3D {
       const nt = new DynamicTexture('num' + p.id, { width: 128, height: 128 }, scene, false); nt.hasAlpha = true; const c = nt.getContext(); c.clearRect(0, 0, 128, 128);
       c.fillStyle = gk ? '#222' : (T.color2 && T.color2 !== shirt ? (T.me ? '#ffffff' : T.color2) : '#fff'); c.font = 'bold 84px "Space Grotesk", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(p.num), 64, 70); nt.update();
       const numMat = new StandardMaterial('nm' + p.id, scene); numMat.diffuseTexture = nt; numMat.opacityTexture = nt; numMat.specularColor = Color3.Black(); numMat.zOffset = -2;
-      const fig = this.rigFigure({ shirt, shorts, socks: gk ? '#222222' : shirt, trim: gk ? '#111111' : (T.color2 || '#000'), skin: SKIN[h % SKIN.length], hair: ['#2a1a0e', '#111111', '#6b4423', '#b58a3c', '#3b2a1a', '#8a8a8a'][h % 6], gloves: gk ? '#f2f2f2' : null, longSleeves: gk, numMat, crest: this.teamCrest(T, p.team) });
+      const fig = this.rigFigure({ shirt, shorts, socks: gk ? '#222222' : shirt, trim: gk ? '#111111' : (T.color2 || '#000'), skin: SKIN[h % SKIN.length], skinT: [0, 0, 0.25, 0.5, 0.8, 1][(h >> 2) % 6], hair: ['#2a1a0e', '#111111', '#6b4423', '#b58a3c', '#3b2a1a', '#8a8a8a'][h % 6], gloves: gk ? '#f2f2f2' : null, longSleeves: gk, numMat, crest: this.teamCrest(T, p.team) });
       const tex = new DynamicTexture('lbl' + p.id, { width: 512, height: 192 }, scene, false); tex.hasAlpha = true;
       const plane = MeshBuilder.CreatePlane('lbl', { width: 2.4 / fig.scale, height: 0.9 / fig.scale }, scene); plane.position.y = 2.15; plane.parent = fig.root; plane.billboardMode = Mesh.BILLBOARDMODE_ALL;
       const lm = new StandardMaterial('lm', scene); lm.diffuseTexture = tex; lm.opacityTexture = tex; lm.emissiveColor = new Color3(1, 1, 1); lm.disableLighting = true; lm.backFaceCulling = false; plane.material = lm; plane.isPickable = false;
@@ -424,6 +512,8 @@ export class Pitch3D {
     this.updateSky();
     this.weatherDim = w === 'rain' ? 0.8 : w === 'snow' ? 0.92 : w === 'wind' ? 0.95 : 1;
     if (this.ground && w === 'snow') this.ground.material.diffuseColor = new Color3(1.15, 1.18, 1.2); else if (this.ground) this.ground.material.diffuseColor = new Color3(1, 1, 1);
+    // nasser Rasen glänzt im Regen
+    if (this.ground) { const gm = this.ground.material, wet = w === 'rain'; gm.specularColor = wet ? new Color3(0.32, 0.36, 0.32) : new Color3(0.07, 0.1, 0.07); gm.specularPower = wet ? 48 : 18; }
   }
   // Stimmung nach dem Spiel: Gewinner jubeln, Verlierer hängen die Köpfe (team: Index oder null)
   setMood(winTeam, ms = 6000) { this.mood = winTeam === null || winTeam === undefined ? null : { win: winTeam, until: performance.now() + ms }; }
@@ -438,13 +528,13 @@ export class Pitch3D {
     this.ps.emitter.set(x, 0.6, y); this.ps.color1 = new Color4(1, 1, 1, 1); this.ps.color2 = new Color4(c.r, c.g, c.b, 1); this.ps.manualEmitCount = 160;
   }
   buildRef() {
-    if (this.rig) { const f = this.rigFigure({ shirt: '#1c1c1c', shorts: '#111111', socks: '#1c1c1c', trim: '#ffd400', skin: '#e0ac69', hair: '#3b2a1a', boots: '#0d0d0d' }, 1.3); return Object.assign(f, { x: PW / 2 + 8, y: PH / 2 + 6 }); }
+    if (this.rig) { const f = this.rigFigure({ shirt: '#1c1c1c', shorts: '#111111', socks: '#1c1c1c', trim: '#ffd400', skin: '#e0ac69', skinT: 0.3, hair: '#3b2a1a', boots: '#0d0d0d' }, 1.3); return Object.assign(f, { x: PW / 2 + 8, y: PH / 2 + 6 }); }
     const f = this.body({ shirt: '#1c1c1c', shorts: '#111111', socks: '#1c1c1c', skin: '#e0ac69', hair: '#3b2a1a', hairStyle: 2 }, 1.28);
     return Object.assign(f, { x: PW / 2 + 8, y: PH / 2 + 6 });
   }
   syncRoster(M) {
     if (!this.ref) this.ref = this.buildRef();
-    if (this.M !== M) { for (const f of this.figs.values()) this.disposeFig(f); this.figs.clear(); this.M = M; this.flight = null; this.camT = null; }
+    if (this.M !== M) { this.crowdColors(M); for (const f of this.figs.values()) this.disposeFig(f); this.figs.clear(); this.M = M; this.flight = null; this.camT = null; }
     for (const p of M.players) { if (p.out) { const f = this.figs.get(p); if (f) f.root.setEnabled(false); continue; } if (!this.figs.has(p)) this.figs.set(p, this.figure(p)); }
   }
   ballHeight(M) {
@@ -579,6 +669,7 @@ export class Pitch3D {
     // Aufzeichnung für die Wiederholung (letzte ~4 s)
     if (!rp && !this.cine) { const pl = new Map(); for (const [p] of this.figs) if (!p.out) pl.set(p, { x: p.x, y: p.y, vx: p.vx, vy: p.vy }); this.hist.push({ t: now, pl, ball: { x: b.x, y: b.y, h: this.ballH, mode: b.mode, owner: null } }); while (this.hist.length && this.hist[0].t < now - 4500) this.hist.shift(); }
     // Publikum pulsiert nach einem Tor
+    if (this.crowd) { this.crowd.t += dt; const ex = Math.max(0, this.crowdPulse || 0), every = ex > 0.05 ? 1 : 6; this.crowd.fr = (this.crowd.fr || 0) + 1; if (this.crowd.fr % every === 0) this.crowdPose(Math.min(1, ex * 1.3)); }
     if (this.crowdPulse > 0) { this.crowdPulse -= dt * 0.5; const k = Math.max(0, this.crowdPulse); if (this.crowdMat) { this.crowdMat.diffuseTexture.vOffset = Math.sin(now / 70) * 0.006 * k; } if (this.crowdMat) this.crowdMat.emissiveColor.set(0.35 + k * 0.5 * Math.abs(Math.sin(now / 90)), 0.35 + k * 0.5 * Math.abs(Math.sin(now / 90)), 0.35 + k * 0.4); }
     // Kamera: Kamerafahrt (Intro), Wiederholung, Torjubel oder TV-Kamera, die dem Ball folgt
     const land = !this.rot;
@@ -606,8 +697,8 @@ export class Pitch3D {
       this.fwPs.emitter.set(-10 + Math.random() * (PW + 20), 22 + Math.random() * 18, -8 + Math.random() * (PH + 16)); this.fwPs.color1 = new Color4(c[0], c[1], c[2], 1); this.fwPs.color2 = new Color4(1, 1, 1, 1); this.fwPs.manualEmitCount = 160 + Math.floor(Math.random() * 120);
       this.flash = Math.max(this.flash, 0.35);
     }
-    if (!this.fpsChecked) { this.fpsT += dt; this.fpsN++; if (this.fpsT > 4) { this.fpsChecked = true; const fps = this.fpsN / this.fpsT; if (fps < 28 && this.pipe) { this.pipe.dispose(); this.pipe = null; this.engine.setHardwareScalingLevel(1); } } }
+    if (!this.fpsChecked) { this.fpsT += dt; this.fpsN++; if (this.fpsT > 4) { this.fpsChecked = true; const fps = this.fpsN / this.fpsT; if (fps < 28 && this.pipe) { this.pipe.dispose(); this.pipe = null; this.engine.setHardwareScalingLevel(1); } if (fps < 22 && this.shadow) { this.shadow.dispose(); this.shadow = null; this.ground.receiveShadows = false; this.blobMat.alpha = 0.38; } } }
     this.scene.render();
   }
-  dispose() { this.disposed = true; try { this.engine.dispose(); } catch { /* ignore */ } }
+  dispose() { this.disposed = true; if (this.kitCache) for (const t of this.kitCache.values()) t.dispose(); try { this.engine.dispose(); } catch { /* ignore */ } }
 }
