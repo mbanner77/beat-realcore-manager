@@ -22,3 +22,5 @@ Der RealCore-Fußballmanager im Browser: Führe TechHub United durch sieben Spie
 - Wetter (Sonne, Regen, Sturm, Schnee) mit Einfluss auf Pässe, Tempo und Abschlüsse sowie 3D-Regen/-Schnee; Kabinenansprache zur Halbzeit; Live-Konditionsanzeige mit Wechselhinweisen
 - Wirtschaft: Eintrittspreis (10–60 €) mit Zuschauerprognose, Fan-Stimmung (Ergebnisse, Tore, Preise, volle Ränge), Stadionausbau in drei Stufen (12.000 → 42.000 Plätze), Fanshop, VIP-Logen, Trainingszentrum, Reha-Zentrum, Gehälter und Unterhalt, Abrechnung je Spieltag mit Verlauf
 - Saisonlänge wählbar: kurz (7 Spieltage) oder voll (14 Spieltage, Hin- und Rückrunde); Punkte werden auf 7 Spieltage normiert, damit die Bestenliste vergleichbar bleibt
+- 3D-Spieler mit Gelenken (Hüfte, Wirbelsäule, Kopf, Schulter/Ellbogen, Hüfte/Knie/Fuß), Haarstile, Rückennummern, Torwarthandschuhe; Laufzyklus mit Kniebeuge und Armschwung, Bereitschaftshaltung des Torwarts, Schuss-, Hechtsprung-, Grätschen- und Jubelposen
+- Nachbearbeitung (Kantenglättung, Leuchten, Kontrast, Vignette; schaltet sich bei schwacher Hardware ab), detaillierter Rasen, Kameramodi TV / Nah / Hinter dem Angriff / Taktik

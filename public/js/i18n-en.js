@@ -516,4 +516,5 @@ export default {
   "{0} Zuschauer ({1} %) – Tickets {2} T€, Bilanz {3} T€.": "{0} spectators ({1} %) – tickets {2} k€, balance {3} k€.", "Achtung: Das Konto ist im Minus. Verkaufe Spieler oder senke die Kosten.": "Warning: the account is in the red. Sell players or cut costs.",
   "Vierzehn Spieltage in Hin- und Rückrunde, sieben Legacy-Clubs, ein Ziel: die Legacy League.": "Fourteen matchdays home and away, seven legacy clubs, one goal: the Legacy League.",
   "Pressekonferenz in der Clean-Core-Arena: {0} übernimmt TechHub United{1}. Vierzehn Spieltage in Hin- und Rückrunde, sieben Legacy-Clubs, ein Ziel: die Legacy League.": "Press conference at the Clean Core Arena: {0} takes over TechHub United{1}. Fourteen matchdays home and away, seven legacy clubs, one goal: the Legacy League.",
+  "Kamera wechseln": "Switch camera", "Nah": "Close", "Hinter dem Angriff": "Behind the attack", "Taktik": "Tactics", "Kamera: {0}": "Camera: {0}",
 };

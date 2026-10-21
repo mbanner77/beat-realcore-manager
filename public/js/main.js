@@ -348,7 +348,7 @@ function startMatch() {
   $('#sc-home').textContent = home.short; $('#sc-away').textContent = away.short; $('#sc-val').textContent = '0 : 0'; $('#sc-home-crest').innerHTML = crest(home, 30); $('#sc-away-crest').innerHTML = crest(away, 30); $('#tl-marks').innerHTML = ''; $('#tl-fill').style.width = '0%';
   if (pitch && pitch.setDaylight) { pitch.setDaylight(se.home); pitch.setWeather?.(se.weather); } $('#sc-min').textContent = "0'"; $('#sc-phase').textContent = '1. Halbzeit';
   $('#ticker-list').innerHTML = ''; $('#ts-stats').textContent = ''; $('#match-banner').hidden = true;
-  renderLiveTactics(); S.warned = new Set(); renderEnergy();
+  renderLiveTactics(); S.warned = new Set(); renderEnergy(); applyCam();
   showLineupIntro(home, away);
   onMatchEvent(M.events[0]);
   setSpeed(1); matchRun = true; show('match'); audio.setCrowd(0.5);
@@ -378,6 +378,9 @@ function renderLiveTactics() {
 function setSpeed(s) { if (!M) return; M.speed = s === 'skip' ? 40 : s; if (M.speed > 1) { clearTimeout(liTimer); $('#lineup-intro').hidden = true; } $$('#speed button[data-s]').forEach(b => b.classList.toggle('on', String(b.dataset.s) === String(s))); }
 $$('#speed button[data-s]').forEach(b => b.addEventListener('click', () => { audio.play('click'); setSpeed(b.dataset.s === 'skip' ? 'skip' : +b.dataset.s); }));
 $('#live-energy').addEventListener('click', () => { if (M && !M.over) { audio.play('click'); openHalf('Taktik'); } });
+const CAMS = [['tv', 'TV'], ['near', 'Nah'], ['goal', 'Hinter dem Angriff'], ['top', 'Taktik']];
+function applyCam() { let m = 'tv'; try { m = localStorage.getItem('brcm-cam') || 'tv'; } catch { /* ignore */ } if (pitch && 'camMode' in pitch) pitch.camMode = m; $('#cam-name').textContent = (CAMS.find(c => c[0] === m) || CAMS[0])[1]; $('#btn-cam').hidden = !S.pitch3d; }
+$('#btn-cam').addEventListener('click', () => { let m = 'tv'; try { m = localStorage.getItem('brcm-cam') || 'tv'; } catch { /* ignore */ } const i = (CAMS.findIndex(c => c[0] === m) + 1) % CAMS.length; try { localStorage.setItem('brcm-cam', CAMS[i][0]); } catch { /* ignore */ } audio.play('click'); applyCam(); toast(`Kamera: ${CAMS[i][1]}`); });
 $('#btn-voice').addEventListener('click', () => { voice.setOn(!voice.on); $('#btn-voice').classList.toggle('off', !voice.on); audio.play('click'); });
 $('#btn-tactics-live').addEventListener('click', () => { if (M && !M.over) { audio.play('click'); openHalf('Taktik'); } });
 let bannerT = null;
