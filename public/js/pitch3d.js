@@ -23,7 +23,7 @@ export class Pitch3D {
     this.engine = new Engine(canvas, true, { stencil: false, preserveDrawingBuffer: false, antialias: true });
     this.engine.setHardwareScalingLevel(1 / Math.min(1.5, devicePixelRatio || 1));
     const scene = this.scene = new Scene(this.engine);
-    scene.clearColor = new Color4(0.012, 0.03, 0.028, 1);
+    scene.clearColor = new Color4(0.012, 0.03, 0.028, 1); scene.skipPointerMovePicking = true; scene.autoClearDepthAndStencil = true;
     scene.ambientColor = new B.Color3(0.25, 0.3, 0.28);
     this.hemi = new HemisphericLight('h', new Vector3(0.2, 1, 0.1), scene); this.hemi.intensity = 0.75; this.hemi.groundColor = new B.Color3(0.08, 0.15, 0.1);
     this.sun = new DirectionalLight('d', new Vector3(-0.45, -1, -0.35), scene); this.sun.position = new Vector3(PW * 0.7, 60, PH * 0.7); this.sun.intensity = 0.95;
@@ -31,7 +31,7 @@ export class Pitch3D {
     this.blobMat = this.mat('blob', '#000000', { alpha: 0.38, spec: 0 });
     this.cam = new ArcRotateCamera('cam', -Math.PI / 2, 0.98, 64, new Vector3(PW / 2, 0, PH / 2), scene);
     this.cam.fov = 0.78; this.cam.minZ = 0.5; this.cam.maxZ = 600;
-    this.buildStadium(); this.buildBall(); this.buildFx(); this.ref = null; this.camMode = 'tv';
+    this.buildStadium(); this.buildBall(); this.buildFx(); this.ref = null; this.camMode = 'tv'; this.trail.particleTexture = this.ptex;
     // Nachbearbeitung: Kantenglättung, leichtes Leuchten, Kontrast, Vignette – bei schwacher Hardware automatisch aus
     try {
       const pl = this.pipe = new B.DefaultRenderingPipeline('pp', false, scene, [this.cam]);
@@ -45,7 +45,7 @@ export class Pitch3D {
   cmat(hex, spec = 0.08) { this.mc ||= new Map(); const k = hex + spec; if (!this.mc.has(k)) this.mc.set(k, this.mat('c' + k, hex, { spec })); return this.mc.get(k); }
   mat(name, hex, o = {}) { const { StandardMaterial, Color3 } = B; const m = new StandardMaterial(name, this.scene); m.diffuseColor = Color3.FromHexString(hex); m.specularColor = new Color3(o.spec ?? 0.08, o.spec ?? 0.08, o.spec ?? 0.08); if (o.em) m.emissiveColor = Color3.FromHexString(o.em); if (o.alpha !== undefined) m.alpha = o.alpha; m.backFaceCulling = o.bfc ?? true; return m; }
   buildStadium() {
-    const { MeshBuilder, DynamicTexture, StandardMaterial, Color3, Vector3 } = B, scene = this.scene;
+    const { MeshBuilder, DynamicTexture, StandardMaterial, Color3, Vector3, ParticleSystem } = B, scene = this.scene;
     // Rasen mit Linien als Textur
     const MX = 10, MZ = 9, W = PW + MX * 2, H = PH + MZ * 2, px = 20; // Pixel pro Meter
     const tex = new DynamicTexture('grass', { width: Math.round(W * px), height: Math.round(H * px) }, scene, true);
@@ -89,7 +89,7 @@ export class Pitch3D {
       for (const dy of [-GOAL_W / 2, GOAL_W / 2]) { const p = MeshBuilder.CreateCylinder('p', { height: h, diameter: 0.14 }, scene); p.position = new Vector3(x0, h / 2, PH / 2 + dy); p.material = postM; }
       const bar = MeshBuilder.CreateCylinder('bar', { height: GOAL_W + 0.14, diameter: 0.14 }, scene); bar.rotation.x = Math.PI / 2; bar.position = new Vector3(x0, h, PH / 2); bar.material = postM;
       for (const dy of [-GOAL_W / 2, GOAL_W / 2]) { const p = MeshBuilder.CreateCylinder('p2', { height: h * 0.8, diameter: 0.08 }, scene); p.position = new Vector3(x0 + d * depth, h * 0.4, PH / 2 + dy); p.material = postM; }
-      const back = MeshBuilder.CreatePlane('nb', { width: GOAL_W, height: h * 0.8 }, scene); back.position = new Vector3(x0 + d * depth, h * 0.4, PH / 2); back.rotation.y = Math.PI / 2; back.material = netM;
+      const back = MeshBuilder.CreatePlane('nb', { width: GOAL_W, height: h * 0.8 }, scene); (this.nets ||= [])[side] = { m: back, x0: x0 + d * depth, d }; back.position = new Vector3(x0 + d * depth, h * 0.4, PH / 2); back.rotation.y = Math.PI / 2; back.material = netM;
       const top = MeshBuilder.CreatePlane('nt', { width: GOAL_W, height: depth * 1.1 }, scene); top.position = new Vector3(x0 + d * depth / 2, h - 0.15, PH / 2); top.rotation.x = Math.PI / 2; top.rotation.y = Math.PI / 2; top.rotation.z = -d * 0.2; top.material = netM;
       for (const dy of [-GOAL_W / 2, GOAL_W / 2]) { const s = MeshBuilder.CreatePlane('ns', { width: depth, height: h }, scene); s.position = new Vector3(x0 + d * depth / 2, h / 2, PH / 2 + dy); s.material = netM; }
     }
@@ -126,6 +126,27 @@ export class Pitch3D {
     for (const [cx, cz, ry, len] of [[PW / 2, PH + 3.2, 0, PW + 8], [PW / 2, -3.2, 0, PW + 8], [PW + 3.2, PH / 2, Math.PI / 2, PH + 6], [-3.2, PH / 2, -Math.PI / 2, PH + 6]]) {
       const b = MeshBuilder.CreatePlane('band', { width: len, height: 0.9 }, scene); b.position = new Vector3(cx, 0.45, cz); b.rotation.y = ry; b.material = am;
     }
+    // Eckfahnen
+    this.flags = [];
+    for (const [fx, fz] of [[0, 0], [PW, 0], [0, PH], [PW, PH]]) {
+      const pole = MeshBuilder.CreateCylinder('fp', { height: 1.6, diameter: 0.05 }, scene); pole.position = new Vector3(fx, 0.8, fz); pole.material = this.cmat('#f2f2f2');
+      const fl = MeshBuilder.CreatePlane('flag', { width: 0.5, height: 0.35 }, scene); fl.material = this.mat('flm', '#ff6a3d', { bfc: false, em: '#5a1a08' }); fl.setPivotPoint(new Vector3(-0.25, 0, 0)); fl.position = new Vector3(fx + 0.25, 1.42, fz); this.flags.push(fl);
+    }
+    // Trainerbänke auf der Gegenseite
+    for (const bx of [PW / 2 - 13, PW / 2 + 13]) {
+      const roof = MeshBuilder.CreateBox('dug', { width: 7, height: 0.12, depth: 2.2 }, scene); roof.position = new Vector3(bx, 2.3, PH + 3.4); roof.material = this.mat('dugm', '#9fd8ff', { alpha: 0.45, em: '#0a1a22' });
+      const back = MeshBuilder.CreateBox('dugb', { width: 7, height: 2.3, depth: 0.15 }, scene); back.position = new Vector3(bx, 1.15, PH + 4.4); back.material = this.cmat('#1f2a2e');
+      const seat = MeshBuilder.CreateBox('dugs', { width: 6.6, height: 0.5, depth: 0.7 }, scene); seat.position = new Vector3(bx, 0.25, PH + 4.0); seat.material = this.cmat(bx < PW / 2 ? '#3ddc84' : '#ff6a3d');
+    }
+    // Anzeigetafel über der Gegentribüne
+    { const sc = this.scoreTex = new DynamicTexture('score', { width: 1024, height: 256 }, scene, false);
+      const sm = new StandardMaterial('scm', scene); sm.diffuseTexture = sc; sm.emissiveTexture = sc; sm.emissiveColor = new Color3(1, 1, 1); sm.disableLighting = true;
+      const scr = MeshBuilder.CreatePlane('screen', { width: 14, height: 3.5 }, scene); scr.position = new Vector3(PW - 6, 9.5, PH + MZ + 1.2); scr.rotation.x = -0.25; scr.material = sm;
+      const frame = MeshBuilder.CreateBox('scf', { width: 14.8, height: 4.2, depth: 0.4 }, scene); frame.position = new Vector3(PW - 6, 9.5, PH + MZ + 1.45); frame.rotation.x = -0.25; frame.material = this.cmat('#111a1c');
+      for (const lx of [-5, 5]) { const leg = MeshBuilder.CreateCylinder('scl', { height: 8, diameter: 0.4 }, scene); leg.position = new Vector3(PW - 6 + lx, 4, PH + MZ + 1.8); leg.material = this.cmat('#2d3a3d'); }
+      this.scoreKey = ''; }
+    // Flugspur bei Schüssen
+    { const tr = this.trail = new ParticleSystem('trail', 300, scene); tr.particleTexture = null; tr.emitter = new Vector3(0, -10, 0); tr.minSize = 0.12; tr.maxSize = 0.22; tr.minLifeTime = 0.25; tr.maxLifeTime = 0.4; tr.emitRate = 0; tr.minEmitPower = 0; tr.maxEmitPower = 0.1; tr.color1 = new B.Color4(1, 1, 1, 0.55); tr.color2 = new B.Color4(0.8, 1, 0.9, 0.35); tr.colorDead = new B.Color4(1, 1, 1, 0); tr.blendMode = ParticleSystem.BLENDMODE_ADD; tr.start(); }
     // Ring unter dem Ballführenden
     const ring = this.ring = MeshBuilder.CreateTorus('ring', { diameter: 3.0, thickness: 0.16, tessellation: 32 }, scene); ring.material = this.mat('ringm', '#ffffff', { em: '#ffffff', alpha: 0.7 }); ring.position.y = 0.05; ring.isVisible = false;
   }
@@ -157,7 +178,7 @@ export class Pitch3D {
     const N = (name, parent, x = 0, y = 0, z = 0) => { const t = new TransformNode(name, scene); t.parent = parent; t.position = new Vector3(x, y, z); return t; };
     const cyl = (parent, h, d1, d2, mat, y, tess = 10) => { const m = MeshBuilder.CreateCylinder('c', { height: h, diameterTop: d1, diameterBottom: d2, tessellation: tess }, scene); m.parent = parent; m.position.y = y; m.material = mat; m.isPickable = false; return m; };
     const sph = (parent, d, mat, x, y, z, sx = 1, sy = 1, sz = 1, seg = 10) => { const m = MeshBuilder.CreateSphere('s', { diameter: d, segments: seg }, scene); m.parent = parent; m.position.set(x, y, z); m.scaling.set(sx, sy, sz); m.material = mat; m.isPickable = false; return m; };
-    const shirt = this.cmat(c.shirt, 0.12), shorts = this.cmat(c.shorts), skin = this.cmat(c.skin, 0.05), socks = this.cmat(c.socks), boots = this.cmat(c.boots || '#151515', 0.3), hair = this.cmat(c.hair), gloves = this.cmat(c.gloves || c.skin);
+    const shirt = c.shirtMat || this.cmat(c.shirt, 0.12), shorts = this.cmat(c.shorts), skin = this.cmat(c.skin, 0.05), socks = this.cmat(c.socks), boots = this.cmat(c.boots || '#151515', 0.3), hair = this.cmat(c.hair), gloves = this.cmat(c.gloves || c.skin);
     const root = new TransformNode('fig', scene); root.scaling.set(scale, scale, scale);
     const j = {};
     j.hips = N('hips', root, 0, 0.98, 0);
@@ -172,6 +193,11 @@ export class Pitch3D {
     const hs = c.hairStyle ?? 0;
     if (hs !== 3) sph(j.head, 0.285, hair, 0, 0.035, -0.012, 0.93, hs === 1 ? 1.05 : 0.86, 1.02, 10); // Haare
     sph(j.head, 0.04, skin, 0, -0.01, 0.135, 1, 1.2, 1, 6);                        // Nase
+    const face = [], n0 = j.head.getChildMeshes(true).length; const dark = this.cmat('#1a1410', 0.3), white = this.cmat('#f4f1ea', 0.2), lip = this.cmat('#7a3b2e');
+    for (const ex of [-0.045, 0.045]) { sph(j.head, 0.034, white, ex, 0.025, 0.112, 1, 0.8, 0.5, 6); sph(j.head, 0.018, dark, ex, 0.025, 0.126, 1, 1, 0.5, 6); const br = MeshBuilder.CreateBox('brow', { width: 0.045, height: 0.008, depth: 0.01 }, scene); br.parent = j.head; br.position.set(ex, 0.055, 0.118); br.material = hair; br.isPickable = false; sph(j.head, 0.06, skin, ex * 2.9, 0, 0, 0.45, 0.8, 0.6, 6); }
+    const mo = MeshBuilder.CreateBox('mouth', { width: 0.05, height: 0.01, depth: 0.01 }, scene); mo.parent = j.head; mo.position.set(0, -0.06, 0.118); mo.material = lip; mo.isPickable = false;
+    face.push(...j.head.getChildMeshes(true).slice(n0));
+    if (c.crest) { const cp = MeshBuilder.CreatePlane('crest', { width: 0.11, height: 0.11 }, scene); cp.parent = j.spine; cp.position.set(0.1, 0.4, 0.205); cp.rotation.x = 0.1; cp.material = c.crest; cp.isPickable = false; }
     for (const sd of [-1, 1]) {
       // Arm
       const sh = j[sd < 0 ? 'shL' : 'shR'] = N('sh', j.spine, sd * 0.28, 0.5, 0);
@@ -189,19 +215,25 @@ export class Pitch3D {
       const boot = MeshBuilder.CreateBox('boot', { width: 0.1, height: 0.08, depth: 0.25 }, scene); boot.parent = ft; boot.position.set(0, -0.02, 0.05); boot.material = boots; boot.isPickable = false;
     }
     const blob = MeshBuilder.CreateDisc('blob', { radius: 0.5, tessellation: 16 }, scene); blob.rotation.x = Math.PI / 2; blob.position.y = 0.015; blob.scaling.set(1, 0.75, 1); blob.material = this.blobMat; blob.parent = root; blob.isPickable = false;
-    return { root, j, phase: Math.random() * 6, scale };
+    return { root, j, phase: Math.random() * 6, scale, face, faceOn: true };
   }
   // Pose anwenden (Winkel in Radiant; x negativ = nach vorn)
   pose(f, P) {
     const j = f.j;
     j.hips.position.y = 0.98 - (P.drop || 0); j.hips.rotation.set(0, P.twist || 0, 0);
     j.spine.rotation.set(P.lean || 0, -(P.twist || 0) * 0.6, P.side || 0);
-    j.head.rotation.set(P.head || 0, 0, 0);
+    j.head.rotation.set(P.head || 0, P.headYaw || 0, 0);
     j.shL.rotation.set(P.shL || 0, 0, P.spreadL ?? 0.12); j.shR.rotation.set(P.shR || 0, 0, -(P.spreadR ?? 0.12));
     j.elL.rotation.set(P.elL ?? -0.35, 0, 0); j.elR.rotation.set(P.elR ?? -0.35, 0, 0);
     j.hipL.rotation.set(P.hipL || 0, 0, P.legSpread ? P.legSpread : 0); j.hipR.rotation.set(P.hipR || 0, 0, P.legSpread ? -P.legSpread : 0);
     j.knL.rotation.set(P.knL ?? 0.08, 0, 0); j.knR.rotation.set(P.knR ?? 0.08, 0, 0);
     j.ftL.rotation.set(-(P.knL ?? 0.08) * 0.4 + (P.hipL || 0) * -0.2, 0, 0); j.ftR.rotation.set(-(P.knR ?? 0.08) * 0.4 + (P.hipR || 0) * -0.2, 0, 0);
+  }
+  // weicher Übergang zwischen Posen (keine Sprünge beim Wechsel Laufen → Schuss → Jubel)
+  blendPose(f, P, dt, rate) {
+    const D = { spreadL: 0.12, spreadR: 0.12, elL: -0.35, elR: -0.35, knL: 0.08, knR: 0.08 }, cur = f.pc ||= {}, k = Math.min(1, dt * rate);
+    for (const key of new Set([...Object.keys(cur), ...Object.keys(P)])) { const target = P[key] ?? D[key] ?? 0, from = cur[key] ?? D[key] ?? 0; cur[key] = from + (target - from) * k; }
+    this.pose(f, cur);
   }
   // Laufzyklus (run 0…1, Phase)
   runPose(ph, run, sprint = 0) {
@@ -209,11 +241,33 @@ export class Pitch3D {
     const knee = (x) => 0.12 + run * (0.25 + 0.95 * Math.max(0, Math.sin(x - 0.9)));
     return { lean: 0.06 + run * 0.2 + sprint * 0.08, hipL: -s * amp, hipR: s * amp, knL: knee(ph), knR: knee(ph + Math.PI), shL: s * amp * 0.85, shR: -s * amp * 0.85, elL: -0.45 - run * 0.85, elR: -0.45 - run * 0.85, spreadL: 0.12 + run * 0.05, spreadR: 0.12 + run * 0.05, twist: s * 0.12 * run, drop: run * 0.04 + Math.abs(c) * 0.04 * run, head: -0.05 - run * 0.1 };
   }
+  // Trikot mit Muster je Verein (Streifen, Ringel, Seitenbahnen) – zwischengespeichert
+  teamShirt(T, ti) {
+    this.shirts ||= new Map(); const key = T.short + ti; if (this.shirts.has(key)) return this.shirts.get(key);
+    const { DynamicTexture, StandardMaterial, Color3 } = B, tex = new DynamicTexture('shirt' + key, { width: 256, height: 128 }, this.scene, true), g = tex.getContext();
+    const h = [...(T.short || '')].reduce((a, ch) => a + ch.charCodeAt(0), 0), kind = T.me ? 'panel' : ['stripes', 'hoops', 'sash', 'plain', 'stripes'][h % 5];
+    g.fillStyle = T.color; g.fillRect(0, 0, 256, 128); g.fillStyle = T.color2 || '#000';
+    if (kind === 'stripes') for (let x = 0; x < 256; x += 32) g.fillRect(x, 0, 12, 128);
+    else if (kind === 'hoops') for (let y = 8; y < 128; y += 28) g.fillRect(0, y, 256, 11);
+    else if (kind === 'sash') { g.save(); g.translate(128, 64); g.rotate(-0.5); g.fillRect(-160, -10, 320, 20); g.restore(); }
+    else if (kind === 'panel') { g.globalAlpha = 0.55; g.fillRect(52, 0, 16, 128); g.fillRect(188, 0, 16, 128); g.globalAlpha = 1; }
+    g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(0, 0, 256, 5); // Kragen
+    tex.update();
+    const m = new StandardMaterial('shm' + key, this.scene); m.diffuseTexture = tex; m.specularColor = new Color3(0.12, 0.12, 0.12);
+    this.shirts.set(key, m); return m;
+  }
+  teamCrest(T, ti) {
+    this.crests ||= new Map(); const key = T.short + ti; if (this.crests.has(key)) return this.crests.get(key);
+    const { DynamicTexture, StandardMaterial, Color3 } = B, tex = new DynamicTexture('cr' + key, { width: 64, height: 64 }, this.scene, true), g = tex.getContext(); tex.hasAlpha = true;
+    g.clearRect(0, 0, 64, 64); g.fillStyle = T.color2 || '#000'; g.strokeStyle = '#fff'; g.lineWidth = 4; g.beginPath(); g.moveTo(32, 4); g.lineTo(58, 12); g.lineTo(58, 34); g.quadraticCurveTo(58, 52, 32, 60); g.quadraticCurveTo(6, 52, 6, 34); g.lineTo(6, 12); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = '#fff'; g.font = 'bold 22px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText((T.short || '?')[0], 32, 34); tex.update();
+    const m = new StandardMaterial('crm' + key, this.scene); m.diffuseTexture = tex; m.opacityTexture = tex; m.specularColor = Color3.Black(); this.crests.set(key, m); return m;
+  }
   figure(p) {
     const { MeshBuilder, DynamicTexture, StandardMaterial, Color3, Mesh } = B, scene = this.scene, T = this.M.teams[p.team];
     const gk = p.pos === 'TW', h = (p.num * 7 + p.team * 13 + (p.name || '').length);
     const shirt = gk ? (p.team === 0 ? '#ffd166' : '#9ad0ff') : T.color, shorts = gk ? '#222222' : T.color2;
-    const fig = this.body({ shirt, shorts, socks: gk ? '#222222' : shirt, skin: SKIN[h % SKIN.length], hair: ['#2a1a0e', '#111111', '#6b4423', '#b58a3c', '#3b2a1a', '#8a8a8a'][h % 6], hairStyle: h % 4, gloves: gk ? '#f2f2f2' : null, longSleeves: gk });
+    const fig = this.body({ shirt, shirtMat: gk ? null : this.teamShirt(T, p.team), crest: this.teamCrest(T, p.team), shorts, socks: gk ? '#222222' : shirt, skin: SKIN[h % SKIN.length], hair: ['#2a1a0e', '#111111', '#6b4423', '#b58a3c', '#3b2a1a', '#8a8a8a'][h % 6], hairStyle: h % 4, gloves: gk ? '#f2f2f2' : null, longSleeves: gk });
     // Rückennummer
     const nt = new DynamicTexture('num' + p.id, { width: 128, height: 128 }, scene, false); nt.hasAlpha = true; const c = nt.getContext(); c.clearRect(0, 0, 128, 128);
     c.fillStyle = gk ? '#222' : (T.color2 || '#000'); c.font = 'bold 84px "Space Grotesk", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(p.num), 64, 70); nt.update();
@@ -244,7 +298,7 @@ export class Pitch3D {
     const now = performance.now();
     if (e.type === 'save' || e.type === 'pen_save') { const k = M.keeper(1 - e.team); if (k) this.anim.set(k, { kind: 'dive', until: now + 900, side: Math.random() < 0.5 ? -1 : 1 }); }
     else if (e.type === 'tackle' && e.p) this.anim.set(e.p, { kind: 'slide', until: now + 700 });
-    else if (e.type === 'goal') this.crowdPulse = 1;
+    else if (e.type === 'goal') { this.crowdPulse = 1; const gx = M.goalOf(e.team).x; this.netHit = { side: gx > PW / 2 ? 1 : 0, t: performance.now() }; }
     else if (e.type === 'yellow' || e.type === 'red') { if (e.p) this.anim.set(e.p, { kind: 'protest', until: now + 1500 }); }
   }
   // Torwiederholung: letzte Sekunden aus einer Kamera hinter dem Tor, in Zeitlupe. Gibt die Dauer in ms zurück (0 = keine Aufnahme).
@@ -354,12 +408,27 @@ export class Pitch3D {
       if (celebrating || happy) { const j = Math.abs(Math.sin(this.t * (happy ? 7 : 9) + p.num * 1.3)); P = { lean: -0.1, shL: -2.7 - j * 0.3, shR: -2.7 - j * 0.3, spreadL: 0.5, spreadR: 0.5, elL: -0.2, elR: -0.2, hipL: -0.3 * j, hipR: -0.3 * j, knL: 0.7 * j, knR: 0.7 * j, head: -0.3 }; f.root.position.y = j * (p === this.celeb?.p ? 0.55 : 0.35); }
       else if (sad) { P = { lean: 0.55, head: 0.45, shL: 0.05, shR: 0.05, spreadL: 0.05, spreadR: 0.05, elL: -0.1, elR: -0.1, knL: 0.15, knR: 0.15, hipL: -0.1, hipR: 0.05 }; f.root.position.y = 0; }
       if (p.injured) { P.lean = 0.45; P.knL = 0.6; P.shR = -0.6; P.elR = -1.4; }
-      this.pose(f, P);
+      { const want = !!this.cine || this.camMode === 'near' || this.camMode === 'goal' || !!this.celeb; if (f.face && f.faceOn !== want) { f.faceOn = want; for (const m of f.face) m.setEnabled(want); } }
+      // Kopf folgt dem Ball
+      { const ang = Math.atan2(b.x - px, b.y - py) - f.root.rotation.y; P.headYaw = Math.max(-0.9, Math.min(0.9, Math.atan2(Math.sin(ang), Math.cos(ang)))); }
+      this.blendPose(f, P, dt, an && an.until > now ? 22 : 12);
       const showLbl = this.labels && (this.camMode === 'tv' || this.camMode === 'top' || b.owner === p); f.plane.setEnabled(showLbl); if (showLbl) this.label(f, p);
     }
     // Ball
     const h = rp ? (b.h || 0) : this.ballHeight(M); this.ballH = rp ? h : lerp(this.ballH, h, Math.min(1, dt * 12));
-    this.ball.position.set(b.x, 0.25 + this.ballH, b.y); this.ballBlob.position.x = b.x + this.ballH * 0.3; this.ballBlob.position.z = b.y - this.ballH * 0.2; const bs = 1 / (1 + this.ballH * 0.5); this.ballBlob.scaling.set(bs, bs, bs);
+    let bx = b.x, bz = b.y;
+    if (!rp && b.owner && this.figs.get(b.owner)) { const f = this.figs.get(b.owner), sp = Math.hypot(b.owner.vx, b.owner.vy), off = 0.55 + (sp > 1 ? 0.45 * Math.abs(Math.sin(f.phase)) : 0); bx = b.owner.x + Math.sin(f.root.rotation.y) * off * f.scale; bz = b.owner.y + Math.cos(f.root.rotation.y) * off * f.scale; }
+    this.ballVis = this.ballVis || { x: bx, z: bz }; const kb = Math.min(1, dt * 18); this.ballVis.x += (bx - this.ballVis.x) * kb; this.ballVis.z += (bz - this.ballVis.z) * kb;
+    if (b.mode === 'shot' || b.mode === 'pass' || rp) { this.ballVis.x = bx; this.ballVis.z = bz; }
+    const bvx = this.ballVis.x, bvz = this.ballVis.z;
+    this.trail.emitter = this.ball.position; this.trail.emitRate = b.mode === 'shot' && !rp ? 260 : 0;
+    // Netz wölbt sich nach einem Tor
+    if (this.netHit && this.nets) { const t = (now - this.netHit.t) / 1000, n = this.nets[this.netHit.side]; if (n) { const a = t < 1.5 ? Math.sin(t * 9) * Math.exp(-t * 2.6) * 0.9 : 0; n.m.position.x = n.x0 + n.d * a; n.m.scaling.y = 1 + Math.abs(a) * 0.15; } if (t > 1.6) this.netHit = null; }
+    // Eckfahnen flattern
+    if (this.flags) this.flags.forEach((fl, i) => { fl.rotation.y = Math.sin(this.t * (this.weatherKind === 'wind' ? 6 : 2.5) + i) * (this.weatherKind === 'wind' ? 0.6 : 0.25); });
+    // Anzeigetafel
+    if (this.scoreTex) { const key = `${M.score[0]}:${M.score[1]}|${Math.floor(M.min)}`; if (key !== this.scoreKey) { this.scoreKey = key; const g = this.scoreTex.getContext(); g.fillStyle = '#04100a'; g.fillRect(0, 0, 1024, 256); g.fillStyle = '#3ddc84'; g.fillRect(0, 0, 1024, 10); g.font = 'bold 60px sans-serif'; g.textBaseline = 'middle'; g.textAlign = 'right'; g.fillStyle = '#ffffff'; g.fillText((M.teams[0].short || '').toUpperCase().slice(0, 10), 370, 120); g.textAlign = 'left'; g.fillText((M.teams[1].short || '').toUpperCase().slice(0, 10), 654, 120); g.textAlign = 'center'; g.fillStyle = '#ffd166'; g.font = 'bold 110px monospace'; g.fillText(`${M.score[0]}:${M.score[1]}`, 512, 120); g.fillStyle = '#8aa79d'; g.font = 'bold 44px monospace'; g.fillText(`${Math.min(90, Math.floor(M.min))}'`, 512, 215); this.scoreTex.update(); } }
+    this.ball.position.set(bvx, 0.25 + this.ballH, bvz); this.ballBlob.position.x = bvx + this.ballH * 0.3; this.ballBlob.position.z = bvz - this.ballH * 0.2; const bs = 1 / (1 + this.ballH * 0.5); this.ballBlob.scaling.set(bs, bs, bs);
     const bv = Math.hypot(b.vx, b.vy); this.ball.rotation.z -= b.vx * dt * 2.2; this.ball.rotation.x += b.vy * dt * 2.2; if (bv < 0.1 && b.owner) { this.ball.rotation.z -= dt * 6; }
     // Ring unter Ballbesitzer / Fokus
     const o = rp ? null : (b.owner || this.focus); this.ring.isVisible = !!o; if (o) { this.ring.position.set(o.x, 0.06, o.y); this.ring.rotation.y += dt * 1.5; const T = M.teams[o.team]; this.ring.material.emissiveColor = B.Color3.FromHexString(T.color); this.ring.material.diffuseColor = this.ring.material.emissiveColor; }
