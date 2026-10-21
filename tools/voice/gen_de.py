@@ -5,19 +5,19 @@ import sys
 LANG=sys.argv[1]
 lines = json.load(open(f'mgr/lines_{LANG}.json'))
 PRON = [
- (r'Legacy League', '[[ lˈɛɡəsi lˈiːk ]]'), (r'\bFax\b', '[[ fˈaks ]]'), (r'Legacy-Monolith FC', '[[ lˈɛɡəsi ]] Monoliet Eff-Zeh'), (r'United', 'Junaited'), (r'deployed', 'diploit'), (r'Clubs', 'Klabs'), (r'Monolithen', 'Monolieten'), (r'Monolith', 'Monoliet'), (r'Data Lake GmbH', 'Däta Leik Geh-Em-Beh-Hah'), (r'Ticketflut', 'Tickettflut'), (r'S/4HANA', 'Ess-vier-Hana'), (r'\bR/3\b', 'Er drei'), (r'\bST22\b', 'Ess Teh zweiundzwanzig'), (r'AI4BIZ', 'Äi for Bis'),
+ (r'Legacy League', '[[ lˈɛɡəsi lˈiːk ]]'), (r'Saisonende', '[[ zɛzˈɔŋ ˈɛndə ]]'), (r'Saison', '[[ zɛzˈɔŋ ]]'), (r'\bFax\b', '[[ fˈaks ]]'), (r'Legacy-Monolith FC', '[[ lˈɛɡəsi ]] Monoliet Eff-Zeh'), (r'United', 'Junaited'), (r'deployed', 'diploit'), (r'Clubs', 'Klabs'), (r'Monolithen', 'Monolieten'), (r'Monolith', 'Monoliet'), (r'Data Lake GmbH', 'Däta Leik Geh-Em-Beh-Hah'), (r'Ticketflut', 'Tickettflut'), (r'S/4HANA', 'Ess-vier-Hana'), (r'\bR/3\b', 'Er drei'), (r'\bST22\b', 'Ess Teh zweiundzwanzig'), (r'AI4BIZ', 'Äi for Bis'),
  (r'Never touch a running system', 'Näwwer tatsch ä ranning Sisstem'), (r'Change Advisory Board', 'Tschäinsch Edweisori Bord'),
  (r'Change[- ]Requests', 'Tschäinsch-Rikwests'), (r'Change[- ]Request', 'Tschäinsch-Rikwest'),
  (r'Release-Freeze', 'Rilies-Friehs'), (r'Clean Core', 'Kliehn-Kohr'), (r'RealCore', 'Riel-Kohr'), (r'TechHub', 'Tech-Hab'),
  (r'Go-Live', 'Go-Leif'), (r'Joule', 'Dschul'), (r'Mainframes', 'Mehn-Frehms'), (r'Mainframe', 'Mehn-Frehm'),
- (r'Batchlauf', 'Bätsch-Lauf'), (r'Batch', 'Bätsch'), (r'Schatten-IT', 'Schatten-I-Teh'), (r'Legacy-IT', '[[ lˈɛɡəsi ]] I-Teh'), (r'Legacy-KI', '[[ lˈɛɡəsi ]] Ka-I'),
+ (r'Batchlauf', 'Bätsch-Lauf'), (r'Batch', 'Bätsch'), (r'Schatten-IT', 'Schatten-I-Teh'), (r'Legacy-IT', '[[ lˈɛɡəsi ]] I-Teh'), (r'Legacy-KI', '[[ lˈɛɡəsi ]] Kah Ih'),
  (r'Upgrade', 'App-Gräid'), (r'Monolith erwacht', 'Mono-Liet erwacht'), (r'Legacy', '[[ lˈɛɡəsi ]]'), (r'Access', 'Äkzess'), (r'Controlling', 'Kontrolling'), (r'Deployment', 'Diploiment'), (r'deployt', 'diploit'),
  (r'Meeting-Camps?', 'Mieting-Kämp'), (r'Meeting', 'Mieting'), (r'Hypercare', 'Heiper-Kehr'), (r'Jour fixe', 'Schur fix'), (r'Templates?', 'Tämplet'), (r'Datenrennen', 'Daten-Rennen'),
  (r'Rollout', 'Rollaut'), (r'\bUI\b', 'U I'), (r'Integration Suite', 'Integrehschen Swiet'), (r'Data Lake', 'Däta Leik'),
  (r'Datenpipelines', 'Datenpeiplains'), (r'Datenpipeline', 'Datenpeiplain'), (r'Pipeline', 'Peiplain'), (r'Onboarding', 'Onbording'),
  (r'Dump', 'Damp'), (r'Lotus Notes', 'Lotus Nouts'), (r'COBOL', 'Kobol'), (r'Security', 'Sikjuriti'), (r'Z-Reports', 'Zett-Reports'), (r'Z-Report', 'Zett-Report'),
  (r'Z-Programme', 'Zett-Programme'), (r'\bBTP\b', 'Beh-Teh-Peh'), (r'\bCPI\b', 'Zeh-Peh-I'), (r'\bABAP\b', 'Abapp'), (r'\bSAP\b', 'Ess-A-Peh'),
- (r'\bKI\b', 'Ka-I'), (r'\bIT\b', 'I-Teh'), (r'Core', 'Kohr'), (r'Excel', 'Exel'), (r'Hub', 'Hab'), (r'Fiori', 'Fiori'), (r'Tickets?', lambda m: m.group(0)),
+ (r'\bKI\b', 'Kah Ih'), (r'\bSturm\b', '[[ ʃtˈʊrm ]]'), (r'\bIT\b', 'I-Teh'), (r'Core', 'Kohr'), (r'Excel', 'Exel'), (r'Hub', 'Hab'), (r'Fiori', 'Fiori'), (r'Tickets?', lambda m: m.group(0)),
  (r'Hotfix', 'Hottfix'), (r'touche', 'tatsche'), (r'Trainee', 'Trehnie'), (r'Academy', 'Äkädemi'), (r'Touchscreen', 'Tatsch-Skrien'), (r'Jets', 'Dschetts'), (r'Post-it', 'Post-itt'), (r'Spaghetti', 'Spagetti'), (r'Wars', 'Woors'), (r'Beat', 'Biet'), (r'Team', 'Tiem'), (r'Doku', 'Doku'), (r'Tests', 'Tests'), (r'Makros', 'Makros'),
 ]
 def norm(t):
