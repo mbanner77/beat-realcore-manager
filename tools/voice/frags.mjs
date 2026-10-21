@@ -1,11 +1,12 @@
 // Sammelt alle Teilstücke für den Live-Kommentar (Satzteile, Namen, Zahlen) je Sprache → tools/voice/frags_<lang>.json
 import fs from 'node:fs';
 import { COMMENT } from '../../public/js/match.js';
-import { SQUAD, MARKET_POOL, OPPONENTS, CLUB } from '../../public/js/data.js';
+import { SQUAD, MARKET_POOL, OPPONENTS, CLUB, INSTR } from '../../public/js/data.js';
 import EN from '../../public/js/i18n-en.js';
 import { FILLER, HALF, WEATHER_LINE, TALK_LINE, splitTpl, cleanFrag, enTemplate } from '../../public/js/commentary.js';
 const names = new Set(['Mainframe-Koloss', 'Schatten-IT Sascha', 'Torwart', 'Clean-Core-Arena', 'Yara Young', 'Timo Trainee', 'Neo Newbie', CLUB.short]);
-for (const p of SQUAD) names.add(p.name); for (const p of MARKET_POOL) names.add(p.name);
+for (const p of SQUAD) names.add(p.name); for (const v of Object.values(INSTR)) names.add(v.name);
+for (const n of ['Kai Kubernetes', 'Nele Node', 'Pia Pipeline', 'Tom Terraform', 'Lia Lambda', 'Ben Bytecode', 'Mia Microservice', 'Jan JSON']) names.add(n); for (const p of MARKET_POOL) names.add(p.name);
 for (const o of OPPONENTS) { names.add(o.short); for (const n of o.names) names.add(n); }
 const out = { de: new Map(), en: new Map() }, missing = [];
 const addTpl = (lang, tpl) => { for (const part of splitTpl(tpl)) if (part.t) { const c = cleanFrag(part.t); if (c && /[A-Za-zÄÖÜäöüß]/.test(c)) out[lang].set('f:' + c, c); } };

@@ -42,6 +42,20 @@ export class Audio {
     const s = c.createBufferSource(); s.buffer = n; const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const g = c.createGain(); g.gain.value = vol;
     s.connect(fl); fl.connect(g); g.connect(this.sfxG); s.start(t);
   }
+  chant(v = 1) {
+    const c = this.ctx; if (!c) return; const lv = 0.5 + this.level * 0.5, beat = 0.42;
+    // Trommel und Klatschen: | X . X . X X X . |
+    [0, 2, 4, 5, 6, 8, 10, 12, 13, 14].forEach((k) => { const d = k * beat / 2; this.tone(90, 45, 0.22, 'sine', 0.14 * v * lv, d, 0.005); for (let j = 0; j < 6; j++) this.noise(0.035, 1500 + Math.random() * 900, 'bandpass', 1.4, 0.018 * v * lv, d + Math.random() * 0.03); });
+    // Chor: mehrere leicht verstimmte Stimmen, Vokal-Formanten
+    const mel = [[392, 0, 1.0], [392, 1.2, 0.5], [440, 1.7, 0.5], [494, 2.2, 1.2], [440, 3.5, 0.5], [392, 4.0, 1.3]];
+    for (const [f, t0, dur] of mel) for (let k = 0; k < 5; k++) {
+      const t = c.currentTime + t0 + Math.random() * 0.05, o = c.createOscillator(), g = c.createGain(), f1 = c.createBiquadFilter(), f2 = c.createBiquadFilter();
+      o.type = 'sawtooth'; o.frequency.value = f / 2 * (1 + (Math.random() - 0.5) * 0.02); f1.type = 'bandpass'; f1.frequency.value = 520; f1.Q.value = 3; f2.type = 'bandpass'; f2.frequency.value = 880; f2.Q.value = 4;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.03 * v * lv, t + 0.08); g.gain.setValueAtTime(0.03 * v * lv, t + dur - 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.2);
+      o.connect(f1); o.connect(f2); f1.connect(g); f2.connect(g); g.connect(this.crowdG); o.start(t); o.stop(t + dur + 0.3);
+    }
+    this.swell(0.18 * lv * v, 0.6, 4.0, 1.5, 700, 0.6);
+  }
   play(name, v = 1) {
     if (!this.ctx || !this.enabled) return;
     const lv = 0.5 + this.level * 0.5;
@@ -64,6 +78,12 @@ export class Audio {
         case 'legacy': this.tone(110, 70, 0.4, 'sawtooth', 0.1 * v); this.noise(0.3, 2000, 'bandpass', 4, 0.08 * v); break;
         case 'win': [523, 659, 784, 1047, 1319].forEach((f, i) => this.tone(f, f, 0.5, 'triangle', 0.11 * v, i * 0.13)); this.swell(0.8 * lv, 0.5, 2.0, 3.0, 900, 0.5, 0.4); break;
         case 'lose': [392, 330, 262, 196].forEach((f, i) => this.tone(f, f * 0.97, 0.55, 'sawtooth', 0.07 * v, i * 0.24)); break;
+        // Fangesang: Trommel, Klatschen im Rhythmus und ein Chor aus gefilterten Stimmen („Oh-oh-oh“)
+        case 'chant': this.chant(v); break;
+        // Pfiffe und Buhrufe der Heimfans
+        case 'boo': this.swell(0.32 * lv * v, 0.25, 0.6, 1.2, 220, 0.9); for (let i = 0; i < 14; i++) { const f = 2300 + Math.random() * 1400, d = Math.random() * 0.9; this.tone(f, f * (0.92 + Math.random() * 0.1), 0.25 + Math.random() * 0.35, 'sine', 0.012 * v, d, 0.03); } break;
+        // Applaus: viele kurze Klatscher
+        case 'applause': for (let i = 0; i < 40; i++) this.noise(0.03, 1400 + Math.random() * 1200, 'bandpass', 1.2, 0.025 * v * lv, Math.random() * 1.6); break;
         case 'type': this.tone(1800, 1500, 0.03, 'square', 0.02 * v); break;
       }
     } catch { /* ignore */ }

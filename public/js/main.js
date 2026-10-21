@@ -1,6 +1,6 @@
 // Beat RealCore – Legacy League: Oberfläche und Spielablauf
 import { initI18n, tr, isEN, LANG, setLang } from './i18n.js';
-import { INTENSITY, ATTR_NAMES, SEASON_LEN, STADIUM, FACILITIES, ECON, WEATHER, TALKS, OBJECTIVES, DIFFICULTY, FORMATIONS, STYLES, TEMPO, TRAINING, OPPONENTS, POS, POS_GROUP, EVENTS, CLUB, SEASON_SCORE } from './data.js';
+import { INTENSITY, ATTR_NAMES, SEASON_LEN, STADIUM, FACILITIES, ECON, WEATHER, TALKS, OBJECTIVES, DIFFICULTY, FORMATIONS, STYLES, TEMPO, TRAINING, OPPONENTS, POS, POS_GROUP, EVENTS, CLUB, SEASON_SCORE, INSTR, ROLES, CORNER_VAR } from './data.js';
 import { Season, rating, posFit, ATTRS, rng } from './manager.js';
 import { Match, MATCH_REAL } from './match.js';
 import { Pitch } from './pitch.js';
@@ -27,7 +27,9 @@ const LOC = isEN ? 'en-US' : 'de-DE';
 const fmt = (n) => Math.round(n).toLocaleString(LOC);
 const money = (n) => `${fmt(n)} T€`;
 const params = new URLSearchParams(location.search);
-const KIOSK = params.has('messe') || params.has('kiosk');
+const KIOSK = params.has('messe') || params.has('kiosk'), TV = params.has('board');
+if (KIOSK) { document.body.classList.add('messe'); try { if (!params.has('gfx')) localStorage.setItem('brcm-gfx', 'mid'); } catch { /* ignore */ } }
+if (TV) document.body.classList.add('tv');
 const audio = new Audio();
 const S = { screen: 'title', prev: 'title', player: { name: '', company: '', team: '' }, diff: 'messe', season: null, gameId: null, config: { ai: false }, board: { difficulty: 'all', period: 'today' }, match: null, pitch: null, brief: null };
 try { const p = JSON.parse(localStorage.getItem('brcm-player')); if (p && !KIOSK) S.player = { ...S.player, ...p }; } catch { /* ignore */ }
@@ -67,6 +69,8 @@ function openSettings() {
   const ov = $('#settings'); ov.hidden = false;
   const cv = $('#opt-voice'); if (cv) { cv.checked = voice.on; cv.onchange = () => { voice.setOn(cv.checked); $('#btn-voice').classList.toggle('off', !voice.on); audio.play('confirm'); if (cv.checked) voice.say(tr('Sprecher aktiv.'), { lang: LANG, prio: 3, interrupt: true }); }; }
   { const g0 = (() => { try { return localStorage.getItem('brcm-gfx') || 'auto'; } catch { return 'auto'; } })(); $$('#opt-gfx button').forEach(b => { b.classList.toggle('on', b.dataset.g === g0); b.onclick = () => { try { localStorage.setItem('brcm-gfx', b.dataset.g); } catch { /* ignore */ } $$('#opt-gfx button').forEach(x => x.classList.toggle('on', x === b)); if (pitch && pitch.dispose && S.screen !== 'match') { pitch.dispose(); pitch = null; } audio.play('confirm'); toast(tr('Grafik geändert – gilt ab dem nächsten Spiel.')); }; }); }
+  { const m0 = lsGet('brcm-mode', 'real'); $$('#opt-mode button').forEach(b => { b.classList.toggle('on', b.dataset.m === m0); b.onclick = () => { lsSet('brcm-mode', b.dataset.m); $$('#opt-mode button').forEach(x => x.classList.toggle('on', x === b)); audio.play('confirm'); }; }); }
+  { const co = $('#opt-offside'); if (co) { co.checked = lsGet('brcm-offside', '1') !== '0'; co.onchange = () => { lsSet('brcm-offside', co.checked ? '1' : '0'); audio.play('confirm'); }; } }
   const c3 = $('#opt-3d'); if (c3) { c3.checked = want3d(); c3.onchange = () => { try { localStorage.setItem('brcm-3d', c3.checked ? '1' : '0'); } catch { /* ignore */ } if (pitch) { pitch.dispose?.(); pitch = null; } audio.play('confirm'); }; }
   for (const k of ['music', 'sfx']) { const el = $('#vol-' + k), v = Math.round(audio.vol[k] * 100); el.value = v; $('#vol-' + k + '-v').textContent = v + '%'; el.oninput = () => { $('#vol-' + k + '-v').textContent = el.value + '%'; audio.setVolume(k, el.value / 100); }; el.onchange = () => audio.play('confirm'); }
   const el = $('#set-lang'); el.innerHTML = [['de', 'Deutsch'], ['en', 'English']].map(([k, n]) => `<button class="${k === LANG ? 'on' : ''}" data-l="${k}">${n}</button>`).join(''); el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => { if (b.dataset.l !== LANG) setLang(b.dataset.l); }));
@@ -160,7 +164,7 @@ function dropBg3d() { if (!bg3) return; document.body.classList.remove('bg3d-on'
 // Spielstand: wird in jeder Spielwoche automatisch gesichert
 const SAVE_KEY = 'brcm-save';
 function writeSave() {
-  const se = S.season; if (KIOSK || !se || se.over) return;
+  const se = S.season; if (KIOSK || S.mini || !se || se.over) return;
   const { hooks, r, ...data } = se;
   try { localStorage.setItem(SAVE_KEY, JSON.stringify({ v: 1, at: Date.now(), gameId: S.gameId, player: S.player, diff: S.diff, len: S.len, season: data })); } catch { /* ignore */ }
 }
@@ -198,7 +202,7 @@ $('#link-privacy').addEventListener('click', (e) => { e.preventDefault(); show('
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && S.screen === 'intro') { $('#btn-intro-skip').click(); return; }
   if (S.screen !== 'title' || e.target.tagName === 'INPUT') return;
-  const m = { w: '#btn-continue', Enter: '#btn-play', b: '#btn-board', '?': '#btn-howto', o: '#btn-settings', i: '#btn-intro' }[e.key.length === 1 ? e.key.toLowerCase() : e.key];
+  const m = { w: '#btn-continue', Enter: '#btn-play', b: '#btn-board', '?': '#btn-howto', o: '#btn-settings', i: '#btn-intro', t: '#btn-daily', d: '#btn-duel' }[e.key.length === 1 ? e.key.toLowerCase() : e.key];
   if (m && !$(m).hidden) { e.preventDefault(); $(m).click(); }
 });
 
@@ -211,10 +215,10 @@ function showSetup() {
 function renderSetupCards() {
   $('#diff-cards').innerHTML = Object.entries(DIFFICULTY).map(([k, d], i) => `<button class="dcard ${k === S.diff ? 'on' : ''}" data-d="${k}"><b>${esc(d.name)}</b><small>${esc(d.desc)} Budget ${money(d.budget)}, Punkte × ${d.mult}.</small>${threat(i)}</button>`).join('');
   $$('#diff-cards .dcard').forEach(b => b.addEventListener('click', () => { S.diff = b.dataset.d; audio.play('click'); renderSetupCards(); }));
-  S.len = S.len || 'short';
+  S.len = S.len || (KIOSK ? 'expo' : 'short');
   $('#len-cards').innerHTML = Object.entries(SEASON_LEN).map(([k, d]) => `<button class="dcard ${k === S.len ? 'on' : ''}" data-l="${k}"><b>${esc(d.name)}</b><small>${esc(d.desc)}</small></button>`).join('');
   $$('#len-cards .dcard').forEach(b => b.addEventListener('click', () => { S.len = b.dataset.l; audio.play('click'); renderSetupCards(); }));
-  $('#season-list').innerHTML = OPPONENTS.map((o, i) => `<li><b>${esc(o.club)}</b> · ${i % 2 === 0 ? 'Heim' : 'Auswärts'}${S.len === 'long' ? ` / ${i % 2 === 0 ? 'Auswärts' : 'Heim'}` : ''}</li>`).join('');
+  $('#season-list').innerHTML = (S.len === 'expo' ? [0, 3, 6].map(i => OPPONENTS[i]) : OPPONENTS).map((o, i) => `<li><b>${esc(o.club)}</b> · ${i % 2 === 0 ? 'Heim' : 'Auswärts'}${S.len === 'long' ? ` / ${i % 2 === 0 ? 'Auswärts' : 'Heim'}` : ''}</li>`).join('');
 }
 $('#btn-brief').addEventListener('click', async () => {
   const name = $('#in-name').value.trim();
@@ -267,7 +271,7 @@ function teamStrength() { const T = SE().teamForMatch(); return Math.round(T.pla
 function updateDots() { $('#dot-training').classList.toggle('on', !SE().trained); $('#dot-radio').classList.toggle('on', S.radioUnread > 0 && S.tab !== 'radio'); }
 function renderWeek() {
   const se = SE(); if (!se || se.over) return; const o = se.opponent;
-  $('#wh-day').textContent = `Spieltag ${se.day + 1} / ${se.len}`; $('#wh-opp').textContent = `vs. ${o.club}`;
+  $('#wh-day').textContent = `Spieltag ${se.day + 1} / ${se.len}` + ((se.seasonNo || 1) > 1 || se.league === 'cloud' ? ` · Saison ${se.seasonNo || 1}${se.league === 'cloud' ? ' · Cloud League' : ''}` : ''); $('#wh-opp').textContent = `vs. ${o.club}`;
   $('#wh-where').textContent = se.home ? `Heimspiel · ${CLUB.stadium}` : `Auswärtsspiel · ${o.club}`;
   $('#wh-budget').textContent = money(se.budget); $('#wh-rank').textContent = se.day ? `${se.rank()}. (${se.table[0].pts} Pkt)` : '–';
   $('#wh-str').textContent = teamStrength(); const mor = Math.round(se.players.reduce((s, p) => s + p.morale, 0) / se.players.length); $('#wh-morale').textContent = mor >= 75 ? '😄 ' + mor : mor >= 55 ? '🙂 ' + mor : '😟 ' + mor;
@@ -363,16 +367,18 @@ function openPlayer(id) {
   const se = SE(), p = se.players.find(x => x.id === id); if (!p) return;
   const inL = se.slots.includes(p.id), st = p.start || p, delta = ATTRS.map(a => Math.round(p[a]) - Math.round(st[a] ?? p[a]));
   $('#pm-title').textContent = p.name;
-  $('#pm-body').innerHTML = `<div class="pm-top">${avatar(p, CLUB, 84)}<div><b>${esc(p.name)}</b><small><span>${esc(p.nick || '')}</span> · <span>${esc(POS[p.pos])}</span> · <span>${p.age} ${isEN ? "yrs" : "J."}</span></small><span class="stars">${'★'.repeat(p.pot || 3)}<i>${'★'.repeat(5 - (p.pot || 3))}</i></span><div class="pm-tags">${p.id === se.captain ? '<i class="cap">Kapitän</i>' : ''}${p.id === se.penTaker ? '<i class="pen">Elfmeter</i>' : ''}${inL ? '<i>Startelf</i>' : ''}${p.injured > 0 ? `<i class="down">verletzt (${p.injured})</i>` : ''}${p.suspended > 0 ? '<i class="down">gesperrt</i>' : ''}</div></div>${ring(rating(p), 64)}</div>
+  $('#pm-body').innerHTML = `<div class="pm-top">${avatar(p, CLUB, 84)}<div><b>${esc(p.name)}</b><small><span>${esc(p.nick || '')}</span> · <span>${esc(POS[p.pos])}</span> · <span>${p.age} ${isEN ? "yrs" : "J."}</span></small><span class="stars">${'★'.repeat(p.pot || 3)}<i>${'★'.repeat(5 - (p.pot || 3))}</i></span><div class="pm-tags">${p.id === se.captain ? '<i class="cap">Kapitän</i>' : ''}${p.id === se.penTaker ? '<i class="pen">Elfmeter</i>' : ''}${p.id === se.cornerTaker ? '<i class="pen">Ecken</i>' : ''}${p.id === se.fkTaker ? '<i class="pen">Freistöße</i>' : ''}${inL ? '<i>Startelf</i>' : ''}${p.injured > 0 ? `<i class="down">verletzt (${p.injured})</i>` : ''}${p.suspended > 0 ? '<i class="down">gesperrt</i>' : ''}</div></div>${ring(rating(p), 64)}</div>
     <div class="pm-grid"><div>${radar(ATTRS.map(a => p[a]), ATTRS.map(a => st[a] ?? p[a]), ATTRS.map(a => tr(ATTR_NAMES[a]).slice(0, 3).toUpperCase()))}<p class="hint">Gestrichelt: Werte zum Saisonstart.</p></div>
     <div><div class="pm-attrs">${ATTRS.map((a, i) => `<div><span>${esc(ATTR_NAMES[a])}</span><i class="bar"><b style="width:${p[a]}%"></b></i><b>${Math.round(p[a])}</b>${delta[i] ? `<em class="${delta[i] > 0 ? 'up' : 'down'}">${delta[i] > 0 ? '▲' : '▼'}${Math.abs(delta[i])}</em>` : '<em></em>'}</div>`).join('')}</div>
     <div class="kgrid pm-k"><div><small>Spiele</small><b>${p.apps}</b></div><div><small>Tore / Vorlagen</small><b>${p.goals} / ${p.assists}</b></div><div><small>Fitness</small><b>${Math.round(p.fitness)} %</b></div><div><small>Stimmung</small><b>${Math.round(p.morale)}</b></div><div><small>Form</small><b>${p.form > 0 ? '+' + p.form : p.form}</b></div><div><small>Marktwert</small><b>${money(p.value)}</b></div></div></div></div>
     <p class="pm-desc">${esc(p.desc || '')}</p>
-    <div class="pm-actions">${inL && p.pos !== 'TW' && p.id !== se.captain ? '<button class="btn sm" data-pa="cap">Zum Kapitän</button>' : ''}${inL && p.pos !== 'TW' && p.id !== se.penTaker ? '<button class="btn sm" data-pa="pen">Elfmeterschütze</button>' : ''}${!se.trained || se.extraTraining ? '<button class="btn sm" data-pa="train">Einzeltraining planen</button>' : ''}${se.players.length > 14 ? `<button class="btn sm" data-pa="sell">Verkaufen · ${money(se.salePrice(p))}</button>` : ''}</div>`;
+    <div class="pm-actions">${inL && p.pos !== 'TW' && p.id !== se.captain ? '<button class="btn sm" data-pa="cap">Zum Kapitän</button>' : ''}${inL && p.pos !== 'TW' && p.id !== se.penTaker ? '<button class="btn sm" data-pa="pen">Elfmeterschütze</button>' : ''}${inL && p.pos !== 'TW' && p.id !== se.cornerTaker ? '<button class="btn sm" data-pa="corner">Eckenschütze</button>' : ''}${inL && p.pos !== 'TW' && p.id !== se.fkTaker ? '<button class="btn sm" data-pa="fk">Freistoßschütze</button>' : ''}${!se.trained || se.extraTraining ? '<button class="btn sm" data-pa="train">Einzeltraining planen</button>' : ''}${se.players.length > 14 ? `<button class="btn sm" data-pa="sell">Verkaufen · ${money(se.salePrice(p))}</button>` : ''}</div>`;
   $$('#pm-body [data-pa]').forEach(b => b.addEventListener('click', () => {
     const k = b.dataset.pa; audio.play('click');
     if (k === 'cap') { se.setCaptain(p.id); toast(`${p.name} trägt die Kapitänsbinde.`); }
     else if (k === 'pen') se.setPenTaker(p.id);
+    else if (k === 'corner') se.setCornerTaker(p.id);
+    else if (k === 'fk') se.setFkTaker(p.id);
     else if (k === 'train') { renderTraining(); const P = S.tplan, slot = P.individual.find(x => !x.id) || P.individual[1]; slot.id = p.id; const weak = [...ATTRS].sort((a, c) => p[a] - p[c]).find(a => a !== 'kondition' || p.pos === 'TW') || 'technik'; slot.attr = p.pos === 'ST' ? 'schuss' : p.pos === 'TW' || p.pos === 'IV' ? 'abwehr' : weak; $('#pmodal').hidden = true; S.tab = 'training'; renderWeek(); return; }
     else if (k === 'sell') { if (!confirm(tr(`${p.name} für ${money(se.salePrice(p))} verkaufen?`))) return; const r = se.sell(p.id); if (r.ok) { audio.play('cash'); $('#pmodal').hidden = true; renderWeek(); return; } toast(r.reason); }
     renderWeek(); openPlayer(p.id);
@@ -425,6 +431,16 @@ function renderTactics() {
   $$('#styles .scard').forEach(b => b.addEventListener('click', () => { se.style = b.dataset.k; audio.play('click'); renderTactics(); }));
   $('#tempos').innerHTML = Object.entries(TEMPO).map(([k, t]) => `<button class="${k === se.tempo ? 'on' : ''}" data-k="${k}">${esc(t.name)}</button>`).join('');
   $$('#tempos button').forEach(b => b.addEventListener('click', () => { se.tempo = b.dataset.k; audio.play('click'); renderTactics(); }));
+  { const inL = se.slots.map(id => se.players.find(p => p.id === id)).filter(p => p && p.pos !== 'TW');
+    const opt = (sel, auto) => `<option value="">${esc(tr(auto))}</option>` + inL.map(p => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.name)} · TC ${Math.round(p.technik)} · SC ${Math.round(p.schuss)}</option>`).join('');
+    $('#setpieces').innerHTML = `<label>Ecken<select id="sp-corner">${opt(se.cornerTaker, 'Automatisch (beste Technik)')}</select></label><label>Freistöße<select id="sp-fk">${opt(se.fkTaker, 'Automatisch (Elfmeterschütze)')}</select></label><label>Eckenvariante<select id="sp-var">${Object.entries(CORNER_VAR).map(([k, v]) => `<option value="${k}" ${k === (se.cornerVar || 'mix') ? 'selected' : ''}>${esc(tr(v))}</option>`).join('')}</select></label>`;
+    $('#sp-corner').onchange = (e) => { se.cornerTaker = e.target.value || null; audio.play('click'); };
+    $('#sp-fk').onchange = (e) => { se.fkTaker = e.target.value || null; audio.play('click'); };
+    $('#sp-var').onchange = (e) => { se.cornerVar = e.target.value; audio.play('click'); };
+    const F = FORMATIONS[se.formation], R = se.roles || {};
+    $('#roles').innerHTML = se.slots.map((id, i) => { const p = se.players.find(x => x.id === id), pos = F.slots[i][0], RS = ROLES[pos]; if (!p || !RS) return ''; const cur = R[p.id] && R[p.id].pos === pos ? R[p.id].role : '';
+      return `<div class="rl"><span class="pos">${esc(pos)}</span><b>${esc(p.name)}</b><select data-rid="${p.id}" data-rpos="${pos}"><option value="">${esc(tr('Standard'))}</option>${Object.entries(RS).map(([k, r]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${esc(tr(r.name))}</option>`).join('')}</select><small>${esc(tr(cur ? RS[cur].desc : 'Spielt die Position nach Plan.'))}</small></div>`; }).join('');
+    $$('#roles select').forEach(sel => sel.onchange = () => { se.setRole(sel.dataset.rid, sel.dataset.rpos, sel.value); audio.play('click'); renderTactics(); }); }
   const ev = se.pendingEvent ? `<p><b style="color:var(--orange)">Störung: ${esc(EVENTS[se.pendingEvent.event].name)}</b> – ${esc(EVENTS[se.pendingEvent.event].desc)}</p>` : '';
   $('#opp-card').innerHTML = `<div class="card-head"><span>Gegner: ${esc(o.club)}</span><span class="tag">Stärke ${o.strength}</span></div><div class="oc"><div class="crest" style="background:${o.color};border-color:${o.color2}">${esc(o.short[0])}</div><div><b>${esc(o.club)}</b><p>${esc(o.teaser)}</p></div></div>${ev}<div class="tipp">💬 ${esc(o.lena)}</div>`;
 }
@@ -503,6 +519,8 @@ function renderRankChart() {
 // Funk
 function renderRadio() { const se = SE(); if (!se) return; const el = $('#radio'); el.innerHTML = [...se.log].reverse().slice(0, 30).map(m => { const P = SPK[m.who] || SPK.hub; return `<div class="msg ${m.who}"><div class="av">${P.av}</div><div><b>${esc(P.n)} · Spieltag ${m.day + 1}</b><p>${esc(m.text)}</p></div></div>`; }).join(''); }
 
+function lsGet(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
 // ---------------- Spieltag ----------------
 let M = null, pitch = null, lastT = 0, matchRun = false;
 function sizePitch() { const wrap = $('.pitch-wrap'); if (!pitch) return; pitch.resize(wrap.clientWidth, wrap.clientHeight); }
@@ -519,22 +537,23 @@ async function ensurePitch() {
 }
 window.addEventListener('resize', () => { sizeBg(); if (bg3) bg3.resize(innerWidth, innerHeight); if (S.screen === 'match') sizePitch(); });
 $('#btn-match').addEventListener('click', async () => { audio.unlock(); audio.play('whistle'); $('#btn-match').disabled = true; await ensurePitch(); $('#btn-match').disabled = false; startMatch(); });
-function startMatch() {
-  const se = SE(), o = se.opponent; se.autoFillIfNeeded?.();
-  const me = se.teamForMatch(), opp = se.opponentForMatch();
-  const home = se.home ? me : opp, away = se.home ? opp : me;
-  M = new Match(home, away, { seed: (Date.now() & 0xffff) + se.day, weather: se.weather, hooks: { injMul: DIFFICULTY[S.diff].inj } }); S.talkUsed = false; S.talk = null;
+function startMatch(mini) {
+  const se = SE(), o = mini ? (mini.oppClub || se.opponent) : se.opponent; se.autoFillIfNeeded?.();
+  const me = mini?.meTeam || se.teamForMatch(), opp = mini?.oppTeam || se.opponentForMatch(), atHome = mini ? true : se.home;
+  const home = atHome ? me : opp, away = atHome ? opp : me;
+  M = new Match(home, away, { seed: (Date.now() & 0xffff) + se.day, weather: mini?.weather || se.weather, spectacle: mini?.spect || lsGet('brcm-mode', 'real') === 'spect', offside: lsGet('brcm-offside', '1') !== '0', hooks: { injMul: DIFFICULTY[S.diff].inj } }); S.talkUsed = false; S.talk = null;
   voice.prefetchFragments(); voice.prefetch(M.players.map(p => 'n:' + p.name).concat([...(home.bench || []), ...(away.bench || [])].map(p => 'n:' + p.name), ['n:' + home.short, 'n:' + away.short]));
-  S.match = M; S.myTeam = se.home ? 0 : 1;
-  M.hooks = { onEvent: (e) => onMatchEvent(e), onHalf: () => openHalf('Halbzeit'), onFull: (r) => endMatch(r), onGoal: (ti) => { pitch.goalFlash(ti); }, injMul: DIFFICULTY[S.diff].inj };
+  S.match = M; S.myTeam = atHome ? 0 : 1; S.chantT = 0;
+  M.hooks = { onEvent: (e) => onMatchEvent(e), onHalf: () => openHalf('Halbzeit'), onFull: (r) => mini ? endMini(r) : endMatch(r), onGoal: (ti) => { pitch.goalFlash(ti); }, injMul: DIFFICULTY[S.diff].inj };
   $('#sc-home').textContent = home.short; $('#sc-away').textContent = away.short; $('#sc-val').textContent = '0 : 0'; $('#sc-home-crest').innerHTML = crest(home, 30); $('#sc-away-crest').innerHTML = crest(away, 30); $('#tl-marks').innerHTML = ''; $('#tl-fill').style.width = '0%';
-  if (pitch && pitch.setDaylight) { pitch.setDaylight(se.home); pitch.setWeather?.(se.weather); } $('#sc-min').textContent = "0'"; $('#sc-phase').textContent = '1. Halbzeit';
+  if (pitch && pitch.setDaylight) { pitch.setDaylight(atHome); pitch.setWeather?.(mini?.weather || se.weather); } $('#sc-min').textContent = "0'"; $('#sc-phase').textContent = '1. Halbzeit';
   $('#ticker-list').innerHTML = ''; $('#ts-stats').textContent = ''; $('#match-banner').hidden = true;
   renderLiveTactics(); S.warned = new Set(); renderEnergy(); applyCam();
-  showLineupIntro(home, away);
+  if (!mini) showLineupIntro(home, away);
   onMatchEvent(M.events[0]);
-  setSpeed(1); matchRun = true; show('match'); audio.setCrowd(0.5);
-  banner(`${home.short} – ${away.short}`, `Spieltag ${se.day + 1} · ${se.home ? CLUB.stadium : o.club}`, false, 2600);
+  if (mini) applyMini(mini);
+  setSpeed(KIOSK && !mini ? 2 : 1); matchRun = true; show('match'); audio.setCrowd(0.5);
+  banner(mini ? mini.title : `${home.short} – ${away.short}`, mini ? mini.text : `Spieltag ${se.day + 1} · ${se.home ? CLUB.stadium : o.club}`, false, mini ? 4200 : 2600);
 }
 // Aufstellungen vor dem Anpfiff
 let liTimer = null;
@@ -554,8 +573,9 @@ function renderEnergy() {
 }
 function renderLiveTactics() {
   const T = M.teams[S.myTeam], se = SE();
-  $('#live-tactics').innerHTML = `<small>Spielstil live</small><div class="seg">${Object.entries(STYLES).map(([k, v]) => `<button class="${k === T.style ? 'on' : ''}" data-k="${k}">${esc(v.name)}</button>`).join('')}</div>`;
-  $$('#live-tactics button').forEach(b => b.addEventListener('click', () => { T.style = b.dataset.k; se.style = b.dataset.k; audio.play('click'); renderLiveTactics(); }));
+  $('#live-tactics').innerHTML = `<small>Spielstil live</small><div class="seg">${Object.entries(STYLES).map(([k, v]) => `<button class="${k === T.style ? 'on' : ''}" data-k="${k}">${esc(v.name)}</button>`).join('')}</div><small>Anweisung</small><div class="seg live-instr">${Object.entries(INSTR).map(([k, v]) => `<button class="${k === (T.instr || 'normal') ? 'on' : ''}" data-i="${k}" title="${esc(tr(v.desc))}">${esc(v.name)}</button>`).join('')}</div>`;
+  $$('#live-tactics button[data-k]').forEach(b => b.addEventListener('click', () => { T.style = b.dataset.k; se.style = b.dataset.k; audio.play('click'); renderLiveTactics(); }));
+  $$('#live-tactics button[data-i]').forEach(b => b.addEventListener('click', () => { T.instr = b.dataset.i; audio.play('click'); toast(`${tr('Anweisung')}: ${tr(INSTR[b.dataset.i].name)} – ${tr(INSTR[b.dataset.i].desc)}`); renderLiveTactics(); }));
 }
 function setSpeed(s) { if (!M) return; M.speed = s === 'skip' ? 40 : s; if (M.speed > 1) { clearTimeout(liTimer); $('#lineup-intro').hidden = true; } $$('#speed button[data-s]').forEach(b => b.classList.toggle('on', String(b.dataset.s) === String(s))); }
 $$('#speed button[data-s]').forEach(b => b.addEventListener('click', () => { audio.play('click'); setSpeed(b.dataset.s === 'skip' ? 'skip' : +b.dataset.s); }));
@@ -581,11 +601,12 @@ function speakFiller() {
 function onMatchEvent(e) {
   const mine = e.team === S.myTeam;
   if (pitch && pitch.onEvent) pitch.onEvent(e, M);
+  if (pitch && pitch.recordClip && M && M.speed < 10 && ['goal', 'save', 'pen_save', 'post', 'parry', 'header', 'fk_wall'].includes(e.type)) { const lb = { goal: 'TOR', save: 'Parade', pen_save: 'Elfmeter gehalten', post: 'Aluminium', parry: 'Glanzparade', header: 'Kopfball', fk_wall: 'Freistoß' }[e.type]; pitch.recordClip(M, e, `${e.min}' · ${tr(lb)} · ${e.p ? e.p.name : ''}`); }
   if (['intercept', 'press', 'tackle', 'cross'].includes(e.type)) return;
   const li = document.createElement('div'); const key = e.type === 'goal' ? (mine ? 'goal' : 'goal_opp') : e.type; li.className = 'te ' + key; li.innerHTML = `<b>${e.min}'</b><span>${esc(e.text)}</span>`;
   const list = $('#ticker-list'); list.prepend(li); while (list.children.length > 60) list.lastChild.remove();
   // Sprecher: wichtige Ereignisse immer, Kleinigkeiten nur bei normalem Tempo
-  const PRIO = { goal: 2, red: 2, penalty: 2, pen_save: 2, pen_miss: 2, full: 2, half: 2, kickoff: 1, yellow: 1, save: 1, post: 1, wide: 1, chance: 1, injury: 1, sub: 1, block: 0, koloss: 1, deflect: 1, corner: 1, freekick: 1, header: 1, parry: 1, fk_wall: 1, claim: 0, clear: 0 };
+  const PRIO = { goal: 2, red: 2, penalty: 2, pen_save: 2, pen_miss: 2, full: 2, half: 2, kickoff: 1, yellow: 1, save: 1, post: 1, wide: 1, chance: 1, injury: 1, sub: 1, block: 0, koloss: 1, offside: 1, instr: 1, onetwo: 0, deflect: 1, corner: 1, freekick: 1, header: 1, parry: 1, fk_wall: 1, claim: 0, clear: 0 };
   const pr = PRIO[e.type]; if (pr !== undefined && M.speed < 10 && (M.speed <= 1 || pr >= 2)) speakEvent(e, { prio: pr, interrupt: e.type === 'goal' || e.type === 'full', rate: e.type === 'goal' ? 1.08 : 1.04, pitch: e.type === 'goal' ? 1.1 : 1 });
   if (e.type === 'kickoff' && M.speed < 10) { const w = M.weather || 'sun'; speakTpl(WEATHER_LINE.de[w], WEATHER_LINE.en[w], matchVals(), { prio: 1 }); }
   if (['goal', 'yellow', 'red', 'injury', 'sub', 'penalty'].includes(e.type)) { const mk = document.createElement('i'); mk.className = 'tm ' + e.type + (mine ? ' me' : ' opp'); mk.style.left = Math.min(100, e.min / 90 * 100) + '%'; mk.title = `${e.min}' ${e.p ? e.p.name : ''}`; mk.innerHTML = icon(e.type === 'goal' ? 'ball' : e.type === 'yellow' || e.type === 'red' ? 'card' : e.type === 'penalty' ? 'pen' : e.type); $('#tl-marks').appendChild(mk); }
@@ -593,9 +614,11 @@ function onMatchEvent(e) {
     else if (pitch && pitch.celebrate && M.speed < 10) pitch.celebrate(e.p); $('#sc-val').classList.remove('flash'); void $('#sc-val').offsetWidth; $('#sc-val').classList.add('flash'); audio.play(mine ? 'goal' : 'goal_opp'); banner(mine ? 'TOOOR!' : 'Gegentor', `${e.p ? e.p.name : ''} · ${e.min}'`, !mine, 2600, e.p); if (M.speed < 10) pitch.burst(M.ball.x, M.ball.y, mine ? '#3ddc84' : '#ff6a3d'); }
   else if (e.type === 'save' || e.type === 'post' || e.type === 'wide') audio.play('ooh', mine ? 0.8 : 0.5);
   else if (e.type === 'chance' && mine) audio.play('chance');
-  else if (e.type === 'freekick') audio.play('whistle');
+  else if (e.type === 'freekick') { audio.play('whistle'); if (!mine) audio.play('boo', 0.7); }
+  else if (e.type === 'offside' && e.team !== S.myTeam) audio.play('applause', 0.5);
+  else if (e.type === 'claim' || e.type === 'clear') audio.play('applause', e.team === S.myTeam || (e.type === 'claim' && e.team !== S.myTeam) ? 0.4 : 0.2);
   else if (e.type === 'header' || e.type === 'parry' || e.type === 'fk_wall' || e.type === 'deflect') audio.play('ooh', mine ? 0.6 : 0.4);
-  else if (e.type === 'yellow' || e.type === 'red') { audio.play('card'); if (e.type === 'red') banner('ROT', e.p.name, !mine); }
+  else if (e.type === 'yellow' || e.type === 'red') { audio.play('card'); if (!mine) audio.play('applause', 0.4); else audio.play('boo', 0.8); if (e.type === 'red') banner('ROT', e.p.name, !mine); }
   else if (e.type === 'penalty') { audio.play('whistle'); audio.play('chance'); banner('ELFMETER', `${e.p ? e.p.name : ''} tritt an`, !mine); }
   else if (e.type === 'pen_save' || e.type === 'pen_miss') audio.play('ooh', mine ? 1 : 0.6);
   else if (e.type === 'injury') { audio.play('ooh', 0.6); if (mine) banner('Verletzung', `${e.p.name} – Wechsel?`, false); }
@@ -656,6 +679,7 @@ function showFullTime(res, r, o) {
 }
 function showReport(res, r, o) {
   const se = SE(), home = res.mine === 'home';
+  $('#btn-highlights').hidden = !(pitch && pitch.clips && pitch.clips.length);
   $('#rep-day').textContent = `Spieltag ${se.results.length} / ${se.len}`;
   $('#rep-title').textContent = r.won ? 'Sieg!' : r.draw ? 'Unentschieden' : 'Niederlage';
   const hn = home ? CLUB.name : o.club, an = home ? o.club : CLUB.name;
@@ -668,7 +692,7 @@ function showReport(res, r, o) {
   const goals = res.events.filter(e => e.type === 'goal');
   const mi = S.myTeam, poss = Math.round(100 * res.poss[mi] / Math.max(1, res.poss[0] + res.poss[1]));
   $('#rep-stats').innerHTML = `<ul class="scorers">${goals.length ? goals.map(e => `<li>${e.min}' ${esc(e.p.name)} (${esc(M.teams[e.team].short)})${e.p2 ? ` <small>Vorlage ${esc(e.p2.name)}</small>` : ''}</li>`).join('') : '<li>Keine Tore.</li>'}</ul>
-    <div class="statline"><span>${res.shots[mi][0]}</span><span>SCHÜSSE</span><span>${res.shots[1 - mi][0]}</span></div><div class="statline"><span>${res.shots[mi][1]}</span><span>AUFS TOR</span><span>${res.shots[1 - mi][1]}</span></div><div class="statline"><span>${poss} %</span><span>BALLBESITZ</span><span>${100 - poss} %</span></div>${res.corners ? `<div class="statline"><span>${res.xg[mi].toFixed(1)}</span><span>XG</span><span>${res.xg[1 - mi].toFixed(1)}</span></div><div class="statline"><span>${res.corners[mi]}</span><span>ECKEN</span><span>${res.corners[1 - mi]}</span></div><div class="statline"><span>${res.fouls[mi]}</span><span>FOULS</span><span>${res.fouls[1 - mi]}</span></div>` : ''}<div class="statline"><span>${res.yellows.length}</span><span>KARTEN</span><span>${res.players.filter(p => p.team !== mi && p.yellow).length}</span></div>`;
+    <div class="statline"><span>${res.shots[mi][0]}</span><span>SCHÜSSE</span><span>${res.shots[1 - mi][0]}</span></div><div class="statline"><span>${res.shots[mi][1]}</span><span>AUFS TOR</span><span>${res.shots[1 - mi][1]}</span></div><div class="statline"><span>${poss} %</span><span>BALLBESITZ</span><span>${100 - poss} %</span></div>${res.corners ? `<div class="statline"><span>${res.xg[mi].toFixed(1)}</span><span>XG</span><span>${res.xg[1 - mi].toFixed(1)}</span></div><div class="statline"><span>${res.corners[mi]}</span><span>ECKEN</span><span>${res.corners[1 - mi]}</span></div><div class="statline"><span>${res.fouls[mi]}</span><span>FOULS</span><span>${res.fouls[1 - mi]}</span></div>${res.offsides ? `<div class="statline"><span>${res.offsides[mi]}</span><span>ABSEITS</span><span>${res.offsides[1 - mi]}</span></div>` : ''}` : ''}<div class="statline"><span>${res.yellows.length}</span><span>KARTEN</span><span>${res.players.filter(p => p.team !== mi && p.yellow).length}</span></div>`;
   const mine = res.players.filter(p => p.team === mi).sort((a, b) => b.rating - a.rating);
   const mvp = mine[0]; if (mvp) $('#rep-mvp').innerHTML = `${avatar(mvp, CLUB, 64)}<div><small>${icon('star')} Spieler:in des Spiels</small><b>${esc(mvp.name)}</b><span>${esc(POS[mvp.pos])} · Note ${Math.max(1, Math.min(10, mvp.rating)).toFixed(1)}${mvp.goals ? ' · ' + mvp.goals + ' Tor' + (mvp.goals > 1 ? 'e' : '') : ''}${mvp.assists ? ' · ' + mvp.assists + ' Vorlage' + (mvp.assists > 1 ? 'n' : '') : ''}</span></div>`;
   $('#rep-ratings').innerHTML = mine.map(p => { const v = Math.max(1, Math.min(10, p.rating)); return `<div class="${v >= 7.5 ? 'hi' : v < 5.5 ? 'lo' : ''}">${avatar(p, CLUB, 30)}<span>${esc(p.name)} <small style="color:var(--muted)">${esc(p.pos)}${p.goals ? ' · ⚽' + p.goals : ''}${p.injured ? ' · 🚑' : ''}</small></span><i class="rbar"><b style="width:${v * 10}%"></b></i><b>${v.toFixed(1)}</b></div>`; }).join('');
@@ -682,6 +706,103 @@ function showReport(res, r, o) {
   setTimeout(() => achShow(achUnlock(achAfterMatch(se, res, r, S.myTeam), KIOSK)), 900);
 }
 $('#btn-next-week').addEventListener('click', () => { audio.play('click'); const se = SE(); if (se.over) showResult(se.result); else { S.tab = 'home'; S.radioUnread = 0; renderWeek(); show('week'); } });
+
+// ---------------- Tages-Challenge & Duell ----------------
+const DAILY = [
+  { id: 'comeback', title: 'Die Aufholjagd', text: '0:2 hinten, noch 30 Minuten – dreh das Spiel!', min: 60, score: [0, 2] },
+  { id: 'hold', title: 'Die Abwehrschlacht', text: '1:0 vorn, noch 20 Minuten gegen den Mainframe-Koloss – bring es nach Hause.', min: 70, score: [1, 0], opp: 6 },
+  { id: 'ten', title: 'Zu zehnt', text: '1:1 nach einem Platzverweis gegen uns – noch 25 Minuten.', min: 65, score: [1, 1], red: true },
+  { id: 'storm', title: 'Sturmspiel', text: '0:0 bei Sturm, noch 30 Minuten – ein Tor entscheidet.', min: 60, score: [0, 0], weather: 'wind' },
+  { id: 'snow', title: 'Schneechaos', text: '1:2 im Schneetreiben, noch 25 Minuten.', min: 65, score: [1, 2], weather: 'snow' },
+  { id: 'festival', title: 'Torfestival', text: '2:2, noch 30 Minuten im Spektakel-Modus – jedes Tor zählt.', min: 60, score: [2, 2], spect: true },
+  { id: 'rain', title: 'Regenschlacht', text: '0:1 im Dauerregen, noch 35 Minuten.', min: 55, score: [0, 1], weather: 'rain' },
+];
+function dailyToday() { const date = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }), n = Math.floor(Date.parse(date) / 864e5), sc = DAILY[n % DAILY.length]; return { date, n, sc, opp: sc.opp ?? (n * 3) % OPPONENTS.length }; }
+// Punkte der Tages-Challenge: Ergebnis, eigene Tore im Zeitfenster, Gegentore
+function dailyPoints(sc, res, mi) { const gf = (mi === 0 ? res.gh : res.ga), ga = (mi === 0 ? res.ga : res.gh), dgf = gf - sc.score[0], dga = ga - sc.score[1]; return Math.max(0, (gf > ga ? 1200 : gf === ga ? 500 : 0) + dgf * 250 - dga * 120 + (res.shots ? res.shots[mi][1] * 20 : 0)); }
+async function startMini(cfg) {
+  audio.unlock(); audio.play('whistle');
+  S.mini = { ...cfg, keep: S.season, keepGame: S.gameId, keepDiff: S.diff };
+  const se = new Season({ difficulty: 'profi', length: 'short', seed: cfg.seed || 77, hooks: {} }); if (cfg.oppIndex !== undefined) se.day = cfg.oppIndex;
+  S.season = se; S.gameId = null; S.diff = 'profi';
+  if (cfg.kind === 'daily') { try { const r = await api('/api/game/start', { mission: 'daily', difficulty: 'profi' }, 4000); S.gameId = r.gameId; } catch { /* offline */ } }
+  $('#mini-modal').hidden = true;
+  await ensurePitch();
+  startMatch({ ...cfg, meTeam: cfg.meTeam || se.teamForMatch(), oppTeam: cfg.oppTeam, oppClub: cfg.oppClub });
+}
+function applyMini(mini) {
+  if (!mini.min) return;
+  M.t = mini.min * MATCH_REAL / 90; M.min = mini.min; M.halfDone = mini.min >= 45; M.score = [...mini.score]; $('#sc-val').textContent = `${M.score[0]} : ${M.score[1]}`; $('#sc-phase').textContent = mini.min >= 45 ? '2. Halbzeit' : '1. Halbzeit';
+  if (mini.red) { const c = M.alive(S.myTeam).filter(p => p.pos !== 'TW' && p.pos !== 'ST'); const p = c[Math.floor(Math.random() * c.length)]; if (p) { p.out = true; p.red = true; } }
+  M.kickoff(1 - S.myTeam);
+}
+async function endMini(res) {
+  matchRun = false; audio.setCrowd(0.2); const mini = S.mini; if (!mini) return; const mi = S.myTeam, gf = mi === 0 ? res.gh : res.ga, ga = mi === 0 ? res.ga : res.gh, won = gf > ga;
+  audio.play(won ? 'win' : gf === ga ? 'confirm' : 'lose');
+  const body = $('#mini-body'); $('#mini-title').textContent = mini.kind === 'daily' ? 'Tages-Challenge' : 'Duell';
+  const pts = mini.kind === 'daily' ? dailyPoints(mini, res, mi) : null;
+  body.innerHTML = `<div class="scen"><b>${esc(mini.title)}</b><span>${esc(mini.text)}</span></div><div class="sc-big">${gf} : ${ga}</div>${pts !== null ? `<div class="pts">${fmt(pts)} Punkte</div>` : `<div class="pts">${won ? 'Duell gewonnen!' : gf === ga ? 'Unentschieden' : 'Duell verloren'}</div>`}<div id="mini-board"><p class="hint">Wird gewertet …</p></div><div class="row"><button class="btn" id="mini-again">Nochmal</button><button class="btn primary" id="mini-home">Zur Startseite</button></div>`;
+  const restore = () => { S.season = mini.keep; S.gameId = mini.keepGame; S.diff = mini.keepDiff; S.mini = null; };
+  $('#mini-home').onclick = () => { audio.play('click'); $('#mini-modal').hidden = true; restore(); goTitle(); };
+  $('#mini-again').onclick = () => { audio.play('click'); restore(); if (mini.kind === 'daily') openDaily(true); else startDuel(mini.code); };
+  $('#mini-modal').hidden = false;
+  try {
+    if (mini.kind === 'daily') {
+      if (S.gameId) await api('/api/scores', { gameId: S.gameId, name: S.player.name || 'Gast', company: S.player.company, teamCode: S.player.team, mission: 'daily', difficulty: 'profi', score: pts, won, duration: gf, stats: { challenge: mini.id, gf, ga } });
+      const d = await api(`/api/leaderboard?mission=daily&daily=${dailyToday().date}&limit=10`);
+      $('#mini-board').innerHTML = `<h3>Heute</h3><table>${d.rows.map((r, i) => `<tr class="${r.name === (S.player.name || 'Gast') && r.score === pts ? 'me' : ''}"><td>${i + 1}</td><td>${esc(r.name)}</td><td class="muted">${esc(r.company || '')}</td><td>${fmt(r.score)}</td></tr>`).join('') || '<tr><td>–</td></tr>'}</table>`;
+    } else {
+      await api(`/api/duel/${mini.code}/result`, { name: S.player.name || 'Gast', gf, ga });
+      const d = await api(`/api/duel/${mini.code}`);
+      $('#mini-board').innerHTML = `<h3>Herausforderungen gegen ${esc(d.name)}</h3><table>${d.results.map(r => `<tr><td>${esc(r.name)}</td><td>${r.gf} : ${r.ga}</td></tr>`).join('')}</table>`;
+    }
+  } catch { $('#mini-board').innerHTML = '<p class="hint">Bestenliste gerade nicht erreichbar.</p>'; }
+}
+function goTitle() { if (typeof showTitle === 'function') showTitle(); else show('title'); }
+function openDaily(direct) {
+  const D = dailyToday(), o = OPPONENTS[D.opp], sc = D.sc;
+  const go = () => startMini({ kind: 'daily', ...sc, title: `Tages-Challenge: ${sc.title}`, oppIndex: D.opp, seed: D.n });
+  if (direct) return go();
+  $('#mini-title').textContent = 'Tages-Challenge';
+  $('#mini-body').innerHTML = `<div class="scen"><b>${esc(sc.title)}</b><span>${esc(sc.text)}</span></div><p>Gegner: <b>${esc(o.club)}</b> · ${sc.weather ? esc(WEATHER[sc.weather]?.name || '') : 'Flutlicht'} · alle spielen mit demselben Kader.</p><div id="mini-board"><p class="hint">Bestenliste wird geladen …</p></div><div class="row"><button class="btn primary big" id="mini-go">Anpfiff</button></div>`;
+  $('#mini-go').onclick = go; $('#mini-modal').hidden = false;
+  api(`/api/leaderboard?mission=daily&daily=${D.date}&limit=10`).then(d => { $('#mini-board').innerHTML = `<h3>Heute (${esc(D.date)})</h3><table>${d.rows.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.name)}</td><td class="muted">${esc(r.company || '')}</td><td>${fmt(r.score)}</td></tr>`).join('') || '<tr><td>Noch niemand – sei die oder der Erste!</td></tr>'}</table>`; }).catch(() => { $('#mini-board').innerHTML = ''; });
+}
+function duelTeamOf(se) { const T = se.teamForMatch(); return { name: `${CLUB.name} (${S.player.name || 'Gast'})`, short: (S.player.name || 'Duell').slice(0, 10).toUpperCase(), formation: T.formation, style: T.style, tempo: T.tempo, cornerVar: T.cornerVar, players: T.players.map(p => ({ name: p.name, nick: p.nick, pos: p.pos, role: p.role, slot: p.slot, num: p.num, tempo: p.tempo, technik: p.technik, abwehr: p.abwehr, schuss: p.schuss, kondition: p.kondition })) }; }
+function myDuels() { try { return JSON.parse(localStorage.getItem('brcm-duels')) || []; } catch { return []; } }
+function openDuel() {
+  $('#mini-title').textContent = 'Duell';
+  const mine = myDuels();
+  $('#mini-body').innerHTML = `<p>Gib den Duell-Code ein, den dir jemand geschickt hat. Du trittst mit ${S.season && !S.season.over ? 'deinem aktuellen Team' : 'dem TechHub-Kader'} an.</p><div class="row"><input class="code" id="duel-code" maxlength="5" placeholder="CODE" autocomplete="off"><button class="btn primary" id="duel-go">Antreten</button></div><p class="hint">Eigenen Code erstellst du in der Saison unter Taktik → Duell.</p><div id="mini-board">${mine.length ? '<h3>Deine Duell-Codes</h3><p class="hint">Ergebnisse werden geladen …</p>' : ''}</div>`;
+  $('#duel-go').onclick = () => { const c = $('#duel-code').value.trim().toUpperCase(); if (/^[A-Z0-9]{5}$/.test(c)) startDuel(c); else toast(tr('Bitte einen fünfstelligen Code eingeben.')); };
+  $('#mini-modal').hidden = false;
+  if (mine.length) Promise.all(mine.slice(-5).reverse().map(c => api(`/api/duel/${c}`).catch(() => null))).then(list => { $('#mini-board').innerHTML = '<h3>Deine Duell-Codes</h3>' + list.filter(Boolean).map(d => `<p><code>${esc(d.code)}</code> · ${d.results.length} Herausforderung(en)</p><table>${d.results.slice(0, 5).map(r => `<tr><td>${esc(r.name)}</td><td>${r.gf} : ${r.ga}</td></tr>`).join('')}</table>`).join(''); });
+}
+async function startDuel(code) {
+  let d; try { d = await api(`/api/duel/${code}`); } catch (e) { toast(tr('Duell-Code nicht gefunden.')); return; }
+  const T = d.team, own = S.season && !S.season.over && !S.mini ? S.season : null;
+  const oppTeam = { ...T, color: '#ff6a3d', color2: '#1a1a1a', bench: [], ai: null, me: false, players: T.players.map((p, i) => ({ ...p, slot: p.slot || [p.pos, 0.5, 0.5], num: p.num || i + 1 })) };
+  startMini({ kind: 'duel', code, title: `Duell gegen ${d.name}`, text: `Code ${code} · ${T.players.length} Spieler · ${STYLES[T.style]?.name || ''}`, min: 0, score: [0, 0], weather: 'sun', oppTeam, oppClub: { club: T.name, short: T.short, color: '#ff6a3d', color2: '#1a1a1a' }, meTeam: own ? own.teamForMatch() : null });
+}
+$('#btn-daily').addEventListener('click', () => { audio.unlock(); audio.play('click'); openDaily(false); });
+$('#btn-duel').addEventListener('click', () => { audio.unlock(); audio.play('click'); openDuel(); });
+$('#btn-mini-close').addEventListener('click', () => { audio.play('click'); $('#mini-modal').hidden = true; if (S.mini && !matchRun) { S.season = S.mini.keep; S.gameId = S.mini.keepGame; S.diff = S.mini.keepDiff; S.mini = null; goTitle(); } });
+$('#btn-duel-share').addEventListener('click', async () => { const se = SE(); if (!se) return; audio.play('click');
+  try { const r = await api('/api/duel', { name: S.player.name || 'Gast', team: duelTeamOf(se) }); const l = myDuels(); l.push(r.code); try { localStorage.setItem('brcm-duels', JSON.stringify(l.slice(-10))); } catch { /* ignore */ }
+    $('#duel-share-out').innerHTML = `Dein Code: <code>${esc(r.code)}</code> – auf der Startseite unter „Duell“ eingeben.`; try { await navigator.clipboard?.writeText(r.code); toast(tr('Code kopiert.')); } catch { /* ignore */ } }
+  catch (e) { toast(tr('Duell-Code konnte nicht erstellt werden.')); } });
+{ const D = dailyToday(); const el = $('#daily-sub'); if (el) el.textContent = `Heute: ${D.sc.title}`; }
+
+// Highlights: Zusammenschnitt der aufgezeichneten Szenen auf dem Spielfeld
+function playHighlights() {
+  if (!pitch || !pitch.clips || !pitch.clips.length || !M) return;
+  const clips = pitch.clips.slice(0, 8); let i = 0, tm = null; const back = S.screen;
+  const end = () => { clearTimeout(tm); pitch.stopReplay(); $('#hl-bar').hidden = true; $('#replay-tag').hidden = true; show(back); };
+  const next = () => { if (i >= clips.length || S.screen !== 'match') return end(); const c = clips[i++]; $('#hl-label').textContent = `${i}/${clips.length} · ${c.label}`; audio.play(c.kind === 'goal' ? 'goal' : 'ooh', 0.6); const d = pitch.playClip(M, c); tm = setTimeout(next, d + 300); };
+  $('#btn-hl-skip').onclick = () => { audio.play('click'); end(); };
+  show('match'); $('#hl-bar').hidden = false; $('#replay-tag').hidden = false; $('#fulltime').hidden = true; next();
+}
+$('#btn-highlights').addEventListener('click', () => { audio.play('click'); playHighlights(); });
 
 // ---------------- Saisonende ----------------
 function endSeason(r) { S.finalResult = r; }
@@ -710,10 +831,12 @@ async function showResult(r) {
   tableRows($('#final-table tbody'), false); resultRows($('#final-results'));
   $('#result-beat').className = 'beat'; $('#result-rank').textContent = 'Wird gewertet …';
   $('#voucher-form').hidden = false; $('#voucher-msg').textContent = ''; $('#in-email').value = ''; $('#in-consent').checked = false; $('#voucher-form').querySelector('button').disabled = false;
+  $('#btn-career').hidden = KIOSK; $('#btn-career').textContent = r.won && se.league !== 'cloud' ? `Aufstieg: Saison ${(se.seasonNo || 1) + 1} in der Cloud League` : `Karriere fortsetzen: Saison ${(se.seasonNo || 1) + 1}`;
   audio.play(r.won ? 'win' : 'lose'); show('result'); if (S.seasonAch) { achShow(S.seasonAch); S.seasonAch = null; }
   try {
     const res = await api('/api/scores', { gameId: S.gameId, name: S.player.name, company: S.player.company, teamCode: S.player.team, mission: 'league', difficulty: se.diffKey, score: r.score, won: r.won, duration: r.rank, stats: { ...se.stats, rank: r.rank, results: se.results.map(x => `${x.gf}:${x.ga}`), events: se.events.map(e => e.event) } });
     S.scoreRow = res; if (res.beat) achShow(achUnlock(['beat_rc'], KIOSK));
+    if (KIOSK && res.id && res.editToken && !res.team) { $('#voucher-qr').hidden = false; drawQR($('#voucher-qr-c'), `${PLAY_URL}?voucher=${res.id}.${res.editToken}`); } else $('#voucher-qr').hidden = true;
     $('#result-rank').textContent = res.rank === '–' ? 'Ergebnis wird von der Spielleitung geprüft.' : `Platz ${res.rank} von ${res.total} · ${DIFFICULTY[se.diffKey].name}`;
     const beat = $('#result-beat');
     if (res.team) { beat.className = 'beat on yes'; beat.textContent = 'RealCore-Team-Ergebnis – zählt als Benchmark für die Liga.'; $('#voucher-form').hidden = true; }
@@ -738,6 +861,8 @@ $('#voucher-form').addEventListener('submit', async (e) => {
   catch (err) { $('#voucher-msg').textContent = 'Das hat nicht geklappt: ' + err.message; btn.disabled = false; }
 });
 $('#btn-again').addEventListener('click', () => { audio.play('click'); startBriefing(); });
+$('#btn-career').addEventListener('click', async () => { audio.play('confirm'); const old = SE(); if (!old) return; S.gameId = null; try { const r = await api('/api/game/start', { mission: 'league', difficulty: S.diff }, 4000); S.gameId = r.gameId; } catch { /* offline */ }
+  S.season = old.nextSeason(seasonHooks()); S.tab = 'home'; S.selSlot = null; S.ceremonyDone = false; S.radioUnread = S.season.log.length; renderWeek(); show('week'); writeSave(); toast(`Saison ${S.season.seasonNo}${S.season.league === 'cloud' ? ' · Cloud League' : ''} – der Kader ist ein Jahr älter.`); });
 $('#btn-new').addEventListener('click', () => { audio.play('click'); S.player = { name: '', company: '', team: '' }; showSetup(); });
 $('#btn-board2').addEventListener('click', () => { audio.play('click'); showBoard(); });
 
@@ -758,6 +883,24 @@ async function loadBoard() {
   } catch { tb.innerHTML = '<tr><td colspan="6">Bestenliste nicht erreichbar.</td></tr>'; }
 }
 
+// QR-Code zeichnen (qrcode-generator, MIT)
+let QR = null;
+async function drawQR(canvas, text) { try { QR ||= (await import('../vendor/qrcode-1.4.4.js')).default; const q = QR(0, 'M'); q.addData(text); q.make(); const n = q.getModuleCount(), g = canvas.getContext('2d'), s = canvas.width / (n + 2); g.fillStyle = '#fff'; g.fillRect(0, 0, canvas.width, canvas.height); g.fillStyle = '#05140d'; for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) g.fillRect(Math.floor((c + 1) * s), Math.floor((r + 1) * s), Math.ceil(s), Math.ceil(s)); return true; } catch { return false; } }
+const PLAY_URL = location.origin + '/';
+// Leaderboard für den zweiten Bildschirm am Stand
+function startTvBoard() { S.board = { difficulty: 'all', period: 'today' }; showBoard(); $('#board-qr').hidden = false; $('#board-qr-url').textContent = PLAY_URL.replace(/^https?:\/\//, ''); drawQR($('#board-qr-c'), PLAY_URL); setInterval(() => { if (S.screen === 'board') loadBoard(); }, 20000); }
+// Gutschein-Formular auf dem eigenen Handy (?voucher=id.token)
+function openVoucherFromQR(v) {
+  const [id, token] = String(v).split('.'); $('#mini-title').textContent = 'Gutschein-Verlosung';
+  $('#mini-body').innerHTML = `<p>Trag deine E-Mail ein – die besten Ergebnisse gewinnen einen TechHub-Gutschein.</p><form id="qv-form" class="voucher"><input type="email" id="qv-mail" placeholder="name@firma.de" required><label class="check"><input type="checkbox" id="qv-consent" required><span>Ich willige ein, dass RealCore mich zur Gutschein-Vergabe per E-Mail kontaktiert. Widerruf jederzeit möglich.</span></label><button class="btn primary" type="submit">Absenden</button><p id="qv-msg" class="hint"></p></form>`;
+  $('#mini-modal').hidden = false;
+  $('#qv-form').addEventListener('submit', async (e) => { e.preventDefault(); try { await api('/api/scores/contact', { id: Number(id), token, email: $('#qv-mail').value.trim(), consent: $('#qv-consent').checked }); $('#qv-msg').textContent = 'Danke! Du bist im Rennen.'; e.target.querySelector('button').disabled = true; } catch (err) { $('#qv-msg').textContent = 'Das hat nicht geklappt: ' + err.message; } });
+}
+// Messe: nach längerer Pause zurück zur Startseite (laufende Spiele bleiben unberührt)
+let lastInput = Date.now();
+if (KIOSK) { ['pointerdown', 'keydown', 'touchstart'].forEach(ev => window.addEventListener(ev, () => { lastInput = Date.now(); }, { passive: true }));
+  setInterval(() => { const idle = Date.now() - lastInput; if (S.screen === 'title' || S.screen === 'intro') return; if (S.screen === 'match' && matchRun) return; if (idle > (S.screen === 'result' || S.screen === 'report' || S.screen === 'board' ? 90000 : 150000)) { lastInput = Date.now(); $$('.overlay').forEach(o => { o.hidden = true; }); S.season = null; S.mini = null; S.player = { name: '', company: '', team: '' }; show('title'); } }, 5000); }
+
 // ---------------- Hauptschleife ----------------
 function frame(now) {
   requestAnimationFrame(frame); // zuerst neu anmelden: ein Fehler darf die Schleife nie anhalten
@@ -772,6 +915,7 @@ function frameBody(now) {
     if (pitch) pitch.draw(M, dt); if (pitch && pitch.kicked) { pitch.kicked = false; if (M.speed <= 2) audio.play('kick', 0.5); }
     const excite = Math.min(1, 0.4 + Math.abs(sc[0] - sc[1]) * 0.1 + (M.ball.mode === 'shot' ? 0.4 : 0)); audio.setCrowd(excite * 0.8);
     if (!M.paused && !M.over && M.speed <= 1 && voice.idle && now - voice.lastEnd > 14000 && now - (S.fillerT || 0) > 24000) { S.fillerT = now; speakFiller(); }
+    if (!M.paused && !M.over && M.speed <= 2 && now > (S.chantT || 0)) { const fans = SE()?.econ?.fans ?? 50, lead = M.score[S.myTeam] - M.score[1 - S.myTeam]; if (S.chantT) audio.play('chant', 0.5 + Math.min(0.5, fans / 200 + Math.max(0, lead) * 0.1)); S.chantT = now + 26000 - Math.min(12000, fans * 80) + Math.random() * 12000; }
   } else if (S.screen === 'title' || S.screen === 'setup' || S.screen === 'brief' || S.screen === 'board' || S.screen === 'howto' || S.screen === 'privacy' || S.screen === 'result' || S.screen === 'report') {
     if (bgMatch && bg3 && S.screen === 'title') { bgMatch.tick(dt); if (bgMatch.over) { if (!S.bgOverT) S.bgOverT = now; else if (now - S.bgOverT > 4000) { S.bgOverT = 0; newBg(); } }
       const t = (now - bg3T0) / 1000, b = bgMatch.ball; S.bgTx = (S.bgTx ?? 52) + ((b.x * 0.55 + 52 * 0.45) - (S.bgTx ?? 52)) * Math.min(1, dt * 0.6); S.bgTz = (S.bgTz ?? 34) + ((b.y * 0.5 + 34 * 0.5) - (S.bgTz ?? 34)) * Math.min(1, dt * 0.6);
@@ -810,7 +954,9 @@ async function init() {
   const boot = $('#boot'); if (boot) { boot.classList.add('out'); setTimeout(() => boot.remove(), 700); }
   rotateNews(); requestAnimationFrame(frame);
   const cfg = loadConfig();
-  if (!params.has('nointro') && !params.has('debug')) { show('intro'); runGate(); } else loadTitleBoard();
+  if (TV) { $('#gate')?.setAttribute('hidden', ''); startTvBoard(); }
+  else if (params.has('voucher')) { $('#gate')?.setAttribute('hidden', ''); show('title'); loadTitleBoard(); openVoucherFromQR(params.get('voucher')); }
+  else if (!params.has('nointro') && !params.has('debug')) { show('intro'); runGate(); } else loadTitleBoard();
   await cfg;
   if (KIOSK) setInterval(() => { if (S.screen === 'title') loadTitleBoard(); }, 30000);
 }

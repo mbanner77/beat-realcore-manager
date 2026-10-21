@@ -23,6 +23,25 @@ export const STYLES = {
   agile:  { name: 'Agile Pressing', desc: 'Früh stören, schnell umschalten. Kostet Kondition.', press: 0.85, risk: 0.55, line: 0.03 },
   bigbang:{ name: 'Big Bang', desc: 'Alles nach vorn. Viele Chancen – und viele Konter.', press: 0.6, risk: 0.85, line: 0.08 },
 };
+// Live-Anweisungen im Spiel
+export const INSTR = {
+  normal: { name: 'Normal', desc: 'Spielplan wie besprochen.' },
+  wings: { name: 'Über die Flügel', desc: 'Bälle auf die Außen, mehr Flanken, Außenverteidiger rücken mit.' },
+  counter: { name: 'Konter', desc: 'Tiefer stehen, nach Ballgewinn sofort steil nach vorn.' },
+  highpress: { name: 'Pressing hoch', desc: 'Früh stören – kostet viel Kondition.' },
+  waste: { name: 'Zeit schinden', desc: 'Ball halten, sichere Pässe, kaum Risiko.' },
+};
+// Spielerrollen je Position (Rolle '' = Standard)
+export const ROLES = {
+  TW: { sweeper: { name: 'Mitspielender Torwart', desc: 'Fängt mehr Flanken ab, baut flach auf.' }, line: { name: 'Linientorwart', desc: 'Bleibt auf der Linie, stärker bei Schüssen.' } },
+  IV: { libero: { name: 'Libero', desc: 'Spielt den ersten Pass sauber nach vorn.' }, stopper: { name: 'Manndecker', desc: 'Hart im Zweikampf, stark im Kopfball.' } },
+  AV: { wingback: { name: 'Offensiver Außenverteidiger', desc: 'Hinterläuft den Flügel, flankt selbst.' }, fullback: { name: 'Defensiver Außenverteidiger', desc: 'Bleibt hinten, sichert ab.' } },
+  DM: { destroyer: { name: 'Abräumer', desc: 'Gewinnt Bälle vor der Abwehr.' }, playmaker: { name: 'Tiefer Spielmacher', desc: 'Verteilt Bälle aus der Tiefe.' } },
+  ZM: { playmaker: { name: 'Spielmacher', desc: 'Präzise Pässe, sucht den tödlichen Ball.' }, destroyer: { name: 'Abräumer', desc: 'Zweikampfstark, presst den Ballführer.' } },
+  FL: { winger: { name: 'Flankengeber', desc: 'Geht bis zur Grundlinie und flankt.' }, inside: { name: 'Inverser Flügel', desc: 'Zieht nach innen und schließt selbst ab.' } },
+  ST: { target: { name: 'Zielspieler', desc: 'Stark im Kopfball, macht Bälle fest.' }, poacher: { name: 'Konterstürmer', desc: 'Läuft in die Tiefe, lauert auf der Abseitslinie.' } },
+};
+export const CORNER_VAR = { mix: 'Gemischt', near: 'Erster Pfosten', far: 'Zweiter Pfosten', short: 'Kurz ausführen' };
 export const TEMPO = { slow: { name: 'Ruhig', k: 0.85 }, normal: { name: 'Normal', k: 1 }, fast: { name: 'Hoch', k: 1.15 } };
 
 // Stammkader TechHub United – jede Rolle kommt aus dem Legacy-Wars-Universum
@@ -210,7 +229,7 @@ export const TALKS = {
 };
 
 // Wirtschaft: Stadion, Ausbauten, Eintritt, Fans
-export const SEASON_LEN = { short: { name: 'Kurze Saison', days: 7, desc: 'Sieben Spieltage, jeder Gegner einmal – ideal am Messestand (ca. 20 Minuten).' }, long: { name: 'Volle Saison', days: 14, desc: 'Hin- und Rückrunde, 14 Spieltage – Stadionausbau und Wirtschaft lohnen sich richtig.' } };
+export const SEASON_LEN = { expo: { name: 'Messe-Express', days: 3, desc: 'Drei Spiele bis zum Finale gegen den Monolithen – ca. 8 Minuten.' }, short: { name: 'Kurze Saison', days: 7, desc: 'Sieben Spieltage, jeder Gegner einmal – ideal am Messestand (ca. 20 Minuten).' }, long: { name: 'Volle Saison', days: 14, desc: 'Hin- und Rückrunde, 14 Spieltage – Stadionausbau und Wirtschaft lohnen sich richtig.' } };
 export const STADIUM = [
   { cap: 12000, name: 'Clean-Core-Arena', cost: 0 },
   { cap: 20000, name: 'Clean-Core-Arena · Ausbau Nordtribüne', cost: 700 },

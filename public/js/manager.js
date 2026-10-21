@@ -36,15 +36,44 @@ export class Season {
     this.formation = '4-4-2'; this.style = 'clean'; this.tempo = 'normal';
     this.coh = { '4-4-2': 60, '4-3-3': 40, '5-3-2': 40, '3-5-2': 35 }; this.cohStyle = { clean: 60, agile: 40, bigbang: 40 }; this.lastTraining = null;
     this.slots = []; this.autoLineup();
-    this.captain = null; this.penTaker = null; this.pickLeaders();
+    this.captain = null; this.penTaker = null; this.cornerTaker = null; this.fkTaker = null; this.cornerVar = 'mix'; this.roles = {}; this.pickLeaders();
     this.objective = null; this.decision = null; this.decided = []; this.sponsorPerWin = false; this.oppMod = 0; this.extraTraining = false;
     this.results = []; this.log = []; this.events = []; this.trained = null; this.market = [];
     this.table = [{ id: 'techhub', club: CLUB.name, short: CLUB.short, pts: 0, gf: 0, ga: 0, w: 0, d: 0, l: 0, me: true }, ...OPPONENTS.map(o => ({ id: o.id, club: o.club, short: o.short, pts: 0, gf: 0, ga: 0, w: 0, d: 0, l: 0 }))];
     this.stats = { goals: 0, conceded: 0, wins: 0, draws: 0, losses: 0, transfersIn: 0, transfersOut: 0, trainings: 0, cleanSheets: 0, bonus: 0, objectives: 0, developed: 0 };
     this.pendingEvent = null; this.weekMsgs = [];
+    this.seasonNo = 1; this.league = 'legacy';
     this.prepareWeek(true);
   }
-  get opponent() { return OPPONENTS[this.day % OPPONENTS.length]; }
+  // Karriere: nächste Saison mit demselben Kader (älter, entwickelt), Nachwuchs, Aufstieg in die Cloud League
+  nextSeason(hooks) {
+    const n = new Season({ difficulty: this.diffKey, length: this.lenKey, hooks: hooks || this.hooks, seed: (this.r() * 0xffffffff) >>> 0 });
+    const r = n.r, msgs = [], promoted = this.rank() === 1 && this.league !== 'cloud';
+    n.seasonNo = (this.seasonNo || 1) + 1; n.league = promoted || this.league === 'cloud' ? 'cloud' : 'legacy';
+    const players = [];
+    for (const p0 of this.players) {
+      const p = { ...p0, age: p0.age + 1, fitness: 100, morale: clamp(p0.morale + 5, 40, 100), form: 0, injured: 0, suspended: 0, yellows: 0, goals: 0, assists: 0, apps: 0 };
+      if (p.age >= 35 && r() < 0.6) { msgs.push(`${p.name} beendet mit ${p.age} die Karriere.`); continue; }
+      const grow = p.age <= 23 ? (p.pot || 3) * 1.4 : p.age <= 27 ? (p.pot || 3) * 0.6 : p.age <= 30 ? 0 : -(p.age - 30) * 0.9;
+      for (const a of ATTRS) { if (p.pos === 'TW' && a === 'schuss') continue; p[a] = clamp(Math.round(p[a] + grow * (0.6 + r() * 0.8)), 15, 99); }
+      p.start = Object.fromEntries(ATTRS.map(a => [a, p[a]])); p.value = Math.max(80, Math.round(p.value * (grow > 0 ? 1.12 : grow < 0 ? 0.88 : 1) / 10) * 10);
+      players.push(p);
+    }
+    // Nachwuchs aus der TechHub-Akademie
+    const NAMES = ['Kai Kubernetes', 'Nele Node', 'Pia Pipeline', 'Tom Terraform', 'Lia Lambda', 'Ben Bytecode', 'Mia Microservice', 'Jan JSON'];
+    const need = Math.max(2, 18 - players.length), POS = ['IV', 'AV', 'ZM', 'FL', 'ST', 'DM'];
+    for (let i = 0; i < need; i++) { const pos = POS[Math.floor(r() * POS.length)], b = 46 + r() * 10, prof = { IV: [0, 2, 12, -8, 4], AV: [8, 2, 6, -4, 6], DM: [0, 4, 10, -2, 6], ZM: [2, 10, 0, 2, 4], FL: [12, 6, -10, 4, 4], ST: [6, 2, -12, 14, 2] }[pos];
+      const p = { id: 'y' + n.seasonNo + '_' + i, name: NAMES[(n.seasonNo * 3 + i) % NAMES.length], nick: 'Akademie', pos, age: 18 + Math.floor(r() * 2), value: 120, unit: 'youth', desc: 'Aus der eigenen TechHub-Akademie.', fitness: 100, morale: 75, form: 0, injured: 0, suspended: 0, yellows: 0, goals: 0, assists: 0, apps: 0, own: true, pot: 4 + (r() < 0.35 ? 1 : 0) };
+      ATTRS.forEach((a, j) => p[a] = clamp(Math.round(b + prof[j] + (r() - 0.5) * 6), 25, 80)); p.start = Object.fromEntries(ATTRS.map(a => [a, p[a]])); players.push(p); msgs.push(`Nachwuchs: ${p.name} (${pos}, ${p.age} J.) rückt aus der Akademie auf.`); }
+    n.players = players; n.budget = Math.round(n.diff.budget * 0.6 + Math.max(0, this.budget) * 0.5);
+    n.econ = { ...this.econ, pending: null, history: [], last: null, fac: { ...this.econ.fac } };
+    n.formation = this.formation; n.style = this.style; n.tempo = this.tempo; n.coh = { ...this.coh }; n.cohStyle = { ...this.cohStyle };
+    n.cornerVar = this.cornerVar; n.roles = {}; n.log = []; n.slots = []; n.autoLineup(); n.pickLeaders(); n.genMarket();
+    n.msg('hub', `Saison ${n.seasonNo}${n.league === 'cloud' ? ' in der Cloud League – die Gegner sind deutlich stärker.' : '.'} ${promoted ? 'Aufstieg geschafft! ' : ''}Der Kader ist ein Jahr älter.`);
+    for (const m of msgs) n.msg('hub', m);
+    return n;
+  }
+  get opponent() { return this.lenKey === 'expo' ? OPPONENTS[[0, 3, 6][this.day % 3]] : OPPONENTS[this.day % OPPONENTS.length]; }
   get home() { return this.day % 2 === 0; }
   msg(who, text) { const m = { who, text, day: this.day }; this.log.push(m); this.hooks.onMessage?.(m); }
 
@@ -138,7 +167,7 @@ export class Season {
     if (this.players.length <= 14) return { ok: false, reason: 'Mindestens 14 Spieler im Kader.' };
     if (p.pos === 'TW' && this.players.filter(x => x.pos === 'TW').length <= 1) return { ok: false, reason: 'Der letzte Torwart bleibt im Kader.' };
     const gain = this.salePrice(p);
-    if (this.captain === id) this.captain = null; if (this.penTaker === id) this.penTaker = null;
+    if (this.captain === id) this.captain = null; if (this.penTaker === id) this.penTaker = null; if (this.cornerTaker === id) this.cornerTaker = null; if (this.fkTaker === id) this.fkTaker = null;
     this.budget += gain; this.players.splice(i, 1); this.stats.transfersOut++;
     this.slots = this.slots.map(s => s === id ? null : s); this.fillLineup(); this.pickLeaders();
     this.msg('hub', `${p.name} wechselt für ${gain} T€. Das Budget freut sich, die Kabine weniger.`);
@@ -194,6 +223,9 @@ export class Season {
   }
   setCaptain(id) { if (this.players.find(p => p.id === id)) { this.captain = id; const p = this.players.find(x => x.id === id); p.morale = clamp(p.morale + 5, 0, 100); } }
   setPenTaker(id) { if (this.players.find(p => p.id === id)) this.penTaker = id; }
+  setCornerTaker(id) { if (this.players.find(p => p.id === id)) this.cornerTaker = id; }
+  setFkTaker(id) { if (this.players.find(p => p.id === id)) this.fkTaker = id; }
+  setRole(id, pos, role) { (this.roles ||= {}); if (!role) delete this.roles[id]; else this.roles[id] = { pos, role }; }
   // ---------- Wochenziel ----------
   pickObjective() {
     const keys = Object.keys(OBJECTIVES).filter(k => k !== this.objective && !(k === 'margin' && this.opponent.strength >= 76));
@@ -261,13 +293,13 @@ export class Season {
   }
   teamForMatch() {
     const F = FORMATIONS[this.formation];
-    const players = this.slots.map((id, i) => { const p = this.players.find(x => x.id === id); if (!p) return null; const pos = F.slots[i][0]; return { ref: p, id: p.id, name: p.name, nick: p.nick, pos, slot: F.slots[i], num: i + 1, ...this.effective(p, pos) }; }).filter(Boolean);
+    const R = this.roles || {}, players = this.slots.map((id, i) => { const p = this.players.find(x => x.id === id); if (!p) return null; const pos = F.slots[i][0]; return { ref: p, id: p.id, name: p.name, nick: p.nick, pos, slot: F.slots[i], num: i + 1, role: (R[p.id] && R[p.id].pos === pos) ? R[p.id].role : '', ...this.effective(p, pos) }; }).filter(Boolean);
     const bench = this.bench().map((p, i) => ({ ref: p, id: p.id, name: p.name, nick: p.nick, pos: p.pos, num: 12 + i, ...this.effective(p, p.pos) }));
-    return { name: CLUB.name, short: CLUB.short, color: CLUB.color, color2: CLUB.color2, players, bench, formation: this.formation, style: this.style, tempo: this.tempo, ai: null, me: true, captain: this.captain, penTaker: this.penTaker };
+    return { name: CLUB.name, short: CLUB.short, color: CLUB.color, color2: CLUB.color2, players, bench, formation: this.formation, style: this.style, tempo: this.tempo, ai: null, me: true, captain: this.captain, penTaker: this.penTaker, cornerTaker: this.cornerTaker, fkTaker: this.fkTaker, cornerVar: this.cornerVar || 'mix', instr: 'normal' };
   }
   opponentForMatch() {
     const o = this.opponent, r = rng(o.seed * 7 + this.diffKey.length), ev = this.pendingEvent?.event;
-    const base = (o.strength + (this.oppMod || 0)) * this.diff.opp * (1 + (ev === 'shadow_it' ? 0.08 : 0));
+    const base = (o.strength + (this.oppMod || 0) + (this.league === 'cloud' ? 9 : 0) + ((this.seasonNo || 1) - 1) * 2) * this.diff.opp * (1 + (ev === 'shadow_it' ? 0.08 : 0));
     const fk = o.style === 'wall' ? '5-3-2' : o.style === 'boss' || o.style === 'longshot' ? '4-3-3' : '4-4-2', F = FORMATIONS[fk];
     const players = F.slots.map(([pos, x, y], i) => {
       const k = 0.55 + base / 140, p = { id: 'o' + i, name: o.names[i] || `${o.short} ${i + 1}`, pos, slot: F.slots[i], num: i + 1 };

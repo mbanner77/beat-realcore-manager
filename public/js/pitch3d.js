@@ -2,7 +2,7 @@
 // Gleiche Schnittstelle wie die 2D-Variante (pitch.js): resize(w, h), draw(M, dt), goalFlash(team), burst(x, y, color), focus.
 import { PW, PH, GOAL_W } from './match.js';
 // Spielerfiguren: CC0-Modell und Animationen von Quaternius (Universal Animation Library 1+2), aufbereitet mit tools/build-player-model.mjs
-const RIG_URL = '/models/player.glb?v=3';
+const RIG_URL = '/models/player.glb?v=4';
 let rigData = null;
 // Einzelaktionen aus Mixamo: Start kurz vor dem Ballkontakt, gespielte Länge, Tempo
 const ONCE_NAMES = new Set(['M_pass', 'M_chip', 'M_strike', 'M_penalty', 'M_gkdropkick', 'M_gkthrow', 'M_header', 'M_tackle', 'M_gkdiveL', 'M_gkdiveR', 'M_gkcatch', 'M_trip', 'M_standup']);
@@ -17,12 +17,15 @@ const ONCE = {
 }; // ArrayBuffer, einmal je Seite geladen
 async function rigBytes() { if (!rigData) rigData = fetch(RIG_URL).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null); return rigData; }
 // HD-Figur: realistischer Körper (Quaternius Universal Base Characters, CC0) mit Texturen und Trikot-Zonenkarte
-const HD_URL = '/models/player-hd.glb?v=2', HD_DIR = '/models/hd/';
+const HD_URL = '/models/player-hd.glb?v=3', HD_DIR = '/models/hd/', HDF_URL = '/models/player-hd-f.glb?v=1', HDF_DIR = '/models/hd/f/';
+// Spielerinnen erkennen (Vornamen der Kader- und Gegnerlisten)
+const FEM = new Set(['Sina', 'Pia', 'Clara', 'Fiona', 'Kim', 'Dana', 'Hanna', 'Ida', 'Greta', 'Mila', 'Lotte', 'Hilde', 'Ines', 'Marta', 'Elke', 'Mandy', 'Vera', 'Zenzi', 'Sabine', 'Moni', 'Tanja', 'Inka', 'Nadja', 'Ria', 'Dagmar', 'Silke', 'Doris', 'Pamela', 'Conny', 'Rosa', 'Nele', 'Lia', 'Mia', 'Yara', 'Lena', 'Anna', 'Lisa', 'Sara', 'Julia']);
+export const isFemale = (p) => !!p && (p.female === true || (p.female !== false && String(p.name || '').split(/[\s-]+/).some(w => FEM.has(w))));
 export const gfx = () => { try { return localStorage.getItem('brcm-gfx') || 'auto'; } catch { return 'auto'; } };
 const wantHD = () => { try { const q = new URLSearchParams(location.search).get('hd'); if (q) return q !== '0'; } catch { /* ignore */ } const g = gfx(); if (g === 'high') return true; if (g === 'mid' || g === 'low') return false; return (navigator.hardwareConcurrency || 4) > 4 && Math.min(screen.width, screen.height) >= 700; };
 // Modelle schon im Hintergrund laden (nur Netzwerk), damit Intro und Anpfiff nicht warten
-export function prefetchModels() { rigBytes(); if (wantHD()) hdAssets(); }
-let hdData = null; const KIT_PIX = new Map(); // Trikotbilder (Pixel) seitenweit wiederverwenden
+export function prefetchModels() { rigBytes(); if (wantHD()) { hdAssets(); hdAssetsF(); } }
+let hdData = null, hdDataF = null; const KIT_PIX = new Map(); // Trikotbilder (Pixel) seitenweit wiederverwenden
 function loadImg(src) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; }); }
 async function hdAssets() {
   if (!hdData) hdData = (async () => {
@@ -31,6 +34,14 @@ async function hdAssets() {
     return { bytes, S, zones: cv(zones, false), light: cv(light), dark: cv(dark) };
   })().catch(() => null);
   return hdData;
+}
+async function hdAssetsF() {
+  if (!hdDataF) hdDataF = (async () => {
+    const [bytes, zones, light, dark] = await Promise.all([fetch(HDF_URL).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error('HDF'))), loadImg(HDF_DIR + 'kit-zones.png'), loadImg(HDF_DIR + 'skin-light.jpg'), loadImg(HDF_DIR + 'skin-dark.jpg')]);
+    const S = 512, cv = (img, smooth = true) => { const c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d', { willReadFrequently: true }); g.imageSmoothingEnabled = smooth; g.drawImage(img, 0, 0, S, S); return g.getImageData(0, 0, S, S).data; };
+    return { bytes, S, zones: cv(zones, false), light: cv(light), dark: cv(dark), female: true };
+  })().catch(() => null);
+  return hdDataF;
 }
 
 let B = null; // Babylon-Modul (lazy)
@@ -143,23 +154,40 @@ export class Pitch3D {
       const hd = !this.noHD && wantHD() ? await hdAssets() : null; this.hd = hd;
       const bytes = hd ? hd.bytes : await rigBytes(); if (!bytes || this.disposed) return; const tl0 = performance.now(); this.tFetch = tl0 - this.t0;
       const c = await B.LoadAssetContainerAsync(new Uint8Array(bytes), this.scene, { pluginExtension: '.glb' }); if (this.disposed) return; this.tParse = performance.now() - tl0;
+      if (hd) { try { const hf = await hdAssetsF(); if (hf && !this.disposed) { this.rigF = await B.LoadAssetContainerAsync(new Uint8Array(hf.bytes), this.scene, { pluginExtension: '.glb' }); this.hdF = hf; this.hdNormalF = new B.Texture(HDF_DIR + 'normal.jpg', this.scene, false, false); } } catch (e) { console.warn('Spielerinnen-Modell nicht geladen', e); this.rigF = null; this.hdF = null; } }
       if (hd) { const { Texture, StandardMaterial, Color3 } = B; this.hdNormal = new Texture(HD_DIR + 'normal.jpg', this.scene, false, false); const em = this.hdEye = new StandardMaterial('hdEye', this.scene); em.diffuseTexture = new Texture(HD_DIR + 'eye.jpg', this.scene, false, false); em.specularColor = new Color3(0.6, 0.6, 0.6); em.specularPower = 64; this.hdBrowTex = new Texture(HD_DIR + 'brows.png', this.scene, false, false); this.kitCache = new Map(); }
-      this.rig = c; this.rigNames = c.animationGroups.map(g => g.name); this.mx = this.rigNames.includes('M_jog');
+      this.rig = c; this.figCheck = null; this.rigNames = c.animationGroups.map(g => g.name); this.mx = this.rigNames.includes('M_jog');
       for (const f of this.figs.values()) this.disposeFig(f); this.figs.clear(); if (this.ref) { const o = this.ref; this.disposeFig(o); this.ref = null; }
     } catch (e) { console.warn('Spielermodell nicht geladen – einfache Figuren', e); }
+  }
+  // Rückfall, wenn die Spielerfiguren auf diesem Gerät nicht gezeichnet werden können (Shaderfehler oder nie bereit):
+  // erst ohne HD-Körper und Schatten, dann einfache Figuren
+  figFail(why) {
+    if (this.figFailing) return; this.figFailing = true; console.warn('Spielerfiguren: Rückfall', why, this.hd ? 'HD' : 'Standard');
+    if (this.shadow) this.disableShadows(); this.shadowTried = true;
+    const wasHD = !!this.hd; this.figCheck = null;
+    if (wasHD) { this.noHD = true; this.hd = null; this.rig = null; this.rigF = null; this.hdF = null; for (const f of this.figs.values()) this.disposeFig(f); this.figs.clear(); this.rigPromise = this.loadRig().then(() => { this.figFailing = false; }); }
+    else { this.noRig = true; this.rig = null; this.mx = false; for (const f of this.figs.values()) this.disposeFig(f); this.figs.clear(); if (this.ref) { this.disposeFig(this.ref); this.ref = null; } this.figFailing = false; }
+  }
+  // Prüft einige Sekunden nach dem Anlegen, ob die Körper wirklich gezeichnet werden können
+  checkFigs(now) {
+    if (!this.rig || this.figFailing || !this.figs.size) return; const C = this.figCheck || (this.figCheck = { t0: now, done: false }); if (C.done || now - C.t0 < 5000) return; C.done = true;
+    let bad = 0, n = 0; for (const f of this.figs.values()) { const m = f.root.getChildMeshes().find(x => x.skeleton); if (!m) continue; n++; if (!m.isReady(true)) bad++; }
+    if (n && bad > n / 2) this.figFail(`${bad}/${n} Körper nicht bereit`);
   }
   disposeFig(f) { try { if (this.shadow) for (const m of f.root.getChildMeshes()) this.shadow.removeShadowCaster(m, false); if (f.agStore || f.ags) for (const g of Object.values(f.agStore || f.ags)) g?.dispose(); if (f.skel) f.skel.dispose(); f.root.dispose(false, true); } catch { /* ignore */ } if (this.kickers) this.kickers = this.kickers.filter(x => x !== f); }
   // Figur aus dem Modell: Farbzonen über eine 16×1-Palette (Trikot, Hose, Stutzen, Haut, Schuhe, Haare, Abschluss, Unterarm, Hände)
   rigFigure(c, scale = 1.45) {
     const { TransformNode, DynamicTexture, StandardMaterial, Texture, Color3, MeshBuilder } = B, scene = this.scene, id = ++this.rigN;
-    const allAg = this.rig.animationGroups; this.rig.animationGroups = []; let inst; try { inst = this.rig.instantiateModelsToScene(n => n + '#' + id, false, { doNotInstantiate: true }); } finally { this.rig.animationGroups = allAg; }
+    const fem = !!(c.female && this.hd && this.rigF && this.hdF), RC = fem ? this.rigF : this.rig;
+    const allAg = RC.animationGroups; RC.animationGroups = []; let inst; try { inst = RC.instantiateModelsToScene(n => n + '#' + id, false, { doNotInstantiate: true }); } finally { RC.animationGroups = allAg; }
     const root = new TransformNode('fig', scene), mr = inst.rootNodes[0]; mr.parent = root; root.scaling.set(scale, scale, scale);
     const tex = new DynamicTexture('pal' + id, { width: 16, height: 1 }, scene, false, Texture.NEAREST_SAMPLINGMODE), g = tex.getContext();
     const pal = [c.shirt, c.shorts, c.socks, c.skin, c.boots || '#141414', c.hair, c.trim || c.shorts, c.longSleeves ? c.shirt : c.skin, c.gloves || c.skin];
     pal.forEach((col, i) => { g.fillStyle = col; g.fillRect(i, 0, 1, 1); }); tex.update(); tex.wrapU = tex.wrapV = Texture.CLAMP_ADDRESSMODE;
-    const mat = new StandardMaterial('pm' + id, scene); mat.diffuseTexture = tex; mat.specularColor = new Color3(0.14, 0.14, 0.14); mat.specularPower = 24;
+    const mat = new StandardMaterial('pm' + id, scene); mat.diffuseTexture = tex; mat.specularColor = new Color3(0.14, 0.14, 0.14); mat.specularPower = 24; mat.onError = (e, errs) => this.figFail('Shader: ' + String(errs).slice(0, 200));
     if (this.hd) {
-      mat.diffuseTexture = this.kitTexture(c); tex.dispose(); mat.bumpTexture = this.hdNormal; mat.specularColor = new Color3(0.1, 0.1, 0.1); mat.specularPower = 18;
+      mat.diffuseTexture = this.kitTexture(c, fem); tex.dispose(); mat.bumpTexture = fem ? this.hdNormalF : this.hdNormal; mat.specularColor = new Color3(0.1, 0.1, 0.1); mat.specularPower = 18;
       const brow = new StandardMaterial('br' + id, scene); brow.diffuseTexture = this.hdBrowTex; brow.diffuseColor = Color3.FromHexString(c.hair).scale(2.2); brow.specularColor = Color3.Black();
       for (const m of mr.getChildMeshes()) { const mn = m.material?.name || ''; m.material = /Eyes/.test(mn) ? this.hdEye : /Hair/.test(mn) ? brow : mat; m.isPickable = false; m.alwaysSelectAsActiveMesh = true; if (m.skeleton) this.shadow?.addShadowCaster(m, false); }
     } else for (const m of mr.getChildMeshes()) { m.material = mat; m.isPickable = false; m.alwaysSelectAsActiveMesh = true; if (m.skeleton) this.shadow?.addShadowCaster(m, false); }
@@ -177,9 +205,9 @@ export class Pitch3D {
     return { root, j, ags, agStore: store, w: {}, rig: true, mat, skel: inst.skeletons[0], phase: Math.random() * 6, scale, face: null, faceOn: false };
   }
   // Trikot auf die Körpertextur malen: Zonen aus der Karte, Schattierung aus dem Körperbild, Haut hell/dunkel gemischt
-  kitTexture(c) {
-    const key = [c.shirt, c.shorts, c.socks, c.boots, c.trim, c.hair, c.gloves, c.longSleeves ? 1 : 0, c.skinT].join('|'); if (this.kitCache.has(key)) return this.kitCache.get(key);
-    const { DynamicTexture } = B, H = this.hd, S = H.S, rgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  kitTexture(c, fem) {
+    const key = [c.shirt, c.shorts, c.socks, c.boots, c.trim, c.hair, c.gloves, c.longSleeves ? 1 : 0, c.skinT, fem ? 'f' : 'm'].join('|'); if (this.kitCache.has(key)) return this.kitCache.get(key);
+    const { DynamicTexture } = B, H = fem ? this.hdF : this.hd, S = H.S, rgb = (h) => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
     const col = [rgb(c.shirt), rgb(c.shorts), rgb(c.socks), null, rgb(c.boots || '#141414'), rgb(c.hair), rgb(c.trim || c.shorts), c.longSleeves ? rgb(c.shirt) : null, c.gloves ? rgb(c.gloves) : null];
     const tex = new DynamicTexture('kit' + this.kitCache.size, { width: S, height: S }, this.scene, true), g = tex.getContext(), out = g.createImageData(S, S), o = out.data, t = c.skinT || 0;
     const cached = KIT_PIX.get(key); if (cached) { o.set(cached); g.putImageData(out, 0, 0); tex.update(false); this.kitCache.set(key, tex); return tex; }
@@ -287,6 +315,12 @@ export class Pitch3D {
       const pole = MeshBuilder.CreateCylinder('pole', { height: 34, diameter: 0.8 }, scene); pole.position = new Vector3(x, 17, z); pole.material = this.mat('pm', '#3a4446');
       const lamp = MeshBuilder.CreateBox('lamp', { width: 5, height: 2.4, depth: 0.6 }, scene); lamp.position = new Vector3(x, 34, z); lamp.material = this.mat('lm' + x, '#ffffff', { em: '#fff6d8' }); lamp.lookAt(new Vector3(PW / 2, 0, PH / 2)); this.lamps.push(lamp);
     }
+    // Flutlicht-Lichthof und Blendstrahl (Billboards, additiv) – sichtbar bei Nacht, stärker beim Blick ins Licht
+    { const gt = new DynamicTexture('glow', { width: 256, height: 256 }, scene, false), g = gt.getContext(), gr = g.createRadialGradient(128, 128, 2, 128, 128, 128);
+      gr.addColorStop(0, 'rgba(255,250,235,1)'); gr.addColorStop(0.12, 'rgba(255,240,200,0.85)'); gr.addColorStop(0.35, 'rgba(255,220,160,0.25)'); gr.addColorStop(1, 'rgba(255,200,120,0)'); g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
+      g.globalCompositeOperation = 'lighter'; const st = g.createLinearGradient(0, 0, 256, 0); st.addColorStop(0, 'rgba(180,210,255,0)'); st.addColorStop(0.5, 'rgba(220,235,255,0.55)'); st.addColorStop(1, 'rgba(180,210,255,0)'); g.fillStyle = st; g.fillRect(0, 124, 256, 8); gt.hasAlpha = true; gt.update();
+      const gm = new StandardMaterial('glowM', scene); gm.diffuseTexture = gt; gm.opacityTexture = gt; gm.emissiveColor = new Color3(1, 1, 1); gm.disableLighting = true; gm.alphaMode = 1; gm.disableDepthWrite = true; gm.backFaceCulling = false; gm.fogEnabled = false;
+      this.glows = this.lamps.map(l => { const q = MeshBuilder.CreatePlane('glow', { size: 22 }, scene); q.material = gm; q.position = l.position.clone(); q.billboardMode = 7; q.isPickable = false; return q; }); }
     // Bandenwerbung
     const adTex = new DynamicTexture('ad', { width: 2048, height: 128 }, scene, false); const ac = adTex.getContext();
     const ads = ['RealCore', 'TechHub', 'Clean Core', 'SAP BTP', 'AI4BIZ', 'Z-Insight', 'realERP', 'RealCore', 'TechHub', 'Legacy League'];
@@ -440,7 +474,7 @@ export class Pitch3D {
       const nt = new DynamicTexture('num' + p.id, { width: 128, height: 128 }, scene, false); nt.hasAlpha = true; const c = nt.getContext(); c.clearRect(0, 0, 128, 128);
       c.fillStyle = gk ? '#222' : (T.color2 && T.color2 !== shirt ? (T.me ? '#ffffff' : T.color2) : '#fff'); c.font = 'bold 84px "Space Grotesk", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(p.num), 64, 70); nt.update();
       const numMat = new StandardMaterial('nm' + p.id, scene); numMat.diffuseTexture = nt; numMat.opacityTexture = nt; numMat.specularColor = Color3.Black(); numMat.zOffset = -2;
-      const fig = this.rigFigure({ shirt, shorts, socks: gk ? '#222222' : shirt, trim: gk ? '#111111' : (T.color2 || '#000'), skin: SKIN[h % SKIN.length], skinT: [0, 0, 0.25, 0.5, 0.8, 1][(h >> 2) % 6], hair: ['#2a1a0e', '#111111', '#6b4423', '#b58a3c', '#3b2a1a', '#8a8a8a'][h % 6], gloves: gk ? '#f2f2f2' : null, longSleeves: gk, numMat, crest: this.teamCrest(T, p.team) });
+      const fig = this.rigFigure({ shirt, shorts, socks: gk ? '#222222' : shirt, trim: gk ? '#111111' : (T.color2 || '#000'), skin: SKIN[h % SKIN.length], skinT: [0, 0, 0.25, 0.5, 0.8, 1][(h >> 2) % 6], hair: ['#2a1a0e', '#111111', '#6b4423', '#b58a3c', '#3b2a1a', '#8a8a8a'][h % 6], gloves: gk ? '#f2f2f2' : null, longSleeves: gk, numMat, crest: this.teamCrest(T, p.team), female: isFemale(p) }, isFemale(p) && this.rigF ? 1.4 : 1.45);
       const tex = new DynamicTexture('lbl' + p.id, { width: 512, height: 192 }, scene, false); tex.hasAlpha = true;
       const plane = MeshBuilder.CreatePlane('lbl', { width: 2.4 / fig.scale, height: 0.9 / fig.scale }, scene); plane.position.y = 2.15; plane.parent = fig.root; plane.billboardMode = Mesh.BILLBOARDMODE_ALL;
       const lm = new StandardMaterial('lm', scene); lm.diffuseTexture = tex; lm.opacityTexture = tex; lm.emissiveColor = new Color3(1, 1, 1); lm.disableLighting = true; lm.backFaceCulling = false; plane.material = lm; plane.isPickable = false;
@@ -498,6 +532,12 @@ export class Pitch3D {
     return this.replay.dur;
   }
   stopReplay() { this.replay = null; }
+  // Höhepunkte für den Zusammenschnitt nach dem Spiel: die letzten Sekunden bis zum Ereignis
+  recordClip(M, e, label) {
+    const now = performance.now(), frames = this.hist.filter(h => h.t > now - 3600); if (frames.length < 8) return;
+    (this.clips ||= []).push({ frames, team: e.team, label, kind: e.type }); if (this.clips.length > 10) this.clips.splice(this.clips.findIndex(c => c.kind !== 'goal'), 1);
+  }
+  playClip(M, clip) { const now = performance.now(), slow = clip.kind === 'goal' ? 0.6 : 0.75; this.replay = { frames: clip.frames, t0: now, slow, g: M.goalOf(clip.team), dur: (clip.frames[clip.frames.length - 1].t - clip.frames[0].t) / slow + 700 }; return this.replay.dur; }
   // Tageszeit: Tag (Heimspiel) oder Flutlicht (Auswärts / Intro)
   setDaylight(day) {
     const { Color4, Color3 } = B; this.day = day;
@@ -563,7 +603,7 @@ export class Pitch3D {
   }
   syncRoster(M) {
     if (!this.ref) this.ref = this.buildRef();
-    if (this.M !== M) { this.crowdColors(M); for (const f of this.figs.values()) this.disposeFig(f); this.figs.clear(); this.M = M; this.flight = null; this.camT = null; }
+    if (this.M !== M) { this.figCheck = null; this.clips = []; this.crowdColors(M); for (const f of this.figs.values()) this.disposeFig(f); this.figs.clear(); this.M = M; this.flight = null; this.camT = null; }
     for (const p of M.players) { if (p.out) { const f = this.figs.get(p); if (f) f.root.setEnabled(false); continue; } if (!this.figs.has(p)) this.figs.set(p, this.figure(p)); }
   }
   ballHeight(M) {
@@ -621,6 +661,7 @@ export class Pitch3D {
   }
   draw(M, dt) {
     if (!M) return; this.t += dt; this.syncRoster(M);
+    this.checkFigs(performance.now());
     const { Vector3 } = B, now = performance.now();
     // Wiederholung: Positionen aus der Aufzeichnung statt aus dem Spiel
     let b = M.ball, rp = null;
@@ -740,6 +781,7 @@ export class Pitch3D {
       const kc = Math.min(1, dt * 3); { let da = want.alpha - this.cam.alpha; da = Math.atan2(Math.sin(da), Math.cos(da)); this.cam.alpha += da * Math.min(1, dt * 2.5); } this.cam.beta = lerp(this.cam.beta, want.beta, kc); this.cam.radius = lerp(this.cam.radius, want.radius, kc);
     }
     if (this.shake > 0) this.shake -= dt;
+    if (this.glows) { const cp = this.cam.position, cf = this.cam.getForwardRay(1).direction; for (const q of this.glows) { const d = q.position.subtract(cp), dl = d.length() || 1, f = Math.max(0, (d.x * cf.x + d.y * cf.y + d.z * cf.z) / dl); const v = this.day ? 0 : this.lampLevel * (0.25 + 0.75 * Math.pow(f, 6)) * (this.weatherDim || 1); q.visibility = v; q.setEnabled(v > 0.02); q.scaling.setAll(0.7 + dl / 160); } }
     const baseH = (this.day ? 1.0 : 0.25 + 0.5 * this.lampLevel) * (this.weatherDim || 1); if (this.flash > 0) { this.flash -= dt * 1.4; this.hemi.intensity = baseH + Math.max(0, this.flash) * 0.6; } else this.hemi.intensity = baseH;
     if (this.fw && performance.now() > this.fwNext) {
       const { Color4 } = B; this.fwNext = performance.now() + 350 + Math.random() * 500;

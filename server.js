@@ -34,11 +34,22 @@ db.exec(`
 // Spalten für Tages-Challenge nachrüsten (bestehende Datenbanken)
 for (const [t, c] of [['games', 'daily TEXT'], ['scores', 'daily TEXT']]) { try { db.exec(`ALTER TABLE ${t} ADD COLUMN ${c}`); } catch { /* existiert schon */ } }
 db.exec('CREATE INDEX IF NOT EXISTS idx_scores_daily ON scores (daily, score DESC)');
+// Duelle: Teams als Code teilen, Ergebnisse der Herausforderer sammeln
+db.exec(`CREATE TABLE IF NOT EXISTS duels (code TEXT PRIMARY KEY, created INTEGER, name TEXT, team TEXT);
+  CREATE TABLE IF NOT EXISTS duel_results (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT, created INTEGER, name TEXT, gf INTEGER, ga INTEGER);
+  CREATE INDEX IF NOT EXISTS idx_duel_results ON duel_results (code, created DESC);`);
+function duelTeam(t) {
+  if (!t || typeof t !== 'object' || !Array.isArray(t.players) || t.players.length < 7 || t.players.length > 11) return null;
+  const num = (v) => Math.max(1, Math.min(99, Math.round(Number(v) || 50)));
+  const POSS = ['TW', 'IV', 'AV', 'DM', 'ZM', 'FL', 'ST'];
+  const players = t.players.map((p, i) => ({ id: 'd' + i, name: clean(p.name, 32) || 'Spieler ' + (i + 1), nick: clean(p.nick, 32), pos: POSS.includes(p.pos) ? p.pos : 'ZM', role: clean(p.role, 12), slot: Array.isArray(p.slot) ? [POSS.includes(p.slot[0]) ? p.slot[0] : 'ZM', Math.max(0, Math.min(1, Number(p.slot[1]) || 0.5)), Math.max(0, Math.min(1, Number(p.slot[2]) || 0.5))] : null, num: Math.max(1, Math.min(99, Number(p.num) || i + 1)), tempo: num(p.tempo), technik: num(p.technik), abwehr: num(p.abwehr), schuss: num(p.schuss), kondition: num(p.kondition) }));
+  return { name: clean(t.name, 40) || 'Duell-Team', short: clean(t.short, 12) || 'DUELL', formation: clean(t.formation, 8), style: ['clean', 'agile', 'bigbang'].includes(t.style) ? t.style : 'clean', tempo: ['slow', 'normal', 'fast'].includes(t.tempo) ? t.tempo : 'normal', cornerVar: clean(t.cornerVar, 8), players };
+}
 
-const MISSIONS = ['league'];
+const MISSIONS = ['league', 'daily'];
 const DIFFS = ['messe', 'profi', 'gf'];
 const EVENTS = ['release_freeze', 'change_requests', 'budget_cut', 'shadow_it', 'koloss', 'wave_now'];
-const MISSION_NAMES = { league: 'Legacy League' };
+const MISSION_NAMES = { league: 'Legacy League', daily: 'Tages-Challenge' };
 // Saisons im SAP-Release-Rhythmus (ein Quartal)
 function seasonOf(day) { const [y, m] = day.split('-').map(Number), q = Math.floor((m - 1) / 3); const start = `${y}-${String(q * 3 + 1).padStart(2, '0')}-01`; const endM = q * 3 + 4; const end = endM > 12 ? `${y + 1}-01-01` : `${y}-${String(endM).padStart(2, '0')}-01`; return { key: `${y}-Q${q + 1}`, name: `${['Winter', 'Frühjahrs', 'Sommer', 'Herbst'][q]}-Release ${y}`, start, end }; }
 const today = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
@@ -120,8 +131,9 @@ JSON-Felder: "headline" (max. 70 Zeichen), "text" (2–3 Sätze, max. 380 Zeiche
 }
 
 // ---------------- Bestenliste ----------------
-function leaderboard({ mission = 'all', difficulty = 'all', period = 'all', limit = 20 }) {
+function leaderboard({ mission = 'all', difficulty = 'all', period = 'all', limit = 20, daily = '' }) {
   const where = ['hidden = 0']; const args = [];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(daily)) { where.push('daily = ?'); args.push(daily); } else if (mission !== 'daily') where.push("mission <> 'daily'");
   if (MISSIONS.includes(mission)) { where.push('mission = ?'); args.push(mission); }
   if (DIFFS.includes(difficulty)) { where.push('difficulty = ?'); args.push(difficulty); }
   if (period === 'today') { where.push('day = ?'); args.push(today()); }
@@ -221,7 +233,7 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       if (!MISSIONS.includes(b.mission) || !DIFFS.includes(b.difficulty)) return send(res, 400, { error: 'ungültig' });
       const id = crypto.randomUUID();
-      const daily = null;
+      const daily = b.mission === 'daily' ? today() : null;
       db.prepare('INSERT INTO games (id, created, mission, difficulty, daily) VALUES (?, ?, ?, ?, ?)').run(id, Date.now(), b.mission, b.difficulty, daily);
       return send(res, 200, { gameId: id });
     }
@@ -267,7 +279,7 @@ const server = http.createServer(async (req, res) => {
       const elapsed = (Date.now() - g.created) / 1000;
       let score = Math.max(0, Math.round(Number(b.score) || 0));
       let flagged = 0;
-      if (elapsed < 120 || score > maxScore(b.difficulty)) flagged = 1; // eine Saison dauert mindestens einige Minuten
+      if ((b.mission === 'daily' ? elapsed < 8 || score > 3000 : elapsed < 120 || score > maxScore(b.difficulty))) flagged = 1; // eine Saison dauert mindestens einige Minuten
       const team = TEAM_CODE && clean(b.teamCode, 32) && clean(b.teamCode, 32).toLowerCase() === TEAM_CODE.toLowerCase() ? 1 : 0;
       const token = crypto.randomBytes(16).toString('hex');
       db.prepare('UPDATE games SET used = 1 WHERE id = ?').run(g.id);
@@ -281,6 +293,21 @@ const server = http.createServer(async (req, res) => {
       if (g.daily) { const dr = db.prepare('SELECT COUNT(*) AS n FROM scores WHERE daily = ? AND hidden = 0 AND (score > ? OR (score = ? AND id < ?))').get(g.daily, score, score, id).n + 1; const dt = db.prepare('SELECT COUNT(*) AS n FROM scores WHERE daily = ? AND hidden = 0').get(g.daily).n; dailyRank = flagged ? null : { rank: dr, total: dt }; }
       return send(res, 200, { id, editToken: token, rank: flagged ? '–' : rank, total, team: !!team, benchmark: bench, beat: !!(bench && score > bench.score && !flagged), daily: dailyRank });
     }
+
+    if (url.pathname === '/api/duel' && req.method === 'POST') {
+      if (limited(ip, 'duel', 20, 3600000)) return send(res, 429, { error: 'Zu viele Duelle.' });
+      const b = await readBody(req); const team = duelTeam(b.team); if (!team) return send(res, 400, { error: 'Team ungültig' });
+      let code; for (let i = 0; i < 8; i++) { code = crypto.randomBytes(4).toString('base64').replace(/[^A-Za-z0-9]/g, '').slice(0, 5).toUpperCase(); if (code.length === 5 && !db.prepare('SELECT 1 FROM duels WHERE code = ?').get(code)) break; }
+      db.prepare('INSERT INTO duels (code, created, name, team) VALUES (?, ?, ?, ?)').run(code, Date.now(), clean(b.name, 32) || 'Unbekannt', JSON.stringify(team));
+      return send(res, 200, { code });
+    }
+    { const m = url.pathname.match(/^\/api\/duel\/([A-Z0-9]{5})(\/result)?$/);
+      if (m) {
+        const d = db.prepare('SELECT * FROM duels WHERE code = ?').get(m[1]); if (!d) return send(res, 404, { error: 'Code unbekannt' });
+        if (m[2] && req.method === 'POST') { if (limited(ip, 'duelres', 30, 3600000)) return send(res, 429, { error: 'Zu viele Ergebnisse.' }); const b = await readBody(req); db.prepare('INSERT INTO duel_results (code, created, name, gf, ga) VALUES (?, ?, ?, ?, ?)').run(d.code, Date.now(), clean(b.name, 32) || 'Gast', Math.max(0, Math.min(30, Number(b.gf) || 0)), Math.max(0, Math.min(30, Number(b.ga) || 0))); return send(res, 200, { ok: true }); }
+        const results = db.prepare('SELECT name, gf, ga, created FROM duel_results WHERE code = ? ORDER BY created DESC LIMIT 30').all(d.code);
+        return send(res, 200, { code: d.code, name: d.name, created: d.created, team: JSON.parse(d.team), results });
+      } }
 
     if (url.pathname === '/api/scores/contact' && req.method === 'POST') {
       const b = await readBody(req);
