@@ -243,7 +243,7 @@ export class Season {
   pickDecision(first) {
     this.decision = null; if (first) return;
     let keys = Object.keys(DECISIONS).filter(k => !this.decided.includes(k) && (k !== 'offer' || this.offerCandidate()));
-    if (!keys.length) keys = ['fanday', 'overtime', 'press', 'scout', 'hypercare'].filter(k => k !== this.decided.at(-1));
+    if (!keys.length) keys = ['fanday', 'overtime', 'press', 'scout', 'hypercare', 'hotfix', 'demo'].filter(k => k !== this.decided.at(-1));
     if (!keys.length) return;
     const key = keys[Math.floor(this.r() * keys.length)]; const d = { key, ...DECISIONS[key], chosen: null };
     if (key === 'offer') { const p = this.offerCandidate(); d.pid = p.id; d.price = Math.round(p.value * 1.5 / 10) * 10; d.text = d.text.replace('{p}', p.name); d.options = d.options.map(o => ({ ...o, effect: o.effect.replace('{v}', d.price) })); }
@@ -260,6 +260,11 @@ export class Season {
     else if (d.key === 'press') { if (optKey === 'bold') { for (const p of this.players) p.morale = clamp(p.morale + 6, 0, 100); this.oppMod += 4; note = 'Die Kampfansage macht die Runde – der Gegner ist gewarnt.'; } else { for (const p of this.players) p.morale = clamp(p.morale + 2, 0, 100); note = 'Bescheiden und ruhig – so mag es Lena.'; } }
     else if (d.key === 'scout') { if (optKey === 'buy') { this.budget -= 100; this.oppMod -= 6; note = 'Die Analyse liegt vor: Der Gegner hat Lücken hinter den Außenverteidigern.'; } else note = 'Keine Analyse – wir vertrauen auf Lenas Bauchgefühl.'; }
     else if (d.key === 'hypercare') { if (optKey === 'yes') { this.budget += 200; const c = this.slots.map(id => this.players.find(p => p.id === id)).filter(p => p && p.pos !== 'TW'); const p = c[Math.floor(r() * c.length)]; if (p) { p.fitness = clamp(p.fitness - 45, 0, 100); note = `${p.name} hilft beim Go-Live – und kommt müde zurück. +200 T€.`; } } else note = 'Der Betrieb muss ohne uns auskommen.'; }
+    else if (d.key === 'hotfix') { if (optKey === 'patch') { this.oppMod -= 3; for (const p of this.players) p.morale = clamp(p.morale - 4, 0, 100); note = 'Notfall-Patch eingespielt – läuft, aber keiner weiß genau warum.'; } else { this.budget -= 150; this.coh[this.formation] = clamp((this.coh[this.formation] || 40) + 8, 0, 100); note = 'Saubere Migration: Das Team versteht das System jetzt wirklich.'; } }
+    else if (d.key === 'joule') { if (optKey === 'yes') { this.budget -= 180; for (const p of this.players) p.technik = clamp(p.technik + 1, 1, 99); note = 'Der KI-Assistent ist im Trainerteam angekommen.'; } else note = 'Der KI-Assistent bleibt auf der Wunschliste.'; }
+    else if (d.key === 'hackathon') { if (optKey === 'yes') { this.econ.fans = clamp(this.econ.fans + 6, 0, 100); for (const p of this.players) p.fitness = clamp(p.fitness - 8, 0, 100); note = 'Der Hackathon war ein Fest – die Stadion-App ist live.'; } else { this.econ.fans = clamp(this.econ.fans - 2, 0, 100); note = 'Kein Hackathon – der Fanclub ist enttäuscht.'; } }
+    else if (d.key === 'demo') { if (optKey === 'yes') { this.budget += 250; for (const p of this.players) p.morale = clamp(p.morale - 4, 0, 100); note = 'Die Demo lief sauber – 250 T€ fließen in die Vereinskasse.'; } else { for (const p of this.players) p.morale = clamp(p.morale + 2, 0, 100); note = 'Die Demo wird vertagt, volle Konzentration aufs Spiel.'; } }
+    else if (d.key === 'cloud') { if (optKey === 'yes') { this.budget -= 100; for (const p of this.players) { p.kondition = clamp(p.kondition + 2, 1, 99); p.fitness = clamp(p.fitness + 8, 0, 100); } note = 'Die Fitnessdaten sind in der Cloud – Regeneration nach Plan.'; } else note = 'Der Server im Keller brummt weiter.'; }
     else if (d.key === 'offer') { const p = this.players.find(x => x.id === d.pid); if (optKey === 'sell' && p && this.players.length > 14) { this.budget += d.price; this.players = this.players.filter(x => x !== p); this.stats.transfersOut++; this.fillLineup(); note = `${p.name} wechselt für ${d.price} T€.`; } else if (p) { p.morale = clamp(p.morale + 8, 0, 100); note = `${p.name} bleibt – und freut sich über das Vertrauen.`; } }
     this.msg('hub', `Vorstand: ${d.title} – ${note}`);
     this.hooks.onDecision?.(d, note);
@@ -302,7 +307,7 @@ export class Season {
     const base = (o.strength + (this.oppMod || 0) + (this.league === 'cloud' ? 9 : 0) + ((this.seasonNo || 1) - 1) * 2) * this.diff.opp * (1 + (ev === 'shadow_it' ? 0.08 : 0));
     const fk = o.style === 'wall' ? '5-3-2' : o.style === 'boss' || o.style === 'longshot' ? '4-3-3' : '4-4-2', F = FORMATIONS[fk];
     const players = F.slots.map(([pos, x, y], i) => {
-      const k = 0.55 + base / 140, p = { id: 'o' + i, name: o.names[i] || `${o.short} ${i + 1}`, pos, slot: F.slots[i], num: i + 1 };
+      const k = (0.55 + base / 140) * 0.975, p = { id: 'o' + i, name: o.names[i] || `${o.short} ${i + 1}`, pos, slot: F.slots[i], num: i + 1 };
       const prof = { TW: [40, 50, 95, 15, 70], IV: [55, 55, 90, 30, 75], AV: [75, 60, 75, 40, 80], DM: [60, 65, 80, 45, 85], ZM: [70, 85, 55, 60, 75], FL: [90, 72, 30, 65, 75], ST: [80, 70, 25, 92, 70] }[pos];
       ATTRS.forEach((a, j) => p[a] = clamp(prof[j] * k * (0.92 + r() * 0.16), 20, 99));
       if (o.style === 'wall') { p.abwehr = clamp(p.abwehr * 1.12, 20, 99); p.tempo *= 0.85; }

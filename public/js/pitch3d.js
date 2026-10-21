@@ -621,14 +621,14 @@ export class Pitch3D {
   // Welche Schuss-/Passbewegung passt? (Torwart: Abwurf oder Abstoß, lange Bälle als Chip, Schüsse aus dem Stand oder Lauf)
   actionFor(k, b, M, now) {
     const f = this.figs.get(k), v = f ? Math.hypot(f.mvx || 0, f.mvy || 0) : 0, len = b.mode === 'pass' && b.target ? Math.hypot(b.target.x - k.x, b.target.y - k.y) : 0;
-    let kind = b.mode === 'shot' ? (v < 1.2 ? 'penalty' : 'shot') : k.pos === 'TW' ? (len > 32 || Math.random() < 0.4 ? 'gkkick' : 'throw') : len > 28 ? 'chip' : 'pass';
+    let kind = b.throwIn ? 'throw' : b.mode === 'shot' ? (v < 1.2 ? 'penalty' : 'shot') : k.pos === 'TW' ? (len > 32 || Math.random() < 0.4 ? 'gkkick' : 'throw') : len > 28 ? 'chip' : 'pass';
     if (!this.mx) kind = k.pos === 'TW' && b.mode === 'pass' && this.rig && Math.random() < 0.5 ? 'throw' : 'kick';
     const c = ONCE[kind]; return { kind, until: now + (c && this.mx ? c.len / c.sp * 1000 : kind === 'throw' ? 650 : 420), t0: now };
   }
   // Modellfigur: Laufen/Sprinten/Stehen gemischt, Sonderaktionen als eigene Animationen
   driveRig(f, p, s, dt) {
     const { v, run, sprint, an, now } = s, MX = this.mx; let tw, sp = {}, rate = 8, once = null;
-    f.root.position.y = 0; f.root.rotation.z = 0;
+    f.root.position.y = 0; f.root.rotation.z = an ? 0 : (f.leanZ || 0);
     const cfg = an && MX ? ONCE[an.kind] : null;
     if (cfg) { once = { n: cfg.n, key: an.t0, from: cfg.from, sp: cfg.sp }; tw = { [cfg.n]: 1 }; rate = 20; }
     else if (an && an.kind === 'down') tw = MX ? { M_fallen: 1 } : { Crouch_Idle_Loop: 1 };
@@ -683,8 +683,11 @@ export class Pitch3D {
       const v = Math.hypot(f.mvx, f.mvy), run = Math.min(1, v / 6), sprint = Math.max(0, Math.min(1, (v - 6) / 3));
       f.phase += dt * (3 + v * 1.35);
       f.root.position.set(px, 0, py); f.root.rotation.z = 0; f.root.rotation.x = 0;
-      if (v > 0.8 && !(f.gk && v < 3.5 && b.owner !== p)) { const ty = Math.atan2(f.mvx, f.mvy); let d = ty - f.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); f.root.rotation.y += d * Math.min(1, dt * 10); }
+      const ry0 = f.root.rotation.y;
+      if (v > 0.8 && !(f.gk && v < 3.5 && b.owner !== p)) { const ty = Math.atan2(f.mvx, f.mvy); let d = ty - f.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); f.root.rotation.y += d * Math.min(1, dt * (v > 6 ? 5.5 : v > 3 ? 8 : 11)); }
       else { const ty = Math.atan2(b.x - px, b.y - py); let d = ty - f.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); f.root.rotation.y += d * Math.min(1, dt * 4); }
+      // in Kurven leicht nach innen neigen (je schneller, desto mehr)
+      { let dr = f.root.rotation.y - ry0; dr = Math.atan2(Math.sin(dr), Math.cos(dr)); const turn = dt > 0 ? dr / dt : 0, want = Math.max(-0.14, Math.min(0.14, -turn * v * 0.01)); f.leanZ = (f.leanZ || 0) + (want - (f.leanZ || 0)) * Math.min(1, dt * 6); }
       let P = this.runPose(f.phase, run, sprint);
       f.root.position.y = run > 0.15 ? Math.max(0, Math.sin(f.phase * 2)) * 0.05 * run : 0;
       if (run < 0.15) { const br = Math.sin(this.t * 2 + p.num) * 0.02; P = { lean: 0.08 + br, knL: 0.14, knR: 0.12, hipL: -0.05, hipR: 0.04, shL: 0.05, shR: -0.05, elL: -0.35, elR: -0.3, head: 0.02 }; }

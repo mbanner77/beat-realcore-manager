@@ -1043,3 +1043,5 @@ body.tv #board-table{font-size:clamp(16px,2.2vw,30px)}
 body.tv #board-table td,body.tv #board-table th{padding:.45em .6em}
 body.tv .board-qr{float:right;margin-left:20px}
 body.tv .board-qr canvas{width:220px;height:220px}
+
+.te.legacy { border-left-color: #b87cff; background: rgba(184,124,255,0.1); font-style: italic; }

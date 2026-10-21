@@ -41,6 +41,11 @@ export const ROLES = {
   FL: { winger: { name: 'Flankengeber', desc: 'Geht bis zur Grundlinie und flankt.' }, inside: { name: 'Inverser Flügel', desc: 'Zieht nach innen und schließt selbst ab.' } },
   ST: { target: { name: 'Zielspieler', desc: 'Stark im Kopfball, macht Bälle fest.' }, poacher: { name: 'Konterstürmer', desc: 'Läuft in die Tiefe, lauert auf der Abseitslinie.' } },
 };
+// Die Legacy-KI meldet sich im Spiel: nach eigenen Toren und nach Gegentoren
+export const LEGACY_LINES = {
+  scored: ['Ein laufendes System fasst man nicht an. Das habt ihr jetzt gelernt.', 'Seit 1998 im Betrieb – und immer noch schneller als eure Cloud.', 'Ticket geschlossen. Ursache: Anwenderfehler.', 'Batchlauf erfolgreich. Ihr seid der Fehler im Log.'],
+  conceded: ['Das war ein Zufallstreffer. Ich habe dafür keinen Prozess.', 'Fehler 4711: Gegentor nicht vorgesehen. Bitte Änderungsantrag stellen.', 'Ich starte neu. Das dauert nur drei Wochenenden.', 'Wer hat diesen Ball ohne Freigabe ins Tor gelassen?'],
+};
 export const CORNER_VAR = { mix: 'Gemischt', near: 'Erster Pfosten', far: 'Zweiter Pfosten', short: 'Kurz ausführen' };
 export const TEMPO = { slow: { name: 'Ruhig', k: 0.85 }, normal: { name: 'Normal', k: 1 }, fast: { name: 'Hoch', k: 1.15 } };
 
@@ -210,6 +215,16 @@ export const DECISIONS = {
     options: [{ key: 'buy', label: 'Analyse kaufen', effect: 'Gegner −6 Stärke, Budget −100 T€' }, { key: 'no', label: 'Ablehnen', effect: 'Keine Änderung' }] },
   hypercare: { title: 'Hypercare-Einsatz', text: 'Der Betrieb braucht dringend Verstärkung im Go-Live eines Kunden. Ein:e Spieler:in aus der Startelf könnte helfen – gegen gute Bezahlung.',
     options: [{ key: 'yes', label: 'Abstellen', effect: 'Budget +200 T€, ein:e Stammspieler:in erschöpft' }, { key: 'no', label: 'Ablehnen', effect: 'Keine Änderung' }] },
+  hotfix: { title: 'Notfall-Patch oder saubere Migration?', text: 'Das Analyse-System der Scouts meldet kurz vor dem Spiel einen kritischen Fehler. Schnell flicken – oder sauber neu aufsetzen?',
+    options: [{ key: 'patch', label: 'Notfall-Patch', effect: 'Gegner −3 Stärke diese Woche, Stimmung −4 (technische Schulden)' }, { key: 'migrate', label: 'Sauber migrieren', effect: 'Budget −150 T€, Eingespieltheit +8' }] },
+  joule: { title: 'KI-Assistent im Trainerteam', text: 'Ein KI-Assistent wertet Trainingsdaten aus und schlägt individuelle Übungen vor. Lizenz: 180 T€.',
+    options: [{ key: 'yes', label: 'Einführen', effect: 'Alle Spieler:innen Technik +1, Budget −180 T€' }, { key: 'no', label: 'Später', effect: 'Keine Änderung' }] },
+  hackathon: { title: 'Hackathon mit dem Fanclub', text: 'Der Fanclub lädt zum Hackathon ins TechHub: Spieler:innen und Fans bauen gemeinsam eine Stadion-App.',
+    options: [{ key: 'yes', label: 'Mitmachen', effect: 'Fans +6, Fitness −8' }, { key: 'no', label: 'Absagen', effect: 'Fans −2' }] },
+  demo: { title: 'Großkunde will eine Live-Demo', text: 'Ein Großkunde aus dem Handel möchte die Stadion-Kasse live sehen – mitten in der Spielvorbereitung.',
+    options: [{ key: 'yes', label: 'Demo geben', effect: 'Budget +250 T€, Stimmung −4' }, { key: 'no', label: 'Vertagen', effect: 'Stimmung +2' }] },
+  cloud: { title: 'Trainingsdaten in die Cloud', text: 'Die Fitnessdaten liegen noch auf einem alten Server im Keller. Umzug in die Cloud kostet 100 T€ – Regeneration wird besser planbar.',
+    options: [{ key: 'yes', label: 'Umziehen', effect: 'Kondition aller +2, Fitness +8, Budget −100 T€' }, { key: 'no', label: 'Keller bleibt', effect: 'Keine Änderung' }] },
   offer: { title: 'Transferanfrage', text: 'Ein Club bietet 150 % des Marktwerts für {p}. Verkaufen oder halten?',
     options: [{ key: 'sell', label: 'Verkaufen', effect: 'Budget +{v} T€' }, { key: 'keep', label: 'Behalten', effect: 'Stimmung des Spielers +8' }] },
 };

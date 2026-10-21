@@ -1,6 +1,6 @@
 // Beat RealCore – Legacy League: Oberfläche und Spielablauf
 import { initI18n, tr, isEN, LANG, setLang } from './i18n.js';
-import { INTENSITY, ATTR_NAMES, SEASON_LEN, STADIUM, FACILITIES, ECON, WEATHER, TALKS, OBJECTIVES, DIFFICULTY, FORMATIONS, STYLES, TEMPO, TRAINING, OPPONENTS, POS, POS_GROUP, EVENTS, CLUB, SEASON_SCORE, INSTR, ROLES, CORNER_VAR } from './data.js';
+import { INTENSITY, ATTR_NAMES, SEASON_LEN, STADIUM, FACILITIES, ECON, WEATHER, TALKS, OBJECTIVES, DIFFICULTY, FORMATIONS, STYLES, TEMPO, TRAINING, OPPONENTS, POS, POS_GROUP, EVENTS, CLUB, SEASON_SCORE, INSTR, ROLES, CORNER_VAR, LEGACY_LINES } from './data.js';
 import { Season, rating, posFit, ATTRS, rng } from './manager.js';
 import { Match, MATCH_REAL } from './match.js';
 import { Pitch } from './pitch.js';
@@ -602,7 +602,7 @@ function onMatchEvent(e) {
   const mine = e.team === S.myTeam;
   if (pitch && pitch.onEvent) pitch.onEvent(e, M);
   if (pitch && pitch.recordClip && M && M.speed < 10 && ['goal', 'save', 'pen_save', 'post', 'parry', 'header', 'fk_wall'].includes(e.type)) { const lb = { goal: 'TOR', save: 'Parade', pen_save: 'Elfmeter gehalten', post: 'Aluminium', parry: 'Glanzparade', header: 'Kopfball', fk_wall: 'Freistoß' }[e.type]; pitch.recordClip(M, e, `${e.min}' · ${tr(lb)} · ${e.p ? e.p.name : ''}`); }
-  if (['intercept', 'press', 'tackle', 'cross'].includes(e.type)) return;
+  if (['intercept', 'press', 'tackle', 'cross', 'throwin'].includes(e.type)) return;
   const li = document.createElement('div'); const key = e.type === 'goal' ? (mine ? 'goal' : 'goal_opp') : e.type; li.className = 'te ' + key; li.innerHTML = `<b>${e.min}'</b><span>${esc(e.text)}</span>`;
   const list = $('#ticker-list'); list.prepend(li); while (list.children.length > 60) list.lastChild.remove();
   // Sprecher: wichtige Ereignisse immer, Kleinigkeiten nur bei normalem Tempo
@@ -610,6 +610,7 @@ function onMatchEvent(e) {
   const pr = PRIO[e.type]; if (pr !== undefined && M.speed < 10 && (M.speed <= 1 || pr >= 2)) speakEvent(e, { prio: pr, interrupt: e.type === 'goal' || e.type === 'full', rate: e.type === 'goal' ? 1.08 : 1.04, pitch: e.type === 'goal' ? 1.1 : 1 });
   if (e.type === 'kickoff' && M.speed < 10) { const w = M.weather || 'sun'; speakTpl(WEATHER_LINE.de[w], WEATHER_LINE.en[w], matchVals(), { prio: 1 }); }
   if (['goal', 'yellow', 'red', 'injury', 'sub', 'penalty'].includes(e.type)) { const mk = document.createElement('i'); mk.className = 'tm ' + e.type + (mine ? ' me' : ' opp'); mk.style.left = Math.min(100, e.min / 90 * 100) + '%'; mk.title = `${e.min}' ${e.p ? e.p.name : ''}`; mk.innerHTML = icon(e.type === 'goal' ? 'ball' : e.type === 'yellow' || e.type === 'red' ? 'card' : e.type === 'penalty' ? 'pen' : e.type); $('#tl-marks').appendChild(mk); }
+  if (e.type === 'goal' && !S.mini && M.speed < 10 && Math.random() < 0.7) { const L = LEGACY_LINES[mine ? 'conceded' : 'scored'], line = L[Math.floor(Math.random() * L.length)]; setTimeout(() => { if (!M || M.over) return; const li2 = document.createElement('div'); li2.className = 'te legacy'; li2.innerHTML = `<b>KI</b><span>Legacy-KI: ${esc(tr(line))}</span>`; $('#ticker-list').prepend(li2); audio.play('legacy', 0.6); voice.say(tr(line), { lang: LANG, prio: 1, pitch: 0.75 }); }, 5200); }
   if (e.type === 'goal') { $('#sc-val').textContent = `${e.score[0]} : ${e.score[1]}`; if (pitch && pitch.startReplay && M.speed <= 1 && !M.over) { const d = pitch.startReplay(M, e.team); if (d) { M.paused = true; $('#replay-tag').hidden = false; voice.say(tr('Wiederholung.'), { lang: LANG, prio: 1 }); setTimeout(() => { if (M && M.paused && $('#half').hidden) M.paused = false; $('#replay-tag').hidden = true; pitch.stopReplay(); pitch.celebrate(e.p); }, d); } else pitch.celebrate(e.p); }
     else if (pitch && pitch.celebrate && M.speed < 10) pitch.celebrate(e.p); $('#sc-val').classList.remove('flash'); void $('#sc-val').offsetWidth; $('#sc-val').classList.add('flash'); audio.play(mine ? 'goal' : 'goal_opp'); banner(mine ? 'TOOOR!' : 'Gegentor', `${e.p ? e.p.name : ''} · ${e.min}'`, !mine, 2600, e.p); if (M.speed < 10) pitch.burst(M.ball.x, M.ball.y, mine ? '#3ddc84' : '#ff6a3d'); }
   else if (e.type === 'save' || e.type === 'post' || e.type === 'wide') audio.play('ooh', mine ? 0.8 : 0.5);
