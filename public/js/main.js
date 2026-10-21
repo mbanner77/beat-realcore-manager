@@ -760,6 +760,10 @@ async function loadBoard() {
 
 // ---------------- Hauptschleife ----------------
 function frame(now) {
+  requestAnimationFrame(frame); // zuerst neu anmelden: ein Fehler darf die Schleife nie anhalten
+  try { frameBody(now); } catch (e) { if (!S.frameErr) { S.frameErr = true; console.error('frame', e); } }
+}
+function frameBody(now) {
   const dt = Math.min(0.05, (now - lastT) / 1000 || 0.016); lastT = now;
   if (S.screen === 'match' && M) {
     if (!M.paused && !M.over) { if (M.speed >= 10) { let n = 0; while (!M.over && !M.paused && n++ < 400) M.step(1 / 30); } else M.tick(dt); }
@@ -774,7 +778,6 @@ function frame(now) {
       bg3.setCine({ alpha: -Math.PI / 2 - 0.55 + Math.sin(t * 0.045) * 0.9, beta: 1.02 + Math.sin(t * 0.07) * 0.1, radius: Math.max(46, 74 - t * 2.4) + Math.sin(t * 0.05) * 6, tx: S.bgTx, tz: S.bgTz, ty: 0.6 }); if (S.heroVis) bg3.draw(bgMatch, dt); updateLiveCard(now); }
     else if (bgMatch) { bgMatch.tick(dt); if (bgMatch.over) newBg(); if (S.screen === 'title') updateLiveCard(now); bgPitch.draw(bgMatch, dt); bgPitch.ctx.setTransform(bgPitch.dpr, 0, 0, bgPitch.dpr, 0, 0); bgPitch.ctx.fillStyle = 'rgba(3,8,7,0.62)'; bgPitch.ctx.fillRect(0, 0, bgPitch.w, bgPitch.h); }
   }
-  requestAnimationFrame(frame);
 }
 
 // ---------------- Offline (PWA) ----------------

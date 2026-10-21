@@ -13,6 +13,7 @@ export class Pitch {
   goalFlash(team) { this.flash = 1; this.flashTeam = team; this.shake = 0.6; }
   burst(x, y, color) { for (let i = 0; i < 18; i++) { const a = Math.random() * Math.PI * 2, v = 6 + Math.random() * 14; this.fx.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.9, max: 0.9, c: color }); } }
   draw(M, dt) {
+    if (!(this.w > 4 && this.h > 4)) return; // unsichtbare oder noch nicht vermessene Fläche
     const ctx = this.ctx, L = this.layout(); this.t += dt;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); ctx.clearRect(0, 0, this.w, this.h);
     ctx.save();
@@ -22,7 +23,7 @@ export class Pitch {
     // Rasen
     ctx.fillStyle = '#0d3b22'; ctx.fillRect(0, 0, this.rot ? this.h : this.w, this.rot ? this.w : this.h);
     for (let i = 0; i < 10; i++) { ctx.fillStyle = i % 2 ? '#15552f' : '#124b2a'; ctx.fillRect(X(i * PW / 10), Y(0), PW / 10 * s + 0.5, PH * s); }
-    const g = ctx.createRadialGradient(X(PW / 2), Y(PH / 2), 10, X(PW / 2), Y(PH / 2), PW * s * 0.7); g.addColorStop(0, 'rgba(255,255,255,0.05)'); g.addColorStop(1, 'rgba(0,0,0,0.35)'); ctx.fillStyle = g; ctx.fillRect(X(-2), Y(-2), (PW + 4) * s, (PH + 4) * s);
+    const g = ctx.createRadialGradient(X(PW / 2), Y(PH / 2), 1, X(PW / 2), Y(PH / 2), Math.max(2, Math.abs(PW * s * 0.7))); g.addColorStop(0, 'rgba(255,255,255,0.05)'); g.addColorStop(1, 'rgba(0,0,0,0.35)'); ctx.fillStyle = g; ctx.fillRect(X(-2), Y(-2), (PW + 4) * s, (PH + 4) * s);
     // Linien
     ctx.strokeStyle = 'rgba(235,255,240,0.85)'; ctx.lineWidth = Math.max(1, s * 0.14);
     ctx.strokeRect(X(0), Y(0), PW * s, PH * s);
