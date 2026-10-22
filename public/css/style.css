@@ -1045,3 +1045,16 @@ body.tv .board-qr{float:right;margin-left:20px}
 body.tv .board-qr canvas{width:220px;height:220px}
 
 .te.legacy { border-left-color: #b87cff; background: rgba(184,124,255,0.1); font-style: italic; }
+
+/* Elfmeter selbst schießen / halten */
+.pen-ui{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);width:min(560px,calc(100% - 24px));background:rgba(4,12,9,.88);border:1px solid rgba(61,220,132,.4);border-radius:16px;padding:12px 14px 14px;z-index:8;backdrop-filter:blur(6px);box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.pen-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px}.pen-head b{font-size:18px;letter-spacing:.04em}.pen-head span{color:#9fb3ad;font-size:13px;text-align:right}
+.pen-goal{position:relative;aspect-ratio:3.2/1;border:5px solid #f4f7f5;border-bottom:none;border-radius:4px 4px 0 0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr);gap:4px;padding:4px;background:repeating-linear-gradient(90deg,rgba(255,255,255,.08) 0 2px,transparent 2px 14px),repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 2px,transparent 2px 14px),#0d2a1a}
+.pen-goal.keep{grid-template-rows:1fr}
+.pen-goal button{border:1px dashed rgba(255,255,255,.25);background:rgba(61,220,132,.08);color:#e8f5ee;border-radius:8px;font:inherit;font-weight:700;font-size:14px;cursor:pointer;min-height:44px;transition:background .15s,transform .1s}
+.pen-goal button:hover,.pen-goal button:focus-visible{background:rgba(61,220,132,.35);outline:none;transform:scale(1.03)}
+.pen-goal button small{display:block;font-weight:400;font-size:11px;color:#9fb3ad}
+.pen-timer{height:5px;background:rgba(255,255,255,.1);border-radius:3px;margin-top:10px;overflow:hidden}.pen-timer i{display:block;height:100%;background:#3ddc84;width:100%}
+.so-board{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center;margin-top:10px;font-family:var(--mono);font-size:13px}
+.so-board .dots{display:flex;gap:5px;flex-wrap:wrap}.so-board .dots i{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.35)}.so-board .dots i.g{background:#3ddc84;border-color:#3ddc84}.so-board .dots i.m{background:#ff6a3d;border-color:#ff6a3d}
+.so-board b{font-size:18px}

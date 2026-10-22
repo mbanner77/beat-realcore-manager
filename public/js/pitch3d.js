@@ -349,9 +349,15 @@ export class Pitch3D {
     const ads = ['RealCore', 'TechHub', 'Clean Core', 'SAP BTP', 'AI4BIZ', 'Z-Insight', 'realERP', 'RealCore', 'TechHub', 'Legacy League'];
     ads.forEach((a, i) => { ac.fillStyle = i % 2 ? '#0b3b22' : '#3ddc84'; ac.fillRect(i * 204.8, 0, 204.8, 128); ac.fillStyle = i % 2 ? '#3ddc84' : '#06261a'; ac.font = 'bold 44px sans-serif'; ac.textAlign = 'center'; ac.textBaseline = 'middle'; ac.fillText(a, i * 204.8 + 102, 64); }); adTex.update();
     const am = new StandardMaterial('am', scene); am.diffuseTexture = adTex; am.emissiveColor = new Color3(0.45, 0.45, 0.45); am.specularColor = Color3.Black(); am.backFaceCulling = false;
-    for (const [cx, cz, ry, len] of [[PW / 2, PH + 3.2, 0, PW + 8], [PW / 2, -3.2, 0, PW + 8], [PW + 3.2, PH / 2, Math.PI / 2, PH + 6], [-3.2, PH / 2, -Math.PI / 2, PH + 6]]) {
+    // vorne mit Lücke für den Spielertunnel
+    const hl = (PW + 8 - 6) / 2;
+    for (const [cx, cz, ry, len] of [[PW / 2, PH + 3.2, 0, PW + 8], [PW / 2 - 3 - hl / 2, -3.2, 0, hl], [PW / 2 + 3 + hl / 2, -3.2, 0, hl], [PW + 3.2, PH / 2, Math.PI / 2, PH + 6], [-3.2, PH / 2, -Math.PI / 2, PH + 6]]) {
       const b = MeshBuilder.CreatePlane('band', { width: len, height: 0.9 }, scene); b.position = new Vector3(cx, 0.45, cz); b.rotation.y = ry; b.material = am;
     }
+    // Spielertunnel (aufblasbar, in Vereinsfarbe)
+    { const tm = this.mat('tun', '#0f3a22', { spec: 0.1 }); for (const sx of [-2.6, 2.6]) { const w = MeshBuilder.CreateBox('tw', { width: 0.3, height: 2.8, depth: 7 }, scene); w.position = new Vector3(PW / 2 + sx, 1.4, -7.2); w.material = tm; }
+      const r = MeshBuilder.CreateBox('tr', { width: 5.5, height: 0.3, depth: 7 }, scene); r.position = new Vector3(PW / 2, 2.9, -7.2); r.material = tm;
+      const f = MeshBuilder.CreateBox('tf', { width: 5.5, height: 0.6, depth: 0.35 }, scene); f.position = new Vector3(PW / 2, 2.6, -3.75); f.material = this.mat('tunf', '#3ddc84', { em: '#0b3b22' }); }
     // Eckfahnen
     this.flags = [];
     for (const [fx, fz] of [[0, 0], [PW, 0], [0, PH], [PW, PH]]) {
@@ -562,6 +568,7 @@ export class Pitch3D {
     if ((e.type === 'tackle' || e.type === 'injury') && e.p) this.turfBurst(e.p.x, e.p.y, e.type === 'tackle' ? 40 : 20);
     if (e.type === 'tackle' && e.p) { if (this.mx) act(e.p, 'tackle'); else this.anim.set(e.p, { kind: 'slide', until: now + 700 }); }
     else if (e.type === 'injury' && e.p && this.mx) act(e.p, 'trip', { next: { kind: 'down', ms: 2200, then: 'standup' } });
+    else if (e.type === 'so_goal') this.crowdPulse = 0.8;
     else if (e.type === 'goal') { this.sbGoal = { name: e.p ? e.p.name : '', color: M.teams[e.team].color || '#3ddc84', until: performance.now() + 9000 }; this.crowdPulse = 1; const gx = M.goalOf(e.team).x; this.netHit = { side: gx > PW / 2 ? 1 : 0, t: performance.now() }; }
     else if (e.type === 'yellow' || e.type === 'red') { if (e.p) this.anim.set(e.p, { kind: 'protest', until: now + 1500 }); }
   }
@@ -654,9 +661,10 @@ export class Pitch3D {
       let end; if (b.mode === 'pass' && b.target) end = { x: b.target.x, y: b.target.y }; else if (b.mode === 'shot') end = M.goalOf(b.shooter.team); else end = { x: b.x + b.vx, y: b.y + b.vy };
       const total = Math.max(2, dist(b, end)); const r = Math.random();
       const h = b.mode === 'shot' ? (b.header ? 0.4 : b.freekick ? 1.4 + r * 0.8 : r < 0.5 ? 0.3 + r : 1.2 + r * 1.2) : b.cross ? 3 + r * 2 : (total > 22 ? 2 + Math.min(4, total / 10) * r : r < 0.35 ? 0.6 + r : 0);
-      this.flight = { mode: b.mode, from: b.from, shooter: b.shooter, start: { x: b.x, y: b.y }, total, h, base: b.mode === 'shot' && b.header ? 2.3 : 0 }; this.lastFlightH = h;
+      this.flight = { mode: b.mode, from: b.from, shooter: b.shooter, start: { x: b.x, y: b.y }, total, h: b.mode === 'shot' && b.penalty && b.aimHigh ? b.aimHigh : h, lin: b.mode === 'shot' && b.penalty && !!b.aimHigh, base: b.mode === 'shot' && b.header ? 2.3 : 0 }; this.lastFlightH = h;
     }
     const f = this.flight, pr = Math.min(1, dist(f.start, b) / f.total);
+    if (f.lin) return f.h * Math.min(1, pr * 1.15) * (1 - Math.max(0, pr - 0.92) * 3); // Elfmeter: steigt gleichmäßig zur gewählten Höhe
     return f.base * (1 - pr) + f.h * 4 * pr * (1 - pr);
   }
   // Welche Schuss-/Passbewegung passt? (Torwart: Abwurf oder Abstoß, lange Bälle als Chip, Schüsse aus dem Stand oder Lauf)
@@ -712,7 +720,10 @@ export class Pitch3D {
       if (now - R.t0 > R.dur) { this.replay = null; rp = null; b = M.ball; }
     }
     // Abschlag/Pass: Beinschwung des Schützen, Kick-Sound-Hinweis
-    if (!rp) { if (this.prevMode === 'held' && (b.mode === 'pass' || b.mode === 'shot')) { const k = b.mode === 'pass' ? b.from : b.shooter; if (k) { this.anim.set(k, this.actionFor(k, b, M, now)); if (b.mode === 'shot' && !b.header) this.turfBurst(k.x, k.y, 14); } this.kicked = true; }
+    if (!rp) { if (this.prevMode === 'held' && (b.mode === 'pass' || b.mode === 'shot')) { const k = b.mode === 'pass' ? b.from : b.shooter; if (k) { this.anim.set(k, this.actionFor(k, b, M, now)); if (b.mode === 'shot' && !b.header) this.turfBurst(k.x, k.y, 14); }
+        if (b.mode === 'shot' && b.penalty && b.keeperDive && b.shooter) { const gk = M.keeper(1 - b.shooter.team), f = gk && this.figs.get(gk); if (f) { const fy = f.root.rotation.y, rx = 0, rz = b.keeperDive.y - gk.y, cross = Math.sin(fy) * rz - Math.cos(fy) * rx, side = cross > 0 ? -1 : 1, c = ONCE.diveL;
+          if (this.mx) { const kind = b.keeperDive.col === 0 ? 'catch' : side < 0 ? 'diveL' : 'diveR', cc = ONCE[kind]; this.anim.set(gk, { kind, t0: now, until: now + (cc ? cc.len / cc.sp * 1000 : 900) }); } else if (c || true) this.anim.set(gk, { kind: 'dive', until: now + 900, side, t0: now }); } }
+        this.kicked = true; }
       if (this.mx && this.prevMode === 'pass' && b.mode === 'held' && b.owner && this.lastFlightH > 1.6 && b.owner.pos !== 'TW') { const c = ONCE.header; this.anim.set(b.owner, { kind: 'header', t0: now, until: now + c.len / c.sp * 1000 }); } this.prevMode = b.mode; }
     // Spieler
     for (const [p, f] of this.figs) {
@@ -726,7 +737,7 @@ export class Pitch3D {
       f.root.position.set(px, 0, py); f.root.rotation.z = 0; f.root.rotation.x = 0;
       const ry0 = f.root.rotation.y;
       if (v > 0.8 && !(f.gk && v < 3.5 && b.owner !== p)) { const ty = Math.atan2(f.mvx, f.mvy); let d = ty - f.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); f.root.rotation.y += d * Math.min(1, dt * (v > 6 ? 5.5 : v > 3 ? 8 : 11)); }
-      else { const ty = Math.atan2(b.x - px, b.y - py); let d = ty - f.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); f.root.rotation.y += d * Math.min(1, dt * 4); }
+      else { const wo = M.sp && M.sp.kind === 'walkout' && !M.sp.stage, ty = wo ? Math.PI : Math.atan2(b.x - px, b.y - py); let d = ty - f.root.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); f.root.rotation.y += d * Math.min(1, dt * 4); }
       // in Kurven leicht nach innen neigen (je schneller, desto mehr)
       { let dr = f.root.rotation.y - ry0; dr = Math.atan2(Math.sin(dr), Math.cos(dr)); const turn = dt > 0 ? dr / dt : 0, want = Math.max(-0.14, Math.min(0.14, -turn * v * 0.01)); f.leanZ = (f.leanZ || 0) + (want - (f.leanZ || 0)) * Math.min(1, dt * 6); }
       let P = this.runPose(f.phase, run, sprint);
@@ -817,10 +828,12 @@ export class Pitch3D {
         if (b.owner) this.lastAtt = b.owner.team; else if (b.mode === 'shot' && b.shooter) this.lastAtt = b.shooter.team; else if (b.mode === 'pass' && b.from) this.lastAtt = b.from.team;
         const att = this.lastAtt ?? 0, G = M.goalOf(att), toGoal = Math.abs(b.x - G.x), nowMs = performance.now();
         let shot = M.pen ? 'pen' : M.sp ? M.sp.kind : (b.mode === 'shot' || toGoal < 30) ? 'attack' : 'mid';
+        if (shot === 'walkout' || shot === 'throw' || shot === 'goalkick') shot = shot === 'walkout' ? 'walkout' : 'mid';
         const D = this.dir || (this.dir = { shot: 'mid', since: 0 });
         if (shot !== D.shot) { const urgent = shot === 'pen' || shot === 'corner' || shot === 'fk' || D.shot === 'pen' || D.shot === 'corner' || D.shot === 'fk' || b.mode === 'shot'; if (urgent || nowMs - D.since > 1800) { D.shot = shot; D.since = nowMs; } else shot = D.shot; }
         const side = G.x > PW / 2 ? 1 : -1;
-        if (shot === 'pen' || shot === 'fk') { // hinter dem Schützen auf das Tor
+        if (shot === 'walkout') { const wp = M.players.filter(q => !q.out), cx = wp.reduce((a2, q) => a2 + q.x, 0) / wp.length, cz = wp.reduce((a2, q) => a2 + q.y, 0) / wp.length; want.alpha = -Math.PI / 2 - (M.sp.stage ? 0.25 : 0.8); want.beta = M.sp.stage ? 1.15 : 1.32; want.radius = M.sp.stage ? 34 : 20; tx = cx; tz = cz; ty = 1.1; follow = 1.6; }
+        else if (shot === 'pen' || shot === 'fk') { // hinter dem Schützen auf das Tor
           const ux = G.x - b.x, uy = G.y - b.y, ul = Math.hypot(ux, uy) || 1; want.alpha = Math.atan2(-uy / ul, -ux / ul); want.beta = shot === 'pen' ? 1.22 : 1.12; want.radius = shot === 'pen' ? 15 : 20 + Math.min(10, ul * 0.2);
           tx = b.x + ux * (shot === 'pen' ? 0.55 : 0.45); tz = b.y + uy * (shot === 'pen' ? 0.55 : 0.45); ty = 1; follow = 3.5;
         } else if (shot === 'corner') { // erhöht aus dem Feld in den Strafraum

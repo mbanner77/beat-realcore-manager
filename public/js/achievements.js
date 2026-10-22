@@ -2,6 +2,8 @@ import { rating } from './manager.js';
 // Erfolge: werden geräteweit gespeichert und gelten über alle Saisons
 export const ACH = [
   { k: 'first_win', ic: 'trophy', name: 'Erster Sieg', desc: 'Gewinne ein Spiel in der Legacy League.' },
+  { k: 'cup', ic: 'trophy', name: 'Pokalsieger', desc: 'Gewinne den TechHub-Pokal.' },
+  { k: 'pen_hero', ic: 'target', name: 'Elfmeterheld', desc: 'Gewinne ein Elfmeterschießen.' },
   { k: 'clean', ic: 'target', name: 'Weiße Weste', desc: 'Spiele zu null.' },
   { k: 'five', ic: 'ball', name: 'Torfestival', desc: 'Schieße fünf Tore in einem Spiel.' },
   { k: 'hattrick', ic: 'star', name: 'Hattrick', desc: 'Ein:e Spieler:in trifft dreimal in einem Spiel.' },

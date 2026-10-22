@@ -70,6 +70,7 @@ function openSettings() {
   const cv = $('#opt-voice'); if (cv) { cv.checked = voice.on; cv.onchange = () => { voice.setOn(cv.checked); $('#btn-voice').classList.toggle('off', !voice.on); audio.play('confirm'); if (cv.checked) voice.say(tr('Sprecher aktiv.'), { lang: LANG, prio: 3, interrupt: true }); }; }
   { const g0 = (() => { try { return localStorage.getItem('brcm-gfx') || 'auto'; } catch { return 'auto'; } })(); $$('#opt-gfx button').forEach(b => { b.classList.toggle('on', b.dataset.g === g0); b.onclick = () => { try { localStorage.setItem('brcm-gfx', b.dataset.g); } catch { /* ignore */ } $$('#opt-gfx button').forEach(x => x.classList.toggle('on', x === b)); if (pitch && pitch.dispose && S.screen !== 'match') { pitch.dispose(); pitch = null; } audio.play('confirm'); toast(tr('Grafik geändert – gilt ab dem nächsten Spiel.')); }; }); }
   { const m0 = lsGet('brcm-mode', 'real'); $$('#opt-mode button').forEach(b => { b.classList.toggle('on', b.dataset.m === m0); b.onclick = () => { lsSet('brcm-mode', b.dataset.m); $$('#opt-mode button').forEach(x => x.classList.toggle('on', x === b)); audio.play('confirm'); }; }); }
+  { const cp = $('#opt-penui'); if (cp) { cp.checked = lsGet('brcm-penui', '1') !== '0'; cp.onchange = () => { lsSet('brcm-penui', cp.checked ? '1' : '0'); audio.play('confirm'); }; } }
   { const co = $('#opt-offside'); if (co) { co.checked = lsGet('brcm-offside', '1') !== '0'; co.onchange = () => { lsSet('brcm-offside', co.checked ? '1' : '0'); audio.play('confirm'); }; } }
   const c3 = $('#opt-3d'); if (c3) { c3.checked = want3d(); c3.onchange = () => { try { localStorage.setItem('brcm-3d', c3.checked ? '1' : '0'); } catch { /* ignore */ } if (pitch) { pitch.dispose?.(); pitch = null; } audio.play('confirm'); }; }
   for (const k of ['music', 'sfx']) { const el = $('#vol-' + k), v = Math.round(audio.vol[k] * 100); el.value = v; $('#vol-' + k + '-v').textContent = v + '%'; el.oninput = () => { $('#vol-' + k + '-v').textContent = el.value + '%'; audio.setVolume(k, el.value / 100); }; el.onchange = () => audio.play('confirm'); }
@@ -202,7 +203,7 @@ $('#link-privacy').addEventListener('click', (e) => { e.preventDefault(); show('
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && S.screen === 'intro') { $('#btn-intro-skip').click(); return; }
   if (S.screen !== 'title' || e.target.tagName === 'INPUT') return;
-  const m = { w: '#btn-continue', Enter: '#btn-play', b: '#btn-board', '?': '#btn-howto', o: '#btn-settings', i: '#btn-intro', t: '#btn-daily', d: '#btn-duel' }[e.key.length === 1 ? e.key.toLowerCase() : e.key];
+  const m = { w: '#btn-continue', Enter: '#btn-play', b: '#btn-board', '?': '#btn-howto', o: '#btn-settings', i: '#btn-intro', t: '#btn-daily', d: '#btn-duel', p: '#btn-cup' }[e.key.length === 1 ? e.key.toLowerCase() : e.key];
   if (m && !$(m).hidden) { e.preventDefault(); $(m).click(); }
 });
 
@@ -541,10 +542,10 @@ function startMatch(mini) {
   const se = SE(), o = mini ? (mini.oppClub || se.opponent) : se.opponent; se.autoFillIfNeeded?.();
   const me = mini?.meTeam || se.teamForMatch(), opp = mini?.oppTeam || se.opponentForMatch(), atHome = mini ? true : se.home;
   const home = atHome ? me : opp, away = atHome ? opp : me;
-  M = new Match(home, away, { seed: (Date.now() & 0xffff) + se.day, weather: mini?.weather || se.weather, spectacle: mini?.spect || lsGet('brcm-mode', 'real') === 'spect', offside: lsGet('brcm-offside', '1') !== '0', hooks: { injMul: DIFFICULTY[S.diff].inj } }); S.talkUsed = false; S.talk = null;
+  M = new Match(home, away, { seed: (Date.now() & 0xffff) + se.day, weather: mini?.weather || se.weather, spectacle: mini?.spect || lsGet('brcm-mode', 'real') === 'spect', walkout: !mini && !KIOSK, offside: lsGet('brcm-offside', '1') !== '0', hooks: { injMul: DIFFICULTY[S.diff].inj } }); S.talkUsed = false; S.talk = null;
   voice.prefetchFragments(); voice.prefetch(M.players.map(p => 'n:' + p.name).concat([...(home.bench || []), ...(away.bench || [])].map(p => 'n:' + p.name), ['n:' + home.short, 'n:' + away.short]));
   S.match = M; S.myTeam = atHome ? 0 : 1; S.chantT = 0;
-  M.hooks = { onEvent: (e) => onMatchEvent(e), onHalf: () => openHalf('Halbzeit'), onFull: (r) => mini ? endMini(r) : endMatch(r), onGoal: (ti) => { pitch.goalFlash(ti); }, injMul: DIFFICULTY[S.diff].inj };
+  M.hooks = { onEvent: (e) => onMatchEvent(e), onHalf: () => openHalf('Halbzeit'), onFull: (r) => { if (mini && mini.kind === 'cup' && r.gh === r.ga && !M.shootout) { startShootoutUI(); return; } mini ? endMini(r) : endMatch(r); }, penaltyChoice: lsGet('brcm-penui', '1') !== '0' ? (info) => showPenUI(info) : null, fkChoice: lsGet('brcm-penui', '1') !== '0' ? (info) => showFkUI(info) : null, onShootoutEnd: () => { hidePenUI(); setTimeout(() => endMini(M.result()), 1600); }, onGoal: (ti) => { pitch.goalFlash(ti); }, injMul: DIFFICULTY[S.diff].inj };
   $('#sc-home').textContent = home.short; $('#sc-away').textContent = away.short; $('#sc-val').textContent = '0 : 0'; $('#sc-home-crest').innerHTML = crest(home, 30); $('#sc-away-crest').innerHTML = crest(away, 30); $('#tl-marks').innerHTML = ''; $('#tl-fill').style.width = '0%';
   if (pitch && pitch.setDaylight) { pitch.setDaylight(atHome); pitch.setWeather?.(mini?.weather || se.weather); } $('#sc-min').textContent = "0'"; $('#sc-phase').textContent = '1. Halbzeit';
   $('#ticker-list').innerHTML = ''; $('#ts-stats').textContent = ''; $('#match-banner').hidden = true;
@@ -552,7 +553,7 @@ function startMatch(mini) {
   if (!mini) showLineupIntro(home, away);
   onMatchEvent(M.events[0]);
   if (mini) applyMini(mini);
-  setSpeed(KIOSK && !mini ? 2 : 1); matchRun = true; show('match'); audio.setCrowd(0.5);
+  setSpeed(KIOSK && !mini ? 2 : 1); matchRun = true; show('match'); audio.setCrowd(0.5); if (M.sp && M.sp.kind === 'walkout') setTimeout(() => audio.play('chant', 0.9), 1200);
   banner(mini ? mini.title : `${home.short} – ${away.short}`, mini ? mini.text : `Spieltag ${se.day + 1} · ${se.home ? CLUB.stadium : o.club}`, false, mini ? 4200 : 2600);
 }
 // Aufstellungen vor dem Anpfiff
@@ -577,7 +578,7 @@ function renderLiveTactics() {
   $$('#live-tactics button[data-k]').forEach(b => b.addEventListener('click', () => { T.style = b.dataset.k; se.style = b.dataset.k; audio.play('click'); renderLiveTactics(); }));
   $$('#live-tactics button[data-i]').forEach(b => b.addEventListener('click', () => { T.instr = b.dataset.i; audio.play('click'); toast(`${tr('Anweisung')}: ${tr(INSTR[b.dataset.i].name)} – ${tr(INSTR[b.dataset.i].desc)}`); renderLiveTactics(); }));
 }
-function setSpeed(s) { if (!M) return; M.speed = s === 'skip' ? 40 : s; if (M.speed > 1) { clearTimeout(liTimer); $('#lineup-intro').hidden = true; } $$('#speed button[data-s]').forEach(b => b.classList.toggle('on', String(b.dataset.s) === String(s))); }
+function setSpeed(s) { if (!M) return; M.speed = s === 'skip' ? 40 : s; if (M.speed > 2) { if (M.pen && M.pen.waiting) { hidePenUI(); M.choosePenalty({}); } if (M.sp && M.sp.waiting) { hidePenUI(); M.chooseFreeKick('top'); } } if (M.speed > 1) { clearTimeout(liTimer); $('#lineup-intro').hidden = true; } $$('#speed button[data-s]').forEach(b => b.classList.toggle('on', String(b.dataset.s) === String(s))); }
 $$('#speed button[data-s]').forEach(b => b.addEventListener('click', () => { audio.play('click'); setSpeed(b.dataset.s === 'skip' ? 'skip' : +b.dataset.s); }));
 $('#live-energy').addEventListener('click', () => { if (M && !M.over) { audio.play('click'); openHalf('Taktik'); } });
 const CAMS = [['auto', 'Regie'], ['tv', 'TV'], ['near', 'Nah'], ['goal', 'Hinter dem Angriff'], ['top', 'Taktik']];
@@ -600,13 +601,15 @@ function speakFiller() {
 }
 function onMatchEvent(e) {
   const mine = e.team === S.myTeam;
+  if (e.type === 'so_goal' || e.type === 'so_miss') { soBoard(); audio.play(e.type === 'so_goal' ? (mine ? 'goal' : 'goal_opp') : 'ooh', 0.8); }
   if (pitch && pitch.onEvent) pitch.onEvent(e, M);
   if (pitch && pitch.recordClip && M && M.speed < 10 && ['goal', 'save', 'pen_save', 'post', 'parry', 'header', 'fk_wall'].includes(e.type)) { const lb = { goal: 'TOR', save: 'Parade', pen_save: 'Elfmeter gehalten', post: 'Aluminium', parry: 'Glanzparade', header: 'Kopfball', fk_wall: 'Freistoß' }[e.type]; pitch.recordClip(M, e, `${e.min}' · ${tr(lb)} · ${e.p ? e.p.name : ''}`); }
-  if (['intercept', 'press', 'tackle', 'cross', 'throwin'].includes(e.type)) return;
+  if (e.type === 'kickoff2') { audio.play('whistle'); return; }
+  if (['intercept', 'press', 'tackle', 'cross', 'throwin', 'so_kick'].includes(e.type)) return;
   const li = document.createElement('div'); const key = e.type === 'goal' ? (mine ? 'goal' : 'goal_opp') : e.type; li.className = 'te ' + key; li.innerHTML = `<b>${e.min}'</b><span>${esc(e.text)}</span>`;
   const list = $('#ticker-list'); list.prepend(li); while (list.children.length > 60) list.lastChild.remove();
   // Sprecher: wichtige Ereignisse immer, Kleinigkeiten nur bei normalem Tempo
-  const PRIO = { goal: 2, red: 2, penalty: 2, pen_save: 2, pen_miss: 2, full: 2, half: 2, kickoff: 1, yellow: 1, save: 1, post: 1, wide: 1, chance: 1, injury: 1, sub: 1, block: 0, koloss: 1, offside: 1, instr: 1, onetwo: 0, deflect: 1, corner: 1, freekick: 1, header: 1, parry: 1, fk_wall: 1, claim: 0, clear: 0 };
+  const PRIO = { goal: 2, red: 2, penalty: 2, pen_save: 2, pen_miss: 2, full: 2, half: 2, kickoff: 1, yellow: 1, save: 1, post: 1, wide: 1, chance: 1, injury: 1, sub: 1, block: 0, koloss: 1, offside: 1, shootout: 2, so_goal: 1, so_miss: 1, so_end: 2, instr: 1, onetwo: 0, deflect: 1, corner: 1, freekick: 1, header: 1, parry: 1, fk_wall: 1, claim: 0, clear: 0 };
   const pr = PRIO[e.type]; if (pr !== undefined && M.speed < 10 && (M.speed <= 1 || pr >= 2)) speakEvent(e, { prio: pr, interrupt: e.type === 'goal' || e.type === 'full', rate: e.type === 'goal' ? 1.08 : 1.04, pitch: e.type === 'goal' ? 1.1 : 1 });
   if (e.type === 'kickoff' && M.speed < 10) { const w = M.weather || 'sun'; speakTpl(WEATHER_LINE.de[w], WEATHER_LINE.en[w], matchVals(), { prio: 1 }); }
   if (['goal', 'yellow', 'red', 'injury', 'sub', 'penalty'].includes(e.type)) { const mk = document.createElement('i'); mk.className = 'tm ' + e.type + (mine ? ' me' : ' opp'); mk.style.left = Math.min(100, e.min / 90 * 100) + '%'; mk.title = `${e.min}' ${e.p ? e.p.name : ''}`; mk.innerHTML = icon(e.type === 'goal' ? 'ball' : e.type === 'yellow' || e.type === 'red' ? 'card' : e.type === 'penalty' ? 'pen' : e.type); $('#tl-marks').appendChild(mk); }
@@ -655,7 +658,7 @@ $('#btn-sub').addEventListener('click', () => { const T = M.teams[S.myTeam], inP
 $('#btn-resume').addEventListener('click', () => { $('#half').hidden = true; M.paused = false; renderLiveTactics();
   if (S.talk && !S.talkUsed && M.halfDone) { S.talkUsed = true; M.teamTalk(S.myTeam, S.talk); speakTpl(TALK_LINE.de[S.talk], TALK_LINE.en[S.talk], matchVals(), { prio: 1 }); } audio.play('whistle'); audio.setCrowd(0.5); if (M.halfDone && M.min < 46) $('#sc-phase').textContent = '2. Halbzeit'; });
 function endMatch(res) {
-  matchRun = false; audio.setCrowd(0.2);
+  matchRun = false; hidePenUI(); audio.setCrowd(0.2);
   const se = SE(), o = se.opponent, r = se.applyResult(res);
   setTimeout(() => showFullTime(res, r, o), 900);
 }
@@ -708,6 +711,62 @@ function showReport(res, r, o) {
 }
 $('#btn-next-week').addEventListener('click', () => { audio.play('click'); const se = SE(); if (se.over) showResult(se.result); else { S.tab = 'home'; S.radioUnread = 0; renderWeek(); show('week'); } });
 
+// ---------------- Elfmeter selbst schießen / halten, Elfmeterschießen ----------------
+let penTimer = null;
+function soBoard() { const so = M && M.shootout; const el = $('#so-board'); if (!so) { el.hidden = true; return; } el.hidden = false; const row = (ti) => { const l = so.log[ti], n = Math.max(5, l.length); return `<span>${esc(M.teams[ti].short)}</span><span class="dots">${Array.from({ length: n }, (_, i) => `<i class="${l[i] === 1 ? 'g' : l[i] === 0 ? 'm' : ''}"></i>`).join('')}</span><b>${so.score[ti]}</b>`; }; el.innerHTML = row(0) + row(1); }
+function showPenUI(info) {
+  const ui = $('#pen-ui'), shoot = info.shoot, goal = $('#pen-goal'); clearInterval(penTimer);
+  $('#pen-title').textContent = shoot ? (info.shootout ? tr('Elfmeterschießen – du schießt') : tr('Elfmeter – wohin schießt du?')) : (info.shootout ? tr('Elfmeterschießen – du hältst') : tr('Elfmeter gegen uns – wohin springst du?'));
+  $('#pen-sub').textContent = shoot ? `${info.taker.name} · ${tr('Schuss')} ${Math.round(info.taker.schuss)}` : `${info.keeper.name} ${tr('gegen')} ${info.taker.name}`;
+  goal.className = 'pen-goal' + (shoot ? '' : ' keep');
+  goal.innerHTML = shoot ? [[-1, 1, 'Links oben'], [0, 1, 'Mitte oben'], [1, 1, 'Rechts oben'], [-1, 0, 'Links flach'], [0, 0, 'Mitte flach'], [1, 0, 'Rechts flach']].map(([c, h, l]) => `<button data-c="${c}" data-h="${h}">${esc(tr(l))}<small>${h ? esc(tr('schwer zu halten, kann drübergehen')) : c ? esc(tr('sicher, aber haltbar')) : esc(tr('frech'))}</small></button>`).join('')
+    : [[-1, 'Links'], [0, 'Stehen bleiben'], [1, 'Rechts']].map(([c, l]) => `<button data-d="${c}">${esc(tr(l))}</button>`).join('');
+  const pick = (c) => { clearInterval(penTimer); ui.querySelectorAll('button').forEach(b => b.disabled = true); audio.play('click'); M.choosePenalty(c); setTimeout(() => { if (!M.shootout) ui.hidden = true; else goal.innerHTML = ''; }, 300); };
+  goal.querySelectorAll('button').forEach(b => b.onclick = () => pick(b.dataset.d !== undefined ? { dive: +b.dataset.d } : { col: +b.dataset.c, high: b.dataset.h === '1' }));
+  ui.hidden = false; soBoard(); const t0 = performance.now(), dur = 8000, bar = $('#pen-timer');
+  penTimer = setInterval(() => { const k = 1 - (performance.now() - t0) / dur; bar.style.width = Math.max(0, k * 100) + '%'; if (k <= 0) { const r = Math.random(); pick(shoot ? { col: r < 0.35 ? -1 : r < 0.65 ? 0 : 1, high: Math.random() < 0.3 } : { dive: r < 0.4 ? -1 : r < 0.6 ? 0 : 1 }); } }, 100);
+  audio.play('chance');
+}
+function showFkUI(info) {
+  const ui = $('#pen-ui'), goal = $('#pen-goal'); clearInterval(penTimer);
+  $('#pen-title').textContent = tr('Freistoß – wie führst du aus?'); $('#pen-sub').textContent = `${info.taker.name} · ${info.dist} m · ${tr('Mauer')}: ${info.wall}`;
+  goal.className = 'pen-goal keep'; goal.innerHTML = [['top', 'Über die Mauer ins Eck', 'schwer zu halten, Mauer selten im Weg'], ['low', 'Flach ins Torwarteck', 'überrascht, aber oft in der Mauer'], ['cross', 'Flanke in den Strafraum', 'Kopfballduell statt Schuss']].map(([k, l, d]) => `<button data-k="${k}">${esc(tr(l))}<small>${esc(tr(d))}</small></button>`).join('');
+  const pick = (k) => { clearInterval(penTimer); audio.play('click'); M.chooseFreeKick(k); ui.hidden = true; };
+  goal.querySelectorAll('button').forEach(b => b.onclick = () => pick(b.dataset.k));
+  $('#so-board').hidden = true; ui.hidden = false; const t0 = performance.now(), dur = 8000, bar = $('#pen-timer');
+  penTimer = setInterval(() => { const k = 1 - (performance.now() - t0) / dur; bar.style.width = Math.max(0, k * 100) + '%'; if (k <= 0) pick(['top', 'low', 'cross'][Math.floor(Math.random() * 3)]); }, 100);
+  audio.play('chance');
+}
+function hidePenUI() { clearInterval(penTimer); $('#pen-ui').hidden = true; }
+function startShootoutUI() { audio.play('whistle3'); banner(tr('ELFMETERSCHIESSEN'), tr('Unentschieden nach 90 Minuten'), false, 3200); M.startShootout(); $('#pen-ui').hidden = false; $('#pen-goal').innerHTML = ''; $('#pen-title').textContent = tr('Elfmeterschießen'); $('#pen-sub').textContent = ''; $('#pen-timer').style.width = '0%'; soBoard(); }
+
+// ---------------- TechHub-Pokal: K.-o.-Runden bis zum Finale gegen den Monolithen, Unentschieden → Elfmeterschießen ----------------
+const CUP_ROUNDS = ['Achtelfinale', 'Viertelfinale', 'Halbfinale', 'Finale'];
+function openCup() {
+  const pool = [0, 1, 2, 3, 4, 5].sort(() => Math.random() - 0.5).slice(0, 3); S.cupRun = { round: 0, opps: [...pool, 6], res: [] };
+  $('#mini-title').textContent = tr('TechHub-Pokal');
+  $('#mini-body').innerHTML = `<div class="scen"><b>${esc(tr('TechHub-Pokal'))}</b><span>${esc(tr('Vier K.-o.-Spiele bis zum Finale gegen den Legacy-Monolith FC. Unentschieden? Dann entscheidet das Elfmeterschießen – du schießt und hältst selbst.'))}</span></div>${cupBracket()}<div class="row"><button class="btn primary big" id="cup-go">${esc(tr('Anpfiff'))}</button></div>`;
+  $('#cup-go').onclick = () => cupPlay(); $('#mini-modal').hidden = false;
+}
+function cupBracket() { const C = S.cupRun; return `<table>${C.opps.map((oi, i) => { const r = C.res[i]; return `<tr class="${i === C.round && !C.out ? 'me' : ''}"><td>${esc(tr(CUP_ROUNDS[i]))}</td><td>${esc(OPPONENTS[oi].club)}</td><td>${r ? `${r.gf}:${r.ga}${r.so ? ` (${r.so[0]}:${r.so[1]} i. E.)` : ''} ${r.won ? '✓' : '✗'}` : '–'}</td></tr>`; }).join('')}</table>`; }
+function cupPlay() { const C = S.cupRun, oi = C.opps[C.round], o = OPPONENTS[oi]; startMini({ kind: 'cup', title: `${tr('TechHub-Pokal')} · ${tr(CUP_ROUNDS[C.round])}`, text: `${tr('gegen')} ${o.club}`, min: 0, score: [0, 0], oppIndex: oi, seed: Date.now() & 0xffff, weather: ['sun', 'rain', 'sun', 'wind'][C.round] }); }
+function cupAfter(mini, res, mi, gf, ga) {
+  const C = S.cupRun, so = res.so ? [res.so[mi], res.so[1 - mi]] : null, won = gf > ga || (gf === ga && so && so[0] > so[1]);
+  C.res[C.round] = { gf, ga, so, won }; if (!won) C.out = true;
+  if (won && so) setTimeout(() => achShow(achUnlock(['pen_hero'], KIOSK)), 1500);
+  const champion = won && C.round === CUP_ROUNDS.length - 1;
+  audio.play(won ? 'win' : 'lose');
+  const restore = () => { S.season = mini.keep; S.gameId = mini.keepGame; S.diff = mini.keepDiff; S.mini = null; };
+  $('#mini-title').textContent = tr('TechHub-Pokal');
+  $('#mini-body').innerHTML = `<div class="scen"><b>${esc(mini.title)}</b><span>${esc(mini.text)}</span></div><div class="sc-big">${gf} : ${ga}${so ? `<small style="display:block;font-size:18px">${so[0]}:${so[1]} ${esc(tr('im Elfmeterschießen'))}</small>` : ''}</div><div class="pts">${champion ? esc(tr('POKALSIEGER! Der Monolith ist gestürzt.')) : won ? esc(tr('Weiter in die nächste Runde!')) : esc(tr('Ausgeschieden.'))}</div>${cupBracket()}<div class="row">${won && !champion ? `<button class="btn primary big" id="cup-next">${esc(tr(CUP_ROUNDS[C.round + 1]))} ›</button>` : `<button class="btn" id="cup-again">${esc(tr('Neuer Pokal'))}</button>`}<button class="btn" id="mini-home">${esc(tr('Zur Startseite'))}</button></div>`;
+  $('#mini-modal').hidden = false;
+  if (champion) { try { localStorage.setItem('brcm-cup', String((+localStorage.getItem('brcm-cup') || 0) + 1)); } catch { /* ignore */ } achShow(achUnlock(['cup'], KIOSK)); const fx = new Confetti($('#ft-fx')); fx.rain(300); setTimeout(() => fx.stop(), 7000); }
+  $('#mini-home').onclick = () => { audio.play('click'); $('#mini-modal').hidden = true; restore(); goTitle(); };
+  const nx = $('#cup-next'); if (nx) nx.onclick = () => { audio.play('confirm'); restore(); C.round++; cupPlay(); };
+  const ag = $('#cup-again'); if (ag) ag.onclick = () => { audio.play('click'); restore(); openCup(); };
+}
+$('#btn-cup').addEventListener('click', () => { audio.unlock(); audio.play('click'); openCup(); });
+
 // ---------------- Tages-Challenge & Duell ----------------
 const DAILY = [
   { id: 'comeback', title: 'Die Aufholjagd', text: '0:2 hinten, noch 30 Minuten – dreh das Spiel!', min: 60, score: [0, 2] },
@@ -738,7 +797,9 @@ function applyMini(mini) {
   M.kickoff(1 - S.myTeam);
 }
 async function endMini(res) {
-  matchRun = false; audio.setCrowd(0.2); const mini = S.mini; if (!mini) return; const mi = S.myTeam, gf = mi === 0 ? res.gh : res.ga, ga = mi === 0 ? res.ga : res.gh, won = gf > ga;
+  matchRun = false; audio.setCrowd(0.2); hidePenUI(); const mini = S.mini; if (!mini) return; const mi = S.myTeam, gf = mi === 0 ? res.gh : res.ga, ga = mi === 0 ? res.ga : res.gh;
+  if (mini.kind === 'cup') return cupAfter(mini, res, mi, gf, ga);
+  const won = gf > ga;
   audio.play(won ? 'win' : gf === ga ? 'confirm' : 'lose');
   const body = $('#mini-body'); $('#mini-title').textContent = mini.kind === 'daily' ? 'Tages-Challenge' : 'Duell';
   const pts = mini.kind === 'daily' ? dailyPoints(mini, res, mi) : null;

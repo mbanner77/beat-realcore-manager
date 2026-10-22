@@ -51,6 +51,7 @@
       </div>
       <div class="menu">
         <button class="menu-item" id="btn-daily"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="M9 15l2 2 4-4"/></svg><span><b>Tages-Challenge</b><small id="daily-sub">Jeden Tag ein neues Szenario</small></span><span class="k">T</span></button>
+        <button class="menu-item" id="btn-cup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/><path d="M10 8l2-2 2 2"/></svg><span><b>TechHub-Pokal</b><small>K.-o.-Runden, Elfmeterschießen</small></span><span class="k">P</span></button>
         <button class="menu-item" id="btn-duel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6M16 16l4 4M19 21l2-2"/><path d="M9.5 6.5L13 3h3v3l-3.5 3.5"/><path d="M5 14l4 4M7 17l-3 3M3 19l2 2"/></svg><span><b>Duell</b><small>Team-Code teilen oder antreten</small></span><span class="k">D</span></button>
         <button class="menu-item" id="btn-board"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg><span><b>Bestenliste</b><small>„Beat RealCore“-Liga</small></span><span class="k">B</span></button>
         <button class="menu-item" id="btn-howto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span><b>So geht's</b><small>Kader, Taktik, Punkte</small></span><span class="k">?</span></button>
@@ -99,7 +100,7 @@
     <p>Eine kurze Saison dauert rund 20 Minuten.</p>
     <button class="btn primary big" id="btn-play2">Saison starten</button>
   </section>
-  <footer class="title-foot"><span>RealCore Group · SAP · BTP · KI · <span class="ver">v3.3</span></span><span><a href="#" id="link-privacy">Datenschutz</a></span><p class="tm-note">3D-Figuren, Körper und Animationen: Quaternius (CC0), Fußball-Bewegungen: Mixamo (Adobe) · Himmel und Rasenstruktur: Poly Haven (CC0) · 3D-Engine: Babylon.js (Apache 2.0)</p><p class="tm-note">SAP, SAP S/4HANA, SAP HANA, SAP BTP, SAP Fiori, SAP Integration Suite, SAP Datasphere, ABAP, Joule, Kyma und SAP R/3 sind Marken oder eingetragene Marken der SAP SE oder ihrer verbundenen Unternehmen in Deutschland und anderen Ländern. Dieses Spiel ist nicht von SAP SE oder einem verbundenen Unternehmen autorisiert oder gesponsert.</p></footer>
+  <footer class="title-foot"><span>RealCore Group · SAP · BTP · KI · <span class="ver">v3.4</span></span><span><a href="#" id="link-privacy">Datenschutz</a></span><p class="tm-note">3D-Figuren, Körper und Animationen: Quaternius (CC0), Fußball-Bewegungen: Mixamo (Adobe) · Himmel und Rasenstruktur: Poly Haven (CC0) · 3D-Engine: Babylon.js (Apache 2.0)</p><p class="tm-note">SAP, SAP S/4HANA, SAP HANA, SAP BTP, SAP Fiori, SAP Integration Suite, SAP Datasphere, ABAP, Joule, Kyma und SAP R/3 sind Marken oder eingetragene Marken der SAP SE oder ihrer verbundenen Unternehmen in Deutschland und anderen Ländern. Dieses Spiel ist nicht von SAP SE oder einem verbundenen Unternehmen autorisiert oder gesponsert.</p></footer>
 </div>
 </section>
 
@@ -251,7 +252,7 @@
   </div>
   <div class="timeline" id="timeline"><div class="tl-fill" id="tl-fill"></div><div class="tl-marks" id="tl-marks"></div></div>
   <div class="match-body">
-    <div class="pitch-wrap"><canvas id="pitch"></canvas><div class="replay-tag" id="replay-tag" hidden>⟲ WIEDERHOLUNG</div><div class="hl-bar" id="hl-bar" hidden><span id="hl-label"></span><button class="btn sm" id="btn-hl-skip">Überspringen ✕</button></div><div class="banner" id="match-banner" hidden></div></div>
+    <div class="pitch-wrap"><canvas id="pitch"></canvas><div class="replay-tag" id="replay-tag" hidden>⟲ WIEDERHOLUNG</div><div class="pen-ui" id="pen-ui" hidden><div class="pen-head"><b id="pen-title">Elfmeter</b><span id="pen-sub"></span></div><div class="pen-goal" id="pen-goal"></div><div class="pen-timer"><i id="pen-timer"></i></div><div class="so-board" id="so-board" hidden></div></div><div class="hl-bar" id="hl-bar" hidden><span id="hl-label"></span><button class="btn sm" id="btn-hl-skip">Überspringen ✕</button></div><div class="banner" id="match-banner" hidden></div></div>
     <aside class="ticker-side"><div class="ts-head"><span>▸ Live-Ticker</span><span id="ts-stats"></span></div><div class="poss" id="poss"><i style="width:50%"></i><span id="poss-l">50 %</span><span id="poss-r">50 %</span></div><div class="live-tactics" id="live-tactics"></div><div class="live-energy" id="live-energy" title="Kondition – Klick öffnet Wechsel"></div><div class="ticker-list" id="ticker-list"></div></aside>
   </div>
   <div class="lineup-intro" id="lineup-intro" hidden></div>
@@ -376,6 +377,7 @@
         <label class="sl chk"><span>Sprecher</span><input type="checkbox" id="opt-voice"><b>DE / EN</b></label>
         <label class="sl chk"><span>3D-Stadion</span><input type="checkbox" id="opt-3d"><b>Babylon.js</b></label>
         <div class="sl"><span>Spielart</span><div class="seg sm" id="opt-mode"><button data-m="real">Realistisch</button><button data-m="spect">Spektakel</button></div></div>
+        <label class="sl chk"><span>Elfmeter selbst</span><input type="checkbox" id="opt-penui"><b>schießen / halten</b></label>
         <label class="sl chk"><span>Abseits</span><input type="checkbox" id="opt-offside"><b>an / aus</b></label>
         <div class="sl"><span>Grafik</span><div class="seg sm" id="opt-gfx"><button data-g="auto">Automatisch</button><button data-g="high">Hoch</button><button data-g="mid">Mittel</button><button data-g="low">Schnell</button></div></div>
       </section>

@@ -38,6 +38,11 @@ export const COMMENT = {
   header: ['Kopfball {p}!', '{p} steigt hoch und köpft!'],
   clear: ['{p} klärt per Kopf – Gefahr gebannt.', 'Geklärt! {p} ist zuerst am Ball.'],
   claim: ['{k} pflückt die Flanke herunter.', '{k} kommt raus und fängt die Flanke sicher.'],
+  shootout: ['Elfmeterschießen! Die Nerven liegen blank.'],
+  so_kick: ['{p} legt sich den Ball zurecht.'],
+  so_goal: ['{p} trifft!', 'Drin! {p} bleibt eiskalt.'],
+  so_miss: ['{p} vergibt!', 'Gehalten – {p} scheitert.'],
+  so_end: ['Das Elfmeterschießen ist entschieden – {t} gewinnt!'],
   throwin: ['Einwurf für {t}.'],
   offside: ['Abseits! {p} stand zu weit vorn – die Fahne ist oben.', 'Die Fahne geht hoch: {p} im Abseits. Zugriff außerhalb des Berechtigungsrahmens.'],
   onetwo: ['Doppelpass! {p} und {p2} spielen sich frei.'],
@@ -56,6 +61,7 @@ export class Match {
     this.teams.forEach((T, ti) => { T.players.forEach(p => this.players.push(this.mkPlayer(p, ti))); T.benchP = (T.bench || []).map(p => ({ ...p })); });
     this.ball = { x: PW / 2, y: PH / 2, vx: 0, vy: 0, z: 0, owner: null, mode: 'loose', target: null, from: null, last: null };
     this.kickoff(0); this.freeze = 0; this.lastTouch = null; this.assist = null;
+    if (o.walkout) this.startWalkout();
     this.log('kickoff', { team: 0 });
   }
   mkPlayer(p, ti) {
@@ -106,16 +112,24 @@ export class Match {
     for (let i = 0; i < steps; i++) this.step(dt / steps);
   }
   step(dt) {
-    this.t += dt * (this.sp || this.pen ? 0.4 : 1); this.min = this.t * MIN_PER_SEC; // Unterbrechungen kosten kaum Spielzeit
-    if (!this.halfDone && this.min >= 45 + this.stoppage) { this.halfDone = true; this.stoppage = 0; this.min = 45; this.t = 45 / MIN_PER_SEC; this.log('half'); this.paused = true; this.kickoff(1); this.hooks.onHalf?.(); return; }
-    if (this.min >= 90 + this.stoppage) { this.over = true; this.log('full'); this.hooks.onFull?.(this.result()); return; }
+    if (this.shootout) return this.stepShootout(dt);
+    this.t += dt * (this.sp && this.sp.kind === 'walkout' || (this.pen && this.pen.waiting) ? 0 : this.sp || this.pen ? 0.4 : 1); this.min = this.t * MIN_PER_SEC; // Unterbrechungen kosten kaum Spielzeit
+    if (!this.halfDone && !this.pen && this.min >= 45 + this.stoppage) { this.halfDone = true; this.stoppage = 0; this.min = 45; this.t = 45 / MIN_PER_SEC; this.log('half'); this.paused = true; this.kickoff(1); this.hooks.onHalf?.(); return; }
+    if (!this.pen && this.min >= 90 + this.stoppage) { this.over = true; this.log('full'); this.hooks.onFull?.(this.result()); return; }
     const b = this.ball;
     if (b.owner) this.poss[b.owner.team] += dt;
     for (const p of this.players) if (!p.out) p.minutes += dt * MIN_PER_SEC;
-    if (this.pen) { this.pen.t -= dt; if (this.pen.t <= 0) this.takePenalty(); else this.movePlayers(dt, true); return; }
+    if (this.pen) { const pn = this.pen;
+      if (pn.waiting) { this.movePlayers(dt, true); return; }
+      pn.t -= dt; if (pn.t <= 0.7 && pn.ask && !pn.asked) { pn.asked = true; pn.waiting = true; this.hooks.penaltyChoice?.({ shoot: !!this.teams[pn.ti].me, taker: pn.taker, keeper: this.keeper(1 - pn.ti), shootout: this.shootout }); return; }
+      if (pn.t <= 0) this.takePenalty(); else this.movePlayers(dt, true); return; }
     if (this.sp) { const sp = this.sp; sp.t -= dt; if (sp.wait > 0) { sp.wait -= dt; if (sp.wait <= 0 && sp.kind === 'kickoff') { this.ball.x = PW / 2; this.ball.y = PH / 2; } } sp.el = (sp.el || 0) + dt;
+      if (sp.waiting) { this.movePlayers(dt, true); return; }
+      if (sp.kind === 'walkout') { const arrived = this.players.every(p => p.out || !p.spT || dist(p, p.spT) < 0.9); if (arrived || sp.el > (sp.stage ? 14 : 12)) { sp.hold += dt; if (sp.stage === 0 && sp.hold > 2.6) { sp.stage = 1; sp.hold = 0; sp.el = 0; const T = this.kickoffTargets(0); for (const [p, t] of T) p.spT = t; } else if (sp.stage === 1 && sp.hold > 0.6) { for (const p of this.players) p.spT = null; this.sp = null; this.kickoff(0); this.log('kickoff2', { team: 0 }); return; } } this.movePlayers(dt, true); return; }
       const ready = sp.taker && sp.taker.spT ? dist(sp.taker, sp.taker.spT) < 0.5 : true, all = sp.kind === 'kickoff' ? this.players.every(p => p.out || !p.spT || dist(p, p.spT) < 1.2) : true;
-      if (sp.t <= 0 || (sp.el > (sp.min || 0) && ready && all && sp.el > (sp.min || 0) + 0.5 * (sp.kind !== 'kickoff'))) this.takeSetPiece(); else this.movePlayers(dt, true); return; }
+      const go = sp.t <= 0 || (sp.el > (sp.min || 0) && ready && all && sp.el > (sp.min || 0) + 0.5 * (sp.kind !== 'kickoff'));
+      if (go && sp.ask && !sp.asked) { sp.asked = true; sp.waiting = true; this.hooks.fkChoice?.({ taker: sp.taker, wall: sp.wall.length, dist: Math.round(dist(this.ball, this.goalOf(sp.ti))) }); return; }
+      if (go) this.takeSetPiece(); else this.movePlayers(dt, true); return; }
     if (this.freeze > 0) { this.freeze -= dt; this.movePlayers(dt, true); return; }
     this.movePlayers(dt, false);
     this.moveBall(dt);
@@ -183,7 +197,7 @@ export class Match {
         this.moveTo(p, b, this.spd(p), dt);
       } else if (b.mode === 'pass' && !frozen && (b.target === p || (b.cross && b.target && p.team !== b.target.team && p.pos !== 'TW' && p === this.nearest(p.team, b.target)[0]))) {
         this.moveTo(p, this.predict(), this.spd(p), dt);
-      } else this.moveTo(p, this.targetOf(p), this.spd(p) * (frozen && !this.sp && !this.pen ? 0.6 : this.sp ? (this.sp.kind === 'kickoff' ? (this.sp.wait > 0 ? (this.sp.celeb && p.team === this.sp.celeb.team ? (p === this.sp.celeb.scorer ? 0.9 : 0.85) : 0) : 0.85) : 1.05) : this.pen ? 0.8 : 0.9), dt);
+      } else this.moveTo(p, this.targetOf(p), this.spd(p) * (frozen && !this.sp && !this.pen ? 0.6 : this.sp ? (this.sp.kind === 'walkout' ? (this.sp.stage ? 0.75 : 0.42) : this.sp.kind === 'kickoff' ? (this.sp.wait > 0 ? (this.sp.celeb && p.team === this.sp.celeb.team ? (p === this.sp.celeb.scorer ? 0.9 : 0.85) : 0) : 0.85) : 1.05) : this.pen ? 0.8 : 0.9), dt);
       // Kondition
       const S = this.styleOf(p.team); p.energy = Math.max(0.3, p.energy - dt * (0.0014 + S.press * 0.0038 + (this.instr(p.team) === 'highpress' ? 0.0022 : 0)) * (1.5 - p.kondition / 100) * this.tempoOf(p.team).k * (this.hasCaptain(p.team) ? 0.94 : 1));
     }
@@ -230,6 +244,7 @@ export class Match {
       if (arrived) {
         const ti = b.shooter.team, k = this.keeper(1 - ti);
         const pen = b.penalty; b.penalty = false;
+        if (pen && this.shootout) { this.shootoutResult(ti, b.outcome === 'goal', b.shooter, k); return; }
         if (b.outcome === 'goal') { this.score[ti]++; b.shooter.goals++; b.shooter.rating += pen ? 0.5 : 0.8; if (this.assist && this.assist !== b.shooter && this.assist.team === ti) { this.assist.assists++; this.assist.rating += 0.5; } for (const d of this.alive(1 - ti)) if (d.pos !== 'ST') d.rating -= 0.08; this.log('goal', { team: ti, p: b.shooter, p2: this.assist && this.assist !== b.shooter ? this.assist : null, score: [...this.score], pen }); this.hooks.onGoal?.(ti); this.startRestart('kickoff', 1 - ti, { scorer: b.shooter, team: ti }); this.stoppage += 0.5; }
         else if (b.outcome === 'save') { k.saves++; k.rating += pen ? 0.8 : 0.22; this.log(pen ? 'pen_save' : 'save', { team: ti, p: b.shooter });
           if (!pen && this.r() < 0.32) { this.log('parry', { team: ti, p: b.shooter }); this.startCorner(ti, b.y < PH / 2 ? 0 : 1); } else { this.give(k); this.freeze = 0.5; } }
@@ -310,7 +325,7 @@ export class Match {
     const b = this.ball, g = this.goalOf(p.team), ti = p.team, r = this.r();
     this.shots[ti][0]++; this.xgSum[ti] += xg; this.lastTouch = p; b.last = p; p.rating += 0.08;
     // Block durch Verteidiger in der Schusslinie
-    let blocker = null; if (o.wall) { const w = o.wall.filter(q => !q.out); if (w.length && this.r() < 0.26) blocker = w[Math.floor(this.r() * w.length)]; } else if (!o.header) for (const q of this.alive(1 - ti)) { if (q.pos === 'TW') continue; const t = ((q.x - p.x) * (g.x - p.x) + (q.y - p.y) * (g.y - p.y)) / (dist(p, g) ** 2); if (t > 0.05 && t < 0.9) { const px = p.x + (g.x - p.x) * t, py = p.y + (g.y - p.y) * t; if (Math.hypot(q.x - px, q.y - py) < 1.1 && this.r() < 0.55 + q.abwehr / 300) { blocker = q; break; } } }
+    let blocker = null; if (o.wall) { const w = o.wall.filter(q => !q.out); if (w.length && this.r() < (o.wallP ?? 0.26)) blocker = w[Math.floor(this.r() * w.length)]; } else if (!o.header) for (const q of this.alive(1 - ti)) { if (q.pos === 'TW') continue; const t = ((q.x - p.x) * (g.x - p.x) + (q.y - p.y) * (g.y - p.y)) / (dist(p, g) ** 2); if (t > 0.05 && t < 0.9) { const px = p.x + (g.x - p.x) * t, py = p.y + (g.y - p.y) * t; if (Math.hypot(q.x - px, q.y - py) < 1.1 && this.r() < 0.55 + q.abwehr / 300) { blocker = q; break; } } }
     let outcome, ty;
     if (blocker) { outcome = 'block'; ty = g.y; }
     else if (r < xg) { outcome = 'goal'; ty = g.y + (this.r() - 0.5) * (GOAL_W - 1.2); this.shots[ti][1]++; }
@@ -412,8 +427,14 @@ export class Match {
     def.slice(wn, wn + 4).forEach((q, i) => { const a = atk[i]; if (a) q.spT = { x: a.spT.x + dir * 0.9, y: a.spT.y }; });
     const k = this.keeper(1 - ti); if (k) k.spT = { x: g.x + dir * 0.9, y: PH / 2 + clamp((b.y - PH / 2) * 0.12, -1.5, 1.5) };
     const direct = ul < 30 && Math.abs(b.y - PH / 2) < 19;
-    this.sp = { kind: 'fk', ti, taker, t: 6, min: 3, wall, direct }; this.spOn = true; this.assist = null; this.freeze = 0;
+    this.sp = { kind: 'fk', ti, taker, t: 6, min: 3, wall, direct, ask: direct && !!this.hooks.fkChoice && !!this.teams[ti].me && this.speed <= 2 }; this.spOn = true; this.assist = null; this.freeze = 0;
     this.log('freekick', { team: ti, p: taker });
+  }
+  // Einlaufen: aus dem Tunnel an die Mittellinie, Aufstellung vor der Haupttribüne, dann auf die Positionen
+  startWalkout() {
+    const b = this.ball; b.owner = null; b.mode = 'held'; b.x = PW / 2; b.y = PH / 2;
+    for (let ti = 0; ti < 2; ti++) this.alive(ti).forEach((p, i) => { p.x = PW / 2 + (ti ? 0.9 : -0.9); p.y = -3 - i * 0.7; p.vx = p.vy = 0; p.spT = { x: PW / 2 + (ti ? 1 : -1) * (2.2 + i * 1.15), y: 5 }; });
+    this.sp = { kind: 'walkout', ti: 0, taker: null, t: 40, stage: 0, hold: 0 };
   }
   startRestart(kind, ti, at) {
     const b = this.ball; b.owner = null; b.mode = 'held'; b.vx = b.vy = 0; b.cross = false; this.assist = null; for (const p of this.players) p.spT = null;
@@ -446,36 +467,72 @@ export class Match {
     }
     // Freistoß: direkt aufs Tor oder hoch in den Strafraum
     const g = this.goalOf(ti), d = dist(this.ball, g); this.give(taker, true);
-    if (sp.direct && this.r() < 0.72) { const ang = Math.max(0.35, 1 - Math.abs(this.ball.y - g.y) / 30); const xg = clamp((0.05 + 0.1 * Math.exp(-(d - 17) / 7)) * ang * (0.55 + taker.schuss / 100 * 0.6 + taker.technik / 100 * 0.25) * this.W.xg, 0.02, 0.2); this.shoot(taker, xg, { wall: sp.wall, fk: true }); return; }
+    if (sp.choice === 'cross') { const q = this.crossTarget(ti, taker); if (q) { this.cross(taker, q, true); return; } }
+    if (sp.choice || (sp.direct && this.r() < 0.72)) { const ang = Math.max(0.35, 1 - Math.abs(this.ball.y - g.y) / 30); const xg = clamp((0.05 + 0.1 * Math.exp(-(d - 17) / 7)) * ang * (0.55 + taker.schuss / 100 * 0.6 + taker.technik / 100 * 0.25) * this.W.xg, 0.02, 0.2); const ch = sp.choice, mul = ch === 'top' ? 1.25 : ch === 'low' ? 0.9 : 1, wp = ch === 'top' ? 0.16 : ch === 'low' ? 0.38 : 0.26; this.shoot(taker, xg * mul, { wall: sp.wall, fk: true, wallP: wp, missUp: ch === 'top' ? 0.06 : 0 }); return; }
     const q = this.crossTarget(ti, taker); if (q) this.cross(taker, q, true);
   }
   // ---------- Elfmeter ----------
-  startPenalty(ti, fouler) {
+  startPenalty(ti, fouler, takerIn) {
     const T = this.teams[ti], alive = this.alive(ti);
-    const taker = alive.find(p => p.id === T.penTaker && p.pos !== 'TW') || alive.filter(p => p.pos !== 'TW').sort((a, b) => b.schuss - a.schuss)[0];
+    const taker = takerIn || alive.find(p => p.id === T.penTaker && p.pos !== 'TW') || alive.filter(p => p.pos !== 'TW').sort((a, b) => b.schuss - a.schuss)[0];
     const g = this.goalOf(ti), spot = { x: g.x + (ti === 0 ? -11 : 11), y: PH / 2 };
     if (fouler && this.r() < 0.35) { fouler.yellow++; fouler.rating -= 0.15; this.log('yellow', { team: fouler.team, p: fouler }); }
     this.ball.owner = null; this.ball.mode = 'held'; this.ball.vx = this.ball.vy = 0; this.ball.x = spot.x; this.ball.y = spot.y;
     for (const p of this.players) p.spT = null;
     taker.spT = { x: spot.x + (ti === 0 ? -1.4 : 1.4), y: spot.y };
     // alle anderen an den Strafraum, Torwart auf die Linie
-    for (const p of this.players) { if (p.out || p === taker) continue; if (p.pos === 'TW' && p.team !== ti) { p.spT = { x: g.x + (ti === 0 ? -0.6 : 0.6), y: PH / 2 }; continue; } if (p.pos === 'TW') continue; if (Math.abs(p.x - g.x) < 22) p.spT = { x: g.x + (ti === 0 ? -21 : 21) - (ti === 0 ? this.r() * 4 : -this.r() * 4), y: clamp(p.y, PH / 2 - 18, PH / 2 + 18) }; }
-    this.pen = { ti, taker, t: 3.4 }; this.stoppage += 0.6;
-    this.log('penalty', { team: ti, p: taker });
+    for (const p of this.players) { if (p.out || p === taker) continue; if (p.pos === 'TW' && p.team !== ti) { p.spT = { x: g.x + (ti === 0 ? -0.6 : 0.6), y: PH / 2 }; continue; }
+      if (this.shootout) { const k = this.players.indexOf(p) % 11, a = k / 11 * Math.PI * 2; p.spT = { x: PW / 2 + Math.cos(a) * 6 + (p.team === 0 ? -1.2 : 1.2), y: PH / 2 + Math.sin(a) * 6 }; if (p.pos === 'TW') p.spT = { x: PW / 2 + (p.team === 0 ? -14 : 14), y: PH / 2 + 10 }; continue; }
+      if (p.pos === 'TW') continue; if (Math.abs(p.x - g.x) < 22) p.spT = { x: g.x + (ti === 0 ? -21 : 21) - (ti === 0 ? this.r() * 4 : -this.r() * 4), y: clamp(p.y, PH / 2 - 18, PH / 2 + 18) }; }
+    const ask = !!this.hooks.penaltyChoice && (this.teams[ti].me || this.teams[1 - ti].me) && this.speed <= 2;
+    this.pen = { ti, taker, t: this.shootout ? 3.0 : 3.4, ask }; if (!this.shootout) this.stoppage += 0.6;
+    this.log(this.shootout ? 'so_kick' : 'penalty', { team: ti, p: taker });
   }
+  // Wahl aus der Oberfläche: Schütze { col: -1|0|1, high } (aus Sicht hinter dem Schützen) oder Torwart { dive: -1|0|1 }
+  chooseFreeKick(c) { if (this.sp && this.sp.kind === 'fk') { this.sp.choice = c; this.sp.waiting = false; } }
+  choosePenalty(c) { const pn = this.pen; if (!pn) return; if (c.col !== undefined) pn.aim = { col: c.col, high: !!c.high }; if (c.dive !== undefined) pn.dive = c.dive; pn.waiting = false; pn.t = Math.min(pn.t, 0.5); }
   takePenalty() {
-    const { ti, taker } = this.pen; this.pen = null; for (const p of this.players) p.spT = null; const b = this.ball, g = this.goalOf(ti), k = this.keeper(1 - ti);
+    const { ti, taker } = this.pen; if (this.pen.aim) this.penAim = this.pen.aim; if (this.pen.dive !== undefined) this.penDive = this.pen.dive; this.pen = null; for (const p of this.players) p.spT = null; const b = this.ball, g = this.goalOf(ti), k = this.keeper(1 - ti);
     taker.x = b.x + (ti === 0 ? -1.2 : 1.2); taker.y = b.y; k.x = g.x + (ti === 0 ? -0.6 : 0.6);
     this.shots[ti][0]++; this.xgSum[ti] += 0.76; this.lastTouch = taker; b.last = taker;
-    const pg = clamp(0.62 + taker.schuss / 100 * 0.25 - k.abwehr / 100 * 0.12, 0.45, 0.88), r = this.r();
-    let outcome, ty;
-    if (r < pg) { outcome = 'goal'; ty = g.y + (this.r() < 0.5 ? -1 : 1) * (1.5 + this.r() * 1.6); this.shots[ti][1]++; }
-    else if (r < pg + 0.22) { outcome = 'save'; ty = g.y + (this.r() - 0.5) * 4; this.shots[ti][1]++; }
-    else if (r < pg + 0.27) { outcome = 'post'; ty = g.y + (this.r() < 0.5 ? -1 : 1) * GOAL_W / 2; }
-    else { outcome = 'wide'; ty = g.y + (this.r() < 0.5 ? -1 : 1) * (GOAL_W / 2 + 0.8 + this.r() * 2); }
+    // Ecke (links/Mitte/rechts, hoch/flach) gegen die Sprungrichtung des Torwarts
+    const aim = this.penAim || (() => { const x = this.r(); return { col: x < 0.38 ? -1 : x < 0.62 ? 0 : 1, high: this.r() < 0.3 }; })(), dive = this.penDive ?? (() => { const x = this.r(); return x < 0.42 ? -1 : x < 0.58 ? 0 : 1; })();
+    this.penAim = null; this.penDive = null;
+    const ws = ti === 0 ? -1 : 1, skill = taker.schuss / 100, miss = (aim.high ? 0.17 : aim.col ? 0.06 : 0.025) * (1.45 - skill), r = this.r();
+    let outcome, ty = g.y + ws * aim.col * 2.55;
+    if (r < miss) { outcome = this.r() < 0.35 ? 'post' : 'wide'; ty = outcome === 'post' ? g.y + ws * (aim.col || (this.r() < 0.5 ? -1 : 1)) * GOAL_W / 2 : g.y + ws * (aim.col || 1) * (GOAL_W / 2 + 0.6 + this.r() * 1.2); }
+    else if (dive === aim.col && this.r() < clamp((aim.high ? 0.32 : aim.col ? 0.68 : 0.82) * (0.55 + k.abwehr / 100 * 0.6), 0.15, 0.92)) { outcome = 'save'; this.shots[ti][1]++; }
+    else { outcome = 'goal'; this.shots[ti][1]++; }
     const sp = 30, dd = Math.hypot(g.x - b.x, ty - b.y) || 1;
     b.owner = null; b.mode = 'shot'; b.shooter = taker; b.outcome = outcome; b.blocker = null; b.penalty = true; b.vx = (g.x - b.x) / dd * sp; b.vy = (ty - b.y) / dd * sp;
+    b.aimHigh = aim.high && outcome !== 'wide' ? 2.0 : aim.high ? 2.9 : 0.35; b.keeperDive = { y: g.y + ws * dive * 2.4, col: dive };
     this.assist = null;
+  }
+  // ---------- Elfmeterschießen ----------
+  startShootout() {
+    this.over = false; this.paused = false; this.sp = null; this.freeze = 0; for (const p of this.players) p.spT = null;
+    const order = (ti) => { const T = this.teams[ti], a = this.alive(ti).filter(p => p.pos !== 'TW').sort((x, y) => (y.id === T.penTaker) - (x.id === T.penTaker) || y.schuss - x.schuss); return a; };
+    this.shootout = { score: [0, 0], kicks: [0, 0], log: [[], []], order: [order(0), order(1)], turn: this.r() < 0.5 ? 0 : 1, wait: 2.5, done: false };
+    this.log('shootout', { team: this.shootout.turn });
+  }
+  stepShootout(dt) {
+    const so = this.shootout; if (so.done) return;
+    if (this.pen) { const pn = this.pen; if (pn.waiting) { this.movePlayers(dt, true); return; } pn.t -= dt; if (pn.t <= 0.7 && pn.ask && !pn.asked) { pn.asked = true; pn.waiting = true; this.hooks.penaltyChoice?.({ shoot: !!this.teams[pn.ti].me, taker: pn.taker, keeper: this.keeper(1 - pn.ti), shootout: so }); return; } if (pn.t <= 0) this.takePenalty(); else this.movePlayers(dt, true); return; }
+    if (this.ball.mode === 'shot') { this.moveBall(dt); return; }
+    if (so.wait > 0) { so.wait -= dt; this.movePlayers(dt, true); return; }
+    const ti = so.turn, list = so.order[ti]; if (!list.length) { so.done = true; return; }
+    const taker = list[so.kicks[ti] % list.length]; this.startPenalty(ti, null, taker);
+  }
+  shootoutResult(ti, scored, taker, keeper) {
+    const so = this.shootout; so.kicks[ti]++; if (scored) so.score[ti]++; so.log[ti].push(scored ? 1 : 0);
+    this.log(scored ? 'so_goal' : 'so_miss', { team: ti, p: taker });
+    this.give(keeper); this.ball.owner = null; this.ball.mode = 'held'; this.ball.x = PW / 2; this.ball.y = PH / 2;
+    const [a, b] = so.score, [ka, kb] = so.kicks, left = (k) => Math.max(0, 5 - k);
+    let winner = null;
+    if (ka <= 5 && kb <= 5) { if (a > b + left(kb)) winner = 0; else if (b > a + left(ka)) winner = 1; else if (ka === 5 && kb === 5 && a !== b) winner = a > b ? 0 : 1; }
+    else if (ka === kb && a !== b) winner = a > b ? 0 : 1;
+    if (winner !== null) { so.done = true; so.winner = winner; this.log('so_end', { team: winner, score: [a, b] }); this.over = true; this.hooks.onShootoutEnd?.(so); return; }
+    so.turn = 1 - ti; so.wait = 1.8;
   }
   // Kabinenansprache (eigenes Team)
   teamTalk(ti, kind) {
@@ -516,7 +573,7 @@ export class Match {
   }
   result() {
     const me = this.teams[0].me ? 0 : 1, mine = this.players.filter(p => p.team === me);
-    return { gh: this.score[0], ga: this.score[1], mine: me === 0 ? 'home' : 'away', events: this.events, shots: this.shots, poss: this.poss, corners: this.corners, fouls: this.fouls, offsides: this.offsides, xg: this.xgSum.map(v => Math.round(v * 100) / 100),
+    return { gh: this.score[0], ga: this.score[1], mine: me === 0 ? 'home' : 'away', events: this.events, shots: this.shots, poss: this.poss, corners: this.corners, fouls: this.fouls, offsides: this.offsides, so: this.shootout ? [...this.shootout.score] : null, xg: this.xgSum.map(v => Math.round(v * 100) / 100),
       played: mine.map(p => p.id), minutes: Object.fromEntries(mine.map(p => [p.id, Math.round(p.minutes)])), ratings: Object.fromEntries(mine.map(p => [p.id, Math.round(clamp(p.rating, 1, 10) * 10) / 10])),
       yellows: mine.filter(p => p.yellow >= 1).map(p => p.id), reds: mine.filter(p => p.red).map(p => p.id), injuries: mine.filter(p => p.injured).map(p => p.id),
       scorers: mine.flatMap(p => Array(p.goals).fill(p.id)), assists: mine.flatMap(p => Array(p.assists).fill(p.id)), players: this.players };
