@@ -137,6 +137,12 @@ export class Pitch3D {
     this.crowdColors(null); body.thinInstanceSetBuffer('color', this.crowd.col, 4, false); arms.thinInstanceSetBuffer('color', this.crowd.col, 4, false);
     { const SK = ['#f1c9a5', '#d9a479', '#8d5524', '#c68642', '#ffdbac', '#5c3a21', '#e0ac69']; seats.forEach((s, i) => { const c = B.Color3.FromHexString(SK[Math.floor(s.k * 7919) % SK.length]); this.crowd.skin.set([c.r * 0.8, c.g * 0.8, c.b * 0.8, 1], i * 4); }); head.thinInstanceSetBuffer('color', this.crowd.skin, 4, true); }
     body.alwaysSelectAsActiveMesh = arms.alwaysSelectAsActiveMesh = head.alwaysSelectAsActiveMesh = true;
+    // Fahnen in den Fanblöcken und Blitzlichter (nachts) aus dem Publikum
+    { const { DynamicTexture, StandardMaterial, MeshBuilder, ParticleSystem, Color4 } = B; const front = seats.filter(s => s.y < 4.5).sort((a, b) => a.k - b.k); this.flags2 = [];
+      for (let i = 0; i < Math.min(18, front.length); i += 1) { const s = front[Math.floor(i * front.length / 18)]; const tx = new DynamicTexture('fl' + i, { width: 64, height: 40 }, scene, false), m = new StandardMaterial('flm' + i, scene); m.diffuseTexture = tx; m.backFaceCulling = false; m.specularColor = Color3.Black(); m.emissiveColor = new Color3(0.25, 0.25, 0.25);
+        const q = MeshBuilder.CreatePlane('flag2', { width: 2.2, height: 1.4 }, scene); q.material = m; q.position.set(s.x, s.y + 2.3, s.z); q.rotation.y = s.ry + Math.PI; q.isPickable = false; this.flags2.push({ q, tx, s, ph: Math.random() * 6 }); }
+      const fl = this.flashPs = new ParticleSystem('flash', 300, scene); fl.particleTexture = this.ptex; fl.emitter = new Vector3(0, 0, 0); fl.minSize = 0.5; fl.maxSize = 1.1; fl.minLifeTime = 0.05; fl.maxLifeTime = 0.11; fl.emitRate = 0; fl.minEmitPower = 0; fl.maxEmitPower = 0; fl.blendMode = ParticleSystem.BLENDMODE_ADD; fl.color1 = new Color4(1, 1, 1, 1); fl.color2 = new Color4(0.85, 0.92, 1, 1); fl.colorDead = new Color4(0, 0, 0, 0); fl.updateSpeed = 0.016;
+      fl.startPositionFunction = (wm, pos) => { const s = seats[Math.floor(Math.random() * seats.length)]; pos.set(s.x, s.y + 1.1, s.z); }; fl.start(); }
     // Die Tribünenfläche zeigt jetzt Sitzreihen statt gemalter Zuschauer
     if (this.crowdMat) { const t = this.crowdMat.diffuseTexture, g = t.getContext(); g.fillStyle = '#1a2124'; g.fillRect(0, 0, 1024, 256); for (let r = 0; r < 256; r += 16) { g.fillStyle = '#2b3438'; g.fillRect(0, r + 6, 1024, 7); g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(0, r + 13, 1024, 3); } t.update(); this.crowdMat.emissiveColor = new Color3(0.18, 0.18, 0.18); }
   }
@@ -147,6 +153,8 @@ export class Pitch3D {
     const neutral = ['#d8d8d8', '#2a2f33', '#5a6b73', '#8a6a4a', '#b8c4cc'];
     C.seats.forEach((s, i) => { const awayBlock = s.x > PW * 0.72 && s.z > PH * 0.3; const pal = s.k < 0.18 ? neutral : awayBlock ? away : s.k < 0.3 ? away : home; const c = Color3.FromHexString(pal[Math.floor(s.k * 997) % pal.length]); const sh = 0.8 + s.k * 0.35; C.col.set([c.r * sh, c.g * sh, c.b * sh, 1], i * 4); });
     if (C.body.thinInstanceCount) { C.body.thinInstanceBufferUpdated('color'); C.arms.thinInstanceBufferUpdated('color'); }
+    for (const f of this.flags2 || []) { const g = f.tx.getContext(), awayBlock = f.s.x > PW * 0.72 && f.s.z > PH * 0.3, pal = awayBlock ? away : home, kind = Math.floor(f.s.k * 1000) % 3; g.fillStyle = pal[0]; g.fillRect(0, 0, 64, 40); g.fillStyle = pal[1] === pal[0] ? '#ffffff' : pal[1];
+      if (kind === 0) for (let x = 0; x < 64; x += 16) g.fillRect(x, 0, 8, 40); else if (kind === 1) g.fillRect(0, 14, 64, 12); else { g.beginPath(); g.moveTo(0, 0); g.lineTo(64, 40); g.lineTo(64, 26); g.lineTo(18, 0); g.fill(); } f.tx.update(); }
   }
   // Haltung: leichtes Wippen, nach Toren Aufspringen mit erhobenen Armen
   crowdPose(excite, force) {
@@ -357,11 +365,12 @@ export class Pitch3D {
       const seat = MeshBuilder.CreateBox('dugs', { width: 6.6, height: 0.5, depth: 0.7 }, scene); seat.position = new Vector3(bx, 0.25, PH + 4.0); seat.material = this.cmat(bx < PW / 2 ? '#3ddc84' : '#ff6a3d');
     }
     // Anzeigetafel über der Gegentribüne
-    { const sc = this.scoreTex = new DynamicTexture('score', { width: 1024, height: 256 }, scene, false);
+    // LED-Videowand: Spielstand oben, darunter Live-Radar, Statistik oder Torjubel
+    { const sc = this.scoreTex = new DynamicTexture('score', { width: 1024, height: 448 }, scene, false);
       const sm = new StandardMaterial('scm', scene); sm.diffuseTexture = sc; sm.emissiveTexture = sc; sm.emissiveColor = new Color3(1, 1, 1); sm.disableLighting = true;
-      const scr = MeshBuilder.CreatePlane('screen', { width: 14, height: 3.5 }, scene); scr.position = new Vector3(PW - 6, 9.5, PH + MZ + 1.2); scr.rotation.x = -0.25; scr.material = sm;
-      const frame = MeshBuilder.CreateBox('scf', { width: 14.8, height: 4.2, depth: 0.4 }, scene); frame.position = new Vector3(PW - 6, 9.5, PH + MZ + 1.45); frame.rotation.x = -0.25; frame.material = this.cmat('#111a1c');
-      for (const lx of [-5, 5]) { const leg = MeshBuilder.CreateCylinder('scl', { height: 8, diameter: 0.4 }, scene); leg.position = new Vector3(PW - 6 + lx, 4, PH + MZ + 1.8); leg.material = this.cmat('#2d3a3d'); }
+      const scr = MeshBuilder.CreatePlane('screen', { width: 16, height: 7 }, scene); scr.position = new Vector3(PW - 6, 11, PH + MZ + 1.2); scr.rotation.x = -0.25; scr.material = sm;
+      const frame = MeshBuilder.CreateBox('scf', { width: 16.8, height: 7.7, depth: 0.4 }, scene); frame.position = new Vector3(PW - 6, 11, PH + MZ + 1.45); frame.rotation.x = -0.25; frame.material = this.cmat('#111a1c');
+      for (const lx of [-6, 6]) { const leg = MeshBuilder.CreateCylinder('scl', { height: 8, diameter: 0.45 }, scene); leg.position = new Vector3(PW - 6 + lx, 4, PH + MZ + 1.8); leg.material = this.cmat('#2d3a3d'); }
       this.scoreKey = ''; }
     // Flugspur bei Schüssen
     { const tr = this.trail = new ParticleSystem('trail', 300, scene); tr.particleTexture = null; tr.emitter = new Vector3(0, -10, 0); tr.minSize = 0.12; tr.maxSize = 0.22; tr.minLifeTime = 0.25; tr.maxLifeTime = 0.4; tr.emitRate = 0; tr.minEmitPower = 0; tr.maxEmitPower = 0.1; tr.color1 = new B.Color4(1, 1, 1, 0.55); tr.color2 = new B.Color4(0.8, 1, 0.9, 0.35); tr.colorDead = new B.Color4(1, 1, 1, 0); tr.blendMode = ParticleSystem.BLENDMODE_ADD; tr.start(); }
@@ -370,9 +379,20 @@ export class Pitch3D {
   }
   buildBall() {
     const { MeshBuilder, DynamicTexture, StandardMaterial, Color3 } = B, scene = this.scene;
-    const tex = new DynamicTexture('ballt', { width: 256, height: 128 }, scene, true); const c = tex.getContext(); c.fillStyle = '#f6f6f6'; c.fillRect(0, 0, 256, 128); c.fillStyle = '#15181c';
-    for (let i = 0; i < 12; i++) { const x = (i % 6) * 42 + (i >= 6 ? 21 : 0) + 10, y = i >= 6 ? 90 : 36; c.beginPath(); for (let k = 0; k < 5; k++) { const a = -Math.PI / 2 + k * Math.PI * 2 / 5; c.lineTo(x + Math.cos(a) * 13, y + Math.sin(a) * 13); } c.closePath(); c.fill(); } tex.update();
-    this.ball = MeshBuilder.CreateSphere('ball', { diameter: 0.5, segments: 12 }, scene); const m = new StandardMaterial('bm', scene); m.diffuseTexture = tex; m.specularColor = new Color3(0.4, 0.4, 0.4); this.ball.material = m;
+    // Klassischer Fußball (abgestumpftes Ikosaeder): 12 Fünfecke, 20 Sechsecke, Nähte – als Kugelpanorama berechnet
+    const TW = 512, TH = 256, tex = new DynamicTexture('ballt', { width: TW, height: TH }, scene, true), c = tex.getContext(), img = c.createImageData(TW, TH), d = img.data;
+    const t = (1 + Math.sqrt(5)) / 2, nrm = (v) => { const l = Math.hypot(...v); return v.map(x => x / l); };
+    const P = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]].map(nrm);
+    const F = []; for (let i = 0; i < 12; i++) for (let j = i + 1; j < 12; j++) for (let k = j + 1; k < 12; k++) { const dd = (a, b) => Math.hypot(P[a][0] - P[b][0], P[a][1] - P[b][1], P[a][2] - P[b][2]); if (dd(i, j) < 1.1 && dd(j, k) < 1.1 && dd(i, k) < 1.1) F.push(nrm([P[i][0] + P[j][0] + P[k][0], P[i][1] + P[j][1] + P[k][1], P[i][2] + P[j][2] + P[k][2]])); }
+    const C = [...P.map(v => [v, 1]), ...F.map(v => [v, 0])];
+    for (let y = 0; y < TH; y++) for (let x = 0; x < TW; x++) {
+      const lon = (x + 0.5) / TW * Math.PI * 2, lat = (0.5 - (y + 0.5) / TH) * Math.PI, v = [Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon)];
+      let b1 = -2, b2 = -2, bi = 0; for (let i = 0; i < C.length; i++) { const q = C[i][0], dt = v[0] * q[0] + v[1] * q[1] + v[2] * q[2] + (C[i][1] ? 0.012 : 0); if (dt > b1) { b2 = b1; b1 = dt; bi = i; } else if (dt > b2) b2 = dt; }
+      const seam = b1 - b2 < 0.012, pent = C[bi][1], o = (y * TW + x) * 4, shade = 0.94 + 0.06 * (b1 - 0.9) * 10;
+      const col = seam ? [70, 74, 78] : pent ? [22, 26, 30] : [246, 247, 245]; for (let k = 0; k < 3; k++) d[o + k] = Math.max(0, Math.min(255, col[k] * shade)); d[o + 3] = 255;
+    }
+    c.putImageData(img, 0, 0); tex.update();
+    this.ball = MeshBuilder.CreateSphere('ball', { diameter: 0.5, segments: 18 }, scene); const m = new StandardMaterial('bm', scene); m.diffuseTexture = tex; m.specularColor = new Color3(0.5, 0.5, 0.5); m.specularPower = 48; this.ball.material = m; this.ball.rotationQuaternion = B.Quaternion.Identity();
     this.ballBlob = MeshBuilder.CreateDisc('bblob', { radius: 0.32, tessellation: 16 }, scene); this.ballBlob.rotation.x = Math.PI / 2; this.ballBlob.material = this.blobMat; this.ballBlob.position.y = 0.02;
   }
   buildFx() {
@@ -383,6 +403,10 @@ export class Pitch3D {
     ps.minEmitBox = new Vector3(-0.3, 0, -0.3); ps.maxEmitBox = new Vector3(0.3, 0.5, 0.3); ps.minSize = 0.25; ps.maxSize = 0.6; ps.minLifeTime = 0.7; ps.maxLifeTime = 1.4;
     ps.emitRate = 0; ps.direction1 = new Vector3(-4, 6, -4); ps.direction2 = new Vector3(4, 12, 4); ps.minEmitPower = 1; ps.maxEmitPower = 2.2; ps.gravity = new Vector3(0, -14, 0); ps.updateSpeed = 0.012; ps.blendMode = ParticleSystem.BLENDMODE_STANDARD;
     ps.color1 = new Color4(1, 1, 1, 1); ps.color2 = new Color4(0.3, 0.9, 0.5, 1); ps.colorDead = new Color4(0, 0, 0, 0); ps.start();
+    // Rasenstücke und Staub bei Grätschen und Schüssen
+    { const tp = this.turf = new ParticleSystem('turf', 400, scene); tp.particleTexture = t; tp.emitter = new Vector3(0, 0, 0); tp.minEmitBox = new Vector3(-0.3, 0, -0.3); tp.maxEmitBox = new Vector3(0.3, 0.1, 0.3); tp.minSize = 0.06; tp.maxSize = 0.16; tp.minLifeTime = 0.4; tp.maxLifeTime = 0.9;
+      tp.emitRate = 0; tp.direction1 = new Vector3(-1.5, 2.5, -1.5); tp.direction2 = new Vector3(1.5, 4.5, 1.5); tp.minEmitPower = 0.6; tp.maxEmitPower = 1.6; tp.gravity = new Vector3(0, -9.8, 0); tp.updateSpeed = 0.014; tp.blendMode = ParticleSystem.BLENDMODE_STANDARD;
+      tp.color1 = new Color4(0.22, 0.5, 0.2, 1); tp.color2 = new Color4(0.42, 0.33, 0.2, 1); tp.colorDead = new Color4(0.2, 0.3, 0.15, 0); tp.start(); }
     // Feuerwerk über den Tribünen
     const fw = this.fwPs = new ParticleSystem('fw', 3000, scene); fw.particleTexture = t; fw.emitter = new Vector3(PW / 2, 30, PH / 2);
     fw.minEmitBox = new Vector3(0, 0, 0); fw.maxEmitBox = new Vector3(0, 0, 0); fw.minSize = 0.5; fw.maxSize = 1.1; fw.minLifeTime = 1.1; fw.maxLifeTime = 2.0;
@@ -535,9 +559,10 @@ export class Pitch3D {
     }
     else if ((e.type === 'header' || e.type === 'clear') && e.p && this.mx) act(e.p, 'header');
     else if ((e.type === 'claim') && this.mx) { const k = M.keeper(1 - e.team); if (k) act(k, 'catch'); }
-    else if (e.type === 'tackle' && e.p) { if (this.mx) act(e.p, 'tackle'); else this.anim.set(e.p, { kind: 'slide', until: now + 700 }); }
+    if ((e.type === 'tackle' || e.type === 'injury') && e.p) this.turfBurst(e.p.x, e.p.y, e.type === 'tackle' ? 40 : 20);
+    if (e.type === 'tackle' && e.p) { if (this.mx) act(e.p, 'tackle'); else this.anim.set(e.p, { kind: 'slide', until: now + 700 }); }
     else if (e.type === 'injury' && e.p && this.mx) act(e.p, 'trip', { next: { kind: 'down', ms: 2200, then: 'standup' } });
-    else if (e.type === 'goal') { this.crowdPulse = 1; const gx = M.goalOf(e.team).x; this.netHit = { side: gx > PW / 2 ? 1 : 0, t: performance.now() }; }
+    else if (e.type === 'goal') { this.sbGoal = { name: e.p ? e.p.name : '', color: M.teams[e.team].color || '#3ddc84', until: performance.now() + 9000 }; this.crowdPulse = 1; const gx = M.goalOf(e.team).x; this.netHit = { side: gx > PW / 2 ? 1 : 0, t: performance.now() }; }
     else if (e.type === 'yellow' || e.type === 'red') { if (e.p) this.anim.set(e.p, { kind: 'protest', until: now + 1500 }); }
   }
   // Torwiederholung: letzte Sekunden aus einer Kamera hinter dem Tor, in Zeitlupe. Gibt die Dauer in ms zurück (0 = keine Aufnahme).
@@ -604,7 +629,8 @@ export class Pitch3D {
   // Feuerwerk an/aus (Meisterfeier)
   setFireworks(on) { this.fw = on; }
   // Torjubel: Schütze reißt die Arme hoch, Kamera fährt heran
-  celebrate(p) { if (p) this.celeb = { p, until: performance.now() + 2100 }; }
+  turfBurst(x, z, n = 30) { if (!this.turf || this.quality === 0) return; this.turf.emitter = new B.Vector3(x, 0.05, z); this.turf.manualEmitCount = n; }
+  celebrate(p) { if (p) this.celeb = { p, until: performance.now() + 4200 }; }
   resize(w, h) { this.w = w; this.h = h; this.rot = h > w * 1.15; this.engine.resize(); this.cam.fov = this.rot ? 0.95 : 0.78; }
   goalFlash(team) { this.flash = 1; this.shake = 0.7; }
   burst(x, y, color) {
@@ -651,7 +677,7 @@ export class Pitch3D {
     else if (an && (an.kind === 'dive' || an.kind === 'diveL' || an.kind === 'diveR')) { const k = 1 - (an.until - now) / 950, kk = Math.sin(Math.min(1, k * 1.25) * Math.PI); f.root.rotation.z = (an.side || 1) * 1.3 * kk; f.root.position.y = 0.5 * kk; tw = { Jump_Loop: 1 }; rate = 16; }
     else if (an && an.kind === 'protest') tw = { Idle_No_Loop: 1 };
     else if (an && an.kind === 'throw') { tw = { OverhandThrow: 1 }; sp = { OverhandThrow: 1.6 }; rate = 14; }
-    else if (s.celebrating || s.happy) {
+    else if ((s.celebrating && v < 2.6) || s.happy) {
       if (MX) { const scorer = p === this.celeb?.p; tw = scorer ? { M_cheer: 1 } : s.happy ? (p.num % 3 === 0 ? { M_victory: 1 } : p.num % 3 === 1 ? { M_cheer: 1 } : { M_fistpump: 1 }) : (p.num % 2 ? { M_fistpump: 1 } : { M_cheer: 1 }); sp = { M_cheer: 1.1, M_fistpump: 1.1, M_victory: 1 }; }
       else { tw = (p.num % 2 || p === this.celeb?.p) ? { Dance_Loop: 1 } : { Yes: 1 }; sp = { Dance_Loop: 1.15, Yes: 1.1 }; }
     }
@@ -686,7 +712,7 @@ export class Pitch3D {
       if (now - R.t0 > R.dur) { this.replay = null; rp = null; b = M.ball; }
     }
     // Abschlag/Pass: Beinschwung des Schützen, Kick-Sound-Hinweis
-    if (!rp) { if (this.prevMode === 'held' && (b.mode === 'pass' || b.mode === 'shot')) { const k = b.mode === 'pass' ? b.from : b.shooter; if (k) this.anim.set(k, this.actionFor(k, b, M, now)); this.kicked = true; }
+    if (!rp) { if (this.prevMode === 'held' && (b.mode === 'pass' || b.mode === 'shot')) { const k = b.mode === 'pass' ? b.from : b.shooter; if (k) { this.anim.set(k, this.actionFor(k, b, M, now)); if (b.mode === 'shot' && !b.header) this.turfBurst(k.x, k.y, 14); } this.kicked = true; }
       if (this.mx && this.prevMode === 'pass' && b.mode === 'held' && b.owner && this.lastFlightH > 1.6 && b.owner.pos !== 'TW') { const c = ONCE.header; this.anim.set(b.owner, { kind: 'header', t0: now, until: now + c.len / c.sp * 1000 }); } this.prevMode = b.mode; }
     // Spieler
     for (const [p, f] of this.figs) {
@@ -719,7 +745,7 @@ export class Pitch3D {
         else if (an.kind === 'slide') { const kk = Math.sin(Math.min(1, k) * Math.PI); P = { lean: -0.6 * kk, drop: 0.55 * kk, hipL: -1.45 * kk, knL: 0.05, hipR: -0.35 * kk, knR: 1.6 * kk, shL: 0.6 * kk, shR: -0.9 * kk, spreadL: 0.6, spreadR: 0.4, elL: -0.2, elR: -0.4, head: 0.3 * kk }; }
         else if (an.kind === 'protest') { const kk = Math.abs(Math.sin(now / 160)); P = { ...P, shL: -1.5 - kk * 0.5, shR: -1.5 - kk * 0.5, spreadL: 0.8, spreadR: 0.8, elL: -0.5, elR: -0.5, lean: -0.05, head: -0.1 }; }
       } else if (an) { this.anim.delete(p); if (an.next) { const nx = an.next, c = ONCE[nx.kind]; this.anim.set(p, { kind: nx.kind, t0: now, until: now + (nx.ms || (c ? c.len / c.sp * 1000 : 1000)), next: nx.then ? { kind: nx.then } : null }); } }
-      const celebrating = this.celeb && this.celeb.until > now && p.team === this.celeb.p.team && (p === this.celeb.p || Math.hypot(p.x - this.celeb.p.x, p.y - this.celeb.p.y) < 12);
+      const celebrating = this.celeb && this.celeb.until > now && p.team === this.celeb.p.team && (p === this.celeb.p || Math.hypot(p.x - this.celeb.p.x, p.y - this.celeb.p.y) < 30);
       const happy = this.mood && this.mood.until > now && p.team === this.mood.win, sad = this.mood && this.mood.until > now && this.mood.win !== null && p.team !== this.mood.win;
       if (celebrating || happy) { const j = Math.abs(Math.sin(this.t * (happy ? 7 : 9) + p.num * 1.3)); P = { lean: -0.1, shL: -2.7 - j * 0.3, shR: -2.7 - j * 0.3, spreadL: 0.5, spreadR: 0.5, elL: -0.2, elR: -0.2, hipL: -0.3 * j, hipR: -0.3 * j, knL: 0.7 * j, knR: 0.7 * j, head: -0.3 }; f.root.position.y = j * (p === this.celeb?.p ? 0.55 : 0.35); }
       else if (sad) { P = { lean: 0.55, head: 0.45, shL: 0.05, shR: 0.05, spreadL: 0.05, spreadR: 0.05, elL: -0.1, elR: -0.1, knL: 0.15, knR: 0.15, hipL: -0.1, hipR: 0.05 }; f.root.position.y = 0; }
@@ -742,11 +768,25 @@ export class Pitch3D {
     // Netz wölbt sich nach einem Tor
     if (this.netHit && this.nets) { const t = (now - this.netHit.t) / 1000, n = this.nets[this.netHit.side]; if (n) { const a = t < 1.5 ? Math.sin(t * 9) * Math.exp(-t * 2.6) * 0.9 : 0; n.m.position.x = n.x0 + n.d * a; n.m.scaling.y = 1 + Math.abs(a) * 0.15; } if (t > 1.6) this.netHit = null; }
     // Eckfahnen flattern
+    if (this.flags2) { const ex = Math.max(0, this.crowdPulse || 0); for (const f of this.flags2) { const w = this.t * (2.2 + ex * 4) + f.ph; f.q.rotation.z = Math.sin(w) * (0.12 + ex * 0.5); f.q.position.y = f.s.y + 2.3 + Math.abs(Math.sin(w * 0.5)) * (0.15 + ex * 0.8); } }
+    if (this.flashPs) { const night = !this.day, big = (this.crowdPulse || 0) > 0.05 || M.ball.mode === 'shot'; this.flashPs.emitRate = night && this.quality > 0 ? (big ? 90 : 3) : big ? 20 : 0; }
     if (this.flags) this.flags.forEach((fl, i) => { fl.rotation.y = Math.sin(this.t * (this.weatherKind === 'wind' ? 6 : 2.5) + i) * (this.weatherKind === 'wind' ? 0.6 : 0.25); });
     // Anzeigetafel
-    if (this.scoreTex) { const key = `${M.score[0]}:${M.score[1]}|${Math.floor(M.min)}`; if (key !== this.scoreKey) { this.scoreKey = key; const g = this.scoreTex.getContext(); g.fillStyle = '#04100a'; g.fillRect(0, 0, 1024, 256); g.fillStyle = '#3ddc84'; g.fillRect(0, 0, 1024, 10); g.font = 'bold 60px sans-serif'; g.textBaseline = 'middle'; g.textAlign = 'right'; g.fillStyle = '#ffffff'; g.fillText((M.teams[0].short || '').toUpperCase().slice(0, 10), 370, 120); g.textAlign = 'left'; g.fillText((M.teams[1].short || '').toUpperCase().slice(0, 10), 654, 120); g.textAlign = 'center'; g.fillStyle = '#ffd166'; g.font = 'bold 110px monospace'; g.fillText(`${M.score[0]}:${M.score[1]}`, 512, 120); g.fillStyle = '#8aa79d'; g.font = 'bold 44px monospace'; g.fillText(`${Math.min(90, Math.floor(M.min))}'`, 512, 215); this.scoreTex.update(); } }
+    if (this.scoreTex && now - (this.sbT || 0) > 110) { this.sbT = now; const g = this.scoreTex.getContext(), T0 = M.teams[0], T1 = M.teams[1];
+      g.fillStyle = '#030b07'; g.fillRect(0, 0, 1024, 448); g.fillStyle = '#3ddc84'; g.fillRect(0, 0, 1024, 8);
+      g.textBaseline = 'middle'; g.font = 'bold 54px sans-serif'; g.textAlign = 'right'; g.fillStyle = '#fff'; g.fillText((T0.short || '').toUpperCase().slice(0, 10), 380, 70); g.textAlign = 'left'; g.fillText((T1.short || '').toUpperCase().slice(0, 10), 644, 70);
+      g.fillStyle = T0.color || '#3ddc84'; g.fillRect(392, 44, 10, 52); g.fillStyle = T1.color || '#ff6a3d'; g.fillRect(622, 44, 10, 52);
+      g.textAlign = 'center'; g.fillStyle = '#ffd166'; g.font = 'bold 96px monospace'; g.fillText(`${M.score[0]}:${M.score[1]}`, 512, 72); g.fillStyle = '#8aa79d'; g.font = 'bold 34px monospace'; g.fillText(`${Math.min(90, Math.floor(M.min))}'`, 512, 136);
+      const gl = this.sbGoal && this.sbGoal.until > now ? this.sbGoal : null, mode = gl ? 'goal' : Math.floor(now / 9000) % 3 === 2 ? 'stats' : 'radar';
+      if (mode === 'goal') { const k = (now % 500) < 250; g.fillStyle = k ? gl.color : '#ffffff'; g.font = 'bold 150px sans-serif'; g.fillText('TOR!', 512, 270); g.fillStyle = '#fff'; g.font = 'bold 48px sans-serif'; g.fillText(gl.name, 512, 385); for (let i = 0; i < 40; i++) { g.fillStyle = ['#3ddc84', '#ffd166', '#fff', gl.color][i % 4]; g.fillRect((i * 97 + now / 3) % 1024, (i * 53 + now / 5) % 300 + 150, 8, 8); } }
+      else if (mode === 'radar') { const x0 = 262, y0 = 168, w = 500, h = 264, sx = w / PW, sy = h / PH; g.fillStyle = '#0c3a1f'; g.fillRect(x0, y0, w, h); g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 2; g.strokeRect(x0, y0, w, h); g.beginPath(); g.moveTo(x0 + w / 2, y0); g.lineTo(x0 + w / 2, y0 + h); g.stroke(); g.beginPath(); g.arc(x0 + w / 2, y0 + h / 2, 9.15 * sx, 0, 6.29); g.stroke(); g.strokeRect(x0, y0 + (PH / 2 - 20.16) * sy, 16.5 * sx, 40.32 * sy); g.strokeRect(x0 + w - 16.5 * sx, y0 + (PH / 2 - 20.16) * sy, 16.5 * sx, 40.32 * sy);
+        for (const p of M.players) { if (p.out) continue; g.fillStyle = p.team === 0 ? (T0.color || '#3ddc84') : (T1.color || '#ff6a3d'); g.beginPath(); g.arc(x0 + p.x * sx, y0 + p.y * sy, 7, 0, 6.29); g.fill(); }
+        g.fillStyle = '#fff'; g.beginPath(); g.arc(x0 + M.ball.x * sx, y0 + M.ball.y * sy, 5, 0, 6.29); g.fill(); g.font = 'bold 26px monospace'; g.fillStyle = '#3ddc84'; g.textAlign = 'left'; g.fillText('LIVE', 30, 190); }
+      else { const pt = M.poss[0] + M.poss[1] || 1, rows = [['BALLBESITZ', Math.round(M.poss[0] / pt * 100) + '%', Math.round(M.poss[1] / pt * 100) + '%'], ['SCHÜSSE', M.shots[0][0], M.shots[1][0]], ['ECKEN', (M.corners || [0, 0])[0], (M.corners || [0, 0])[1]], ['FOULS', (M.fouls || [0, 0])[0], (M.fouls || [0, 0])[1]]];
+        g.font = 'bold 40px monospace'; rows.forEach(([k, a, c], i) => { const y = 200 + i * 62; g.fillStyle = '#8aa79d'; g.textAlign = 'center'; g.fillText(k, 512, y); g.fillStyle = '#fff'; g.textAlign = 'right'; g.fillText(String(a), 300, y); g.textAlign = 'left'; g.fillText(String(c), 724, y); }); }
+      this.scoreTex.update(); }
     this.ball.position.set(bvx, 0.25 + this.ballH, bvz); this.ballBlob.position.x = bvx + this.ballH * 0.3; this.ballBlob.position.z = bvz - this.ballH * 0.2; const bs = 1 / (1 + this.ballH * 0.5); this.ballBlob.scaling.set(bs, bs, bs);
-    const bv = Math.hypot(b.vx, b.vy); this.ball.rotation.z -= b.vx * dt * 2.2; this.ball.rotation.x += b.vy * dt * 2.2; if (bv < 0.1 && b.owner) { this.ball.rotation.z -= dt * 6; }
+    { const pvx = this.ballPrev ? (bvx - this.ballPrev.x) / Math.max(dt, 1e-3) : 0, pvz = this.ballPrev ? (bvz - this.ballPrev.z) / Math.max(dt, 1e-3) : 0; this.ballPrev = { x: bvx, z: bvz }; const sp = Math.min(40, Math.hypot(pvx, pvz)); if (sp > 0.05 && this.ball.rotationQuaternion) { const ax = new B.Vector3(pvz, 0, -pvx).normalize(), q = B.Quaternion.RotationAxis(ax, -sp * dt / 0.25); this.ball.rotationQuaternion = q.multiply(this.ball.rotationQuaternion); } }
     // Ring unter Ballbesitzer / Fokus
     const o = rp ? null : (b.owner || this.focus); this.ring.isVisible = !!o; if (o) { this.ring.position.set(o.x, 0.06, o.y); this.ring.rotation.y += dt * 1.5; const T = M.teams[o.team]; this.ring.material.emissiveColor = B.Color3.FromHexString(T.color); this.ring.material.diffuseColor = this.ring.material.emissiveColor; }
     // Schiedsrichter: hält Abstand zum Ball, läuft mit

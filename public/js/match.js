@@ -113,7 +113,7 @@ export class Match {
     if (b.owner) this.poss[b.owner.team] += dt;
     for (const p of this.players) if (!p.out) p.minutes += dt * MIN_PER_SEC;
     if (this.pen) { this.pen.t -= dt; if (this.pen.t <= 0) this.takePenalty(); else this.movePlayers(dt, true); return; }
-    if (this.sp) { const sp = this.sp; sp.t -= dt; if (sp.wait > 0) sp.wait -= dt; sp.el = (sp.el || 0) + dt;
+    if (this.sp) { const sp = this.sp; sp.t -= dt; if (sp.wait > 0) { sp.wait -= dt; if (sp.wait <= 0 && sp.kind === 'kickoff') { this.ball.x = PW / 2; this.ball.y = PH / 2; } } sp.el = (sp.el || 0) + dt;
       const ready = sp.taker && sp.taker.spT ? dist(sp.taker, sp.taker.spT) < 0.5 : true, all = sp.kind === 'kickoff' ? this.players.every(p => p.out || !p.spT || dist(p, p.spT) < 1.2) : true;
       if (sp.t <= 0 || (sp.el > (sp.min || 0) && ready && all && sp.el > (sp.min || 0) + 0.5 * (sp.kind !== 'kickoff'))) this.takeSetPiece(); else this.movePlayers(dt, true); return; }
     if (this.freeze > 0) { this.freeze -= dt; this.movePlayers(dt, true); return; }
@@ -128,6 +128,7 @@ export class Match {
   targetOf(p) {
     const b = this.ball, ti = p.team, S = this.styleOf(ti), own = b.owner && b.owner.team === ti, dir = ti === 0 ? 1 : -1;
     const a = p.anchor;
+    if (this.sp && this.sp.celeb && this.sp.wait > 0) { const c = this.sp.celeb; if (p === c.scorer) return c.flag; if (p.team === c.team && p.pos !== 'TW') { const k = (p.num || 1) % 6; return { x: c.scorer.x + Math.cos(k) * 1.6, y: c.scorer.y + Math.sin(k) * 1.6 }; } return { x: p.x, y: p.y }; }
     if (p.spT && (this.sp || this.pen || (b.mode === 'pass' && b.cross))) return p.spT;
     if (p.pos === 'TW') { const gx = ti === 0 ? 2.5 : PW - 2.5; const ty = clamp(PH / 2 + (b.y - PH / 2) * 0.35, PH / 2 - 4, PH / 2 + 4); const near = dist(b, { x: gx, y: PH / 2 }) < 16 && !own; return { x: near ? gx + dir * 4 : gx, y: ty }; }
     const ins = this.instr(ti), hp = this.teams[ti].press === 1 || ins === 'highpress', rl = this.role(p);
@@ -182,7 +183,7 @@ export class Match {
         this.moveTo(p, b, this.spd(p), dt);
       } else if (b.mode === 'pass' && !frozen && (b.target === p || (b.cross && b.target && p.team !== b.target.team && p.pos !== 'TW' && p === this.nearest(p.team, b.target)[0]))) {
         this.moveTo(p, this.predict(), this.spd(p), dt);
-      } else this.moveTo(p, this.targetOf(p), this.spd(p) * (frozen && !this.sp && !this.pen ? 0.6 : this.sp ? (this.sp.kind === 'kickoff' ? (this.sp.wait > 0 ? 0 : 0.85) : 1.05) : this.pen ? 0.8 : 0.9), dt);
+      } else this.moveTo(p, this.targetOf(p), this.spd(p) * (frozen && !this.sp && !this.pen ? 0.6 : this.sp ? (this.sp.kind === 'kickoff' ? (this.sp.wait > 0 ? (this.sp.celeb && p.team === this.sp.celeb.team ? (p === this.sp.celeb.scorer ? 0.9 : 0.85) : 0) : 0.85) : 1.05) : this.pen ? 0.8 : 0.9), dt);
       // Kondition
       const S = this.styleOf(p.team); p.energy = Math.max(0.3, p.energy - dt * (0.0014 + S.press * 0.0038 + (this.instr(p.team) === 'highpress' ? 0.0022 : 0)) * (1.5 - p.kondition / 100) * this.tempoOf(p.team).k * (this.hasCaptain(p.team) ? 0.94 : 1));
     }
@@ -229,7 +230,7 @@ export class Match {
       if (arrived) {
         const ti = b.shooter.team, k = this.keeper(1 - ti);
         const pen = b.penalty; b.penalty = false;
-        if (b.outcome === 'goal') { this.score[ti]++; b.shooter.goals++; b.shooter.rating += pen ? 0.5 : 0.8; if (this.assist && this.assist !== b.shooter && this.assist.team === ti) { this.assist.assists++; this.assist.rating += 0.5; } for (const d of this.alive(1 - ti)) if (d.pos !== 'ST') d.rating -= 0.08; this.log('goal', { team: ti, p: b.shooter, p2: this.assist && this.assist !== b.shooter ? this.assist : null, score: [...this.score], pen }); this.hooks.onGoal?.(ti); this.startRestart('kickoff', 1 - ti); this.stoppage += 0.5; }
+        if (b.outcome === 'goal') { this.score[ti]++; b.shooter.goals++; b.shooter.rating += pen ? 0.5 : 0.8; if (this.assist && this.assist !== b.shooter && this.assist.team === ti) { this.assist.assists++; this.assist.rating += 0.5; } for (const d of this.alive(1 - ti)) if (d.pos !== 'ST') d.rating -= 0.08; this.log('goal', { team: ti, p: b.shooter, p2: this.assist && this.assist !== b.shooter ? this.assist : null, score: [...this.score], pen }); this.hooks.onGoal?.(ti); this.startRestart('kickoff', 1 - ti, { scorer: b.shooter, team: ti }); this.stoppage += 0.5; }
         else if (b.outcome === 'save') { k.saves++; k.rating += pen ? 0.8 : 0.22; this.log(pen ? 'pen_save' : 'save', { team: ti, p: b.shooter });
           if (!pen && this.r() < 0.32) { this.log('parry', { team: ti, p: b.shooter }); this.startCorner(ti, b.y < PH / 2 ? 0 : 1); } else { this.give(k); this.freeze = 0.5; } }
         else if (b.outcome === 'post') { this.log('post', { team: ti, p: b.shooter }); this.loose(g.x - (ti === 0 ? 2 : -2), g.y + (this.r() - 0.5) * 10, (ti === 0 ? -1 : 1) * 9, (this.r() - 0.5) * 8); }
@@ -416,7 +417,11 @@ export class Match {
   }
   startRestart(kind, ti, at) {
     const b = this.ball; b.owner = null; b.mode = 'held'; b.vx = b.vy = 0; b.cross = false; this.assist = null; for (const p of this.players) p.spT = null;
-    if (kind === 'kickoff') { b.x = PW / 2; b.y = PH / 2; const T = this.kickoffTargets(ti); for (const [p, t] of T) p.spT = t; this.sp = { kind, ti, taker: T.taker, t: 6.5, wait: 2.0, min: 2.8 }; return; }
+    if (kind === 'kickoff') { const T = this.kickoffTargets(ti); for (const [p, t] of T) p.spT = t;
+      // Torjubel: Schütze läuft Richtung Eckfahne, die Mitspieler hinterher – erst danach geht es zurück zum Anstoß
+      let celeb = null; if (at && at.scorer && !at.scorer.out) { const sc = at.scorer, cy = sc.y < PH / 2 ? 1.5 : PH - 1.5, cx = clamp(sc.x + (sc.team === 0 ? 1 : -1) * 6, 3, PW - 3); celeb = { scorer: sc, team: at.team, flag: { x: cx, y: cy } }; }
+      if (!celeb) { b.x = PW / 2; b.y = PH / 2; }
+      this.sp = { kind, ti, taker: T.taker, t: celeb ? 9 : 6.5, wait: celeb ? 3.6 : 2.0, min: celeb ? 4.4 : 2.8, celeb }; return; }
     if (kind === 'throw') { b.x = at.x; b.y = at.y; const [p] = this.nearest(ti, b); if (!p) return; p.spT = { x: at.x, y: at.y === 0 ? -0.6 : PH + 0.6 }; this.sp = { kind, ti, taker: p, t: 5, min: 0.6 }; this.log('throwin', { team: ti, p }); return; }
     if (kind === 'goalkick') { const k = this.keeper(ti), gx = ti === 0 ? 5.5 : PW - 5.5; b.x = gx; b.y = PH / 2 + (this.r() - 0.5) * 8; k.spT = { x: b.x + (ti === 0 ? -1 : 1), y: b.y }; this.sp = { kind, ti, taker: k, t: 4, min: 0.9 }; return; }
   }
