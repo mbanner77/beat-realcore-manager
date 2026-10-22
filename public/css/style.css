@@ -1058,3 +1058,20 @@ body.tv .board-qr canvas{width:220px;height:220px}
 .so-board{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center;margin-top:10px;font-family:var(--mono);font-size:13px}
 .so-board .dots{display:flex;gap:5px;flex-wrap:wrap}.so-board .dots i{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,.35)}.so-board .dots i.g{background:#3ddc84;border-color:#3ddc84}.so-board .dots i.m{background:#ff6a3d;border-color:#ff6a3d}
 .so-board b{font-size:18px}
+
+/* v3.5: Druckleiste, Bauchbinde, Torschusskarte */
+.timeline{height:30px}
+#tl-mom{position:absolute;inset:0;width:100%;height:100%;opacity:.85;pointer-events:none}
+.lower3{position:absolute;left:18px;bottom:22px;display:flex;align-items:stretch;gap:0;z-index:5;animation:l3in .45s cubic-bezier(.2,.8,.2,1) both;filter:drop-shadow(0 6px 18px rgba(0,0,0,.45))}
+.lower3 i{display:grid;place-items:center;min-width:54px;font-style:normal;font-family:var(--mono);font-size:26px;font-weight:800;color:#06140d;background:var(--l3c,#3ddc84);border-radius:10px 0 0 10px;padding:0 10px}
+.lower3 div{background:rgba(5,14,10,.9);border:1px solid rgba(255,255,255,.08);border-left:none;border-radius:0 10px 10px 0;padding:8px 16px 8px 12px;display:grid}
+.lower3 b{font-size:18px;letter-spacing:.02em}.lower3 span{font-size:12.5px;color:#9fb3ad;font-family:var(--mono)}
+.lower3.out{animation:l3out .35s ease both}
+@keyframes l3in{from{transform:translateX(-30px);opacity:0}to{transform:none;opacity:1}}@keyframes l3out{to{transform:translateX(-20px);opacity:0}}
+.rep-wide{grid-column:1/-1}
+.rep-viz{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px;align-items:center}
+@media (max-width:760px){.rep-viz{grid-template-columns:1fr}}
+.rep-viz svg{width:100%;height:auto;display:block}
+.shot-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:#9fb3ad;margin-top:6px}.shot-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+
+.half-viz{margin-top:10px;max-width:420px}.half-viz svg{width:100%;height:auto;display:block;border-radius:6px}

@@ -1,5 +1,5 @@
 // Legacy League Service Worker: Spiel bei wackligem Messe-WLAN offline spielbar; Bestenliste und KI laufen live über /api.
-const C = 'legacy-league-v24';
+const C = 'legacy-league-v25';
 const CORE = ['/', '/index.html', '/css/style.css', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/img/realcore-wordmark.png',
   '/js/main.js', '/js/manager.js', '/js/match.js', '/js/pitch.js', '/js/data.js', '/js/audio.js', '/js/i18n.js', '/js/i18n-en.js', '/js/pitch3d.js', '/js/intro.js', '/js/ui.js', '/js/voice.js', '/js/commentary.js', '/js/fx.js', '/js/ceremony.js', '/js/achievements.js', '/vendor/babylon-lite-9.js', '/models/player.glb?v=4'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(C).then(c => c.addAll(CORE)).then(() => self.skipWaiting())); });

@@ -307,7 +307,7 @@ export class Season {
     const base = (o.strength + (this.oppMod || 0) + (this.league === 'cloud' ? 9 : 0) + ((this.seasonNo || 1) - 1) * 2) * this.diff.opp * (1 + (ev === 'shadow_it' ? 0.08 : 0));
     const fk = o.style === 'wall' ? '5-3-2' : o.style === 'boss' || o.style === 'longshot' ? '4-3-3' : '4-4-2', F = FORMATIONS[fk];
     const players = F.slots.map(([pos, x, y], i) => {
-      const k = (0.55 + base / 140) * 0.975, p = { id: 'o' + i, name: o.names[i] || `${o.short} ${i + 1}`, pos, slot: F.slots[i], num: i + 1 };
+      const k = (0.55 + base / 140) * 0.965, p = { id: 'o' + i, name: o.names[i] || `${o.short} ${i + 1}`, pos, slot: F.slots[i], num: i + 1 };
       const prof = { TW: [40, 50, 95, 15, 70], IV: [55, 55, 90, 30, 75], AV: [75, 60, 75, 40, 80], DM: [60, 65, 80, 45, 85], ZM: [70, 85, 55, 60, 75], FL: [90, 72, 30, 65, 75], ST: [80, 70, 25, 92, 70] }[pos];
       ATTRS.forEach((a, j) => p[a] = clamp(prof[j] * k * (0.92 + r() * 0.16), 20, 99));
       if (o.style === 'wall') { p.abwehr = clamp(p.abwehr * 1.12, 20, 99); p.tempo *= 0.85; }
