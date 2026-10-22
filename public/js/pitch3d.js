@@ -796,7 +796,7 @@ export class Pitch3D {
     if (this.flashPs) { const night = !this.day, big = (this.crowdPulse || 0) > 0.05 || M.ball.mode === 'shot'; this.flashPs.emitRate = night && this.quality > 0 ? (big ? 90 : 3) : big ? 20 : 0; }
     if (this.flags) this.flags.forEach((fl, i) => { fl.rotation.y = Math.sin(this.t * (this.weatherKind === 'wind' ? 6 : 2.5) + i) * (this.weatherKind === 'wind' ? 0.6 : 0.25); });
     // Anzeigetafel
-    if (this.scoreTex && now - (this.sbT || 0) > 110) { this.sbT = now; const g = this.scoreTex.getContext(), T0 = M.teams[0], T1 = M.teams[1];
+    if (this.scoreTex && now - (this.sbT || 0) > (this.sbGoal && this.sbGoal.until > now ? 90 : this.lite || this.quality < 2 ? 400 : 200)) { this.sbT = now; const g = this.scoreTex.getContext(), T0 = M.teams[0], T1 = M.teams[1];
       g.fillStyle = '#030b07'; g.fillRect(0, 0, 1024, 448); g.fillStyle = '#3ddc84'; g.fillRect(0, 0, 1024, 8);
       g.textBaseline = 'middle'; g.font = 'bold 54px sans-serif'; g.textAlign = 'right'; g.fillStyle = '#fff'; g.fillText((T0.short || '').toUpperCase().slice(0, 10), 380, 70); g.textAlign = 'left'; g.fillText((T1.short || '').toUpperCase().slice(0, 10), 644, 70);
       g.fillStyle = T0.color || '#3ddc84'; g.fillRect(392, 44, 10, 52); g.fillStyle = T1.color || '#ff6a3d'; g.fillRect(622, 44, 10, 52);

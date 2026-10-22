@@ -55,7 +55,7 @@ export const COMMENT = {
 export class Match {
   constructor(home, away, o = {}) {
     this.r = rng(o.seed || 1); this.hooks = o.hooks || {}; this.spect = !!o.spectacle; this.offside = o.offside !== false; this.offsides = [0, 0]; this.weather = o.weather || 'sun'; this.W = WEATHER[this.weather] || WEATHER.sun; this.t = 0; this.min = 0; this.speed = 1; this.paused = false; this.halfDone = false; this.over = false; this.stoppage = 0;
-    this.score = [0, 0]; this.events = []; this.shots = [[0, 0], [0, 0]]; this.poss = [0, 0]; this.corners = [0, 0]; this.fouls = [0, 0]; this.xgSum = [0, 0]; this.sp = null; this.shotLog = []; this.mom = Array.from({ length: 100 }, () => [0, 0]);
+    this.score = [0, 0]; this.events = []; this.shots = [[0, 0], [0, 0]]; this.poss = [0, 0]; this.corners = [0, 0]; this.fouls = [0, 0]; this.xgSum = [0, 0]; this.sp = null; this.shotLog = []; this.mom = Array.from({ length: 100 }, () => [0, 0]); this.heat = [new Array(96).fill(0), new Array(96).fill(0)];
     this.teams = [home, away]; this.players = [];
     this.subsLeft = [3, 3]; this.subsDone = [];
     this.teams.forEach((T, ti) => { T.players.forEach(p => this.players.push(this.mkPlayer(p, ti))); T.benchP = (T.bench || []).map(p => ({ ...p })); });
@@ -117,7 +117,7 @@ export class Match {
     if (!this.halfDone && !this.pen && this.min >= 45 + this.stoppage) { this.halfDone = true; this.stoppage = 0; this.min = 45; this.t = 45 / MIN_PER_SEC; this.log('half'); this.paused = true; this.kickoff(1); this.hooks.onHalf?.(); return; }
     if (!this.pen && this.min >= 90 + this.stoppage) { this.over = true; this.log('full'); this.hooks.onFull?.(this.result()); return; }
     const b = this.ball;
-    if (b.owner) { this.poss[b.owner.team] += dt; const o = b.owner, g = this.goalOf(o.team); if (Math.abs(o.x - g.x) < 35) { const mi = Math.min(99, Math.floor(this.min)); this.mom[mi][o.team] += dt * (Math.abs(o.x - g.x) < 18 ? 2 : 1); } }
+    if (b.owner) { this.poss[b.owner.team] += dt; { const o = b.owner, hx = o.team === 0 ? o.x : PW - o.x, hy = o.team === 0 ? o.y : PH - o.y; this.heat[o.team][Math.max(0, Math.min(7, Math.floor(hy / PH * 8))) * 12 + Math.max(0, Math.min(11, Math.floor(hx / PW * 12)))] += dt; } const o = b.owner, g = this.goalOf(o.team); if (Math.abs(o.x - g.x) < 35) { const mi = Math.min(99, Math.floor(this.min)); this.mom[mi][o.team] += dt * (Math.abs(o.x - g.x) < 18 ? 2 : 1); } }
     for (const p of this.players) if (!p.out) p.minutes += dt * MIN_PER_SEC;
     if (this.pen) { const pn = this.pen;
       if (pn.waiting) { this.movePlayers(dt, true); return; }
@@ -589,7 +589,7 @@ export class Match {
   }
   result() {
     const me = this.teams[0].me ? 0 : 1, mine = this.players.filter(p => p.team === me);
-    return { gh: this.score[0], ga: this.score[1], mine: me === 0 ? 'home' : 'away', events: this.events, shots: this.shots, poss: this.poss, corners: this.corners, fouls: this.fouls, offsides: this.offsides, so: this.shootout ? [...this.shootout.score] : null, shotLog: this.shotLog, mom: this.mom.slice(0, Math.max(90, Math.ceil(this.min))), xg: this.xgSum.map(v => Math.round(v * 100) / 100),
+    return { gh: this.score[0], ga: this.score[1], mine: me === 0 ? 'home' : 'away', events: this.events, shots: this.shots, poss: this.poss, corners: this.corners, fouls: this.fouls, offsides: this.offsides, so: this.shootout ? [...this.shootout.score] : null, shotLog: this.shotLog, heat: this.heat.map(h => h.map(v => Math.round(v * 10) / 10)), mom: this.mom.slice(0, Math.max(90, Math.ceil(this.min))), xg: this.xgSum.map(v => Math.round(v * 100) / 100),
       played: mine.map(p => p.id), minutes: Object.fromEntries(mine.map(p => [p.id, Math.round(p.minutes)])), ratings: Object.fromEntries(mine.map(p => [p.id, Math.round(clamp(p.rating, 1, 10) * 10) / 10])),
       yellows: mine.filter(p => p.yellow >= 1).map(p => p.id), reds: mine.filter(p => p.red).map(p => p.id), injuries: mine.filter(p => p.injured).map(p => p.id),
       scorers: mine.flatMap(p => Array(p.goals).fill(p.id)), assists: mine.flatMap(p => Array(p.assists).fill(p.id)), players: this.players };
